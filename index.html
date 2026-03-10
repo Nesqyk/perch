@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Find your spot before the panic does. Real-time campus space finder." />
+  <meta name="theme-color" content="#1a6b3c" />
+
+  <title>Perch — Find Your Spot</title>
+
+  <!-- Favicon placeholder -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+  <!-- All styles are CSS-module-free; one cascade, CSS variables for theming -->
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="stylesheet" href="/src/styles/map.css" />
+  <link rel="stylesheet" href="/src/styles/sidebar.css" />
+  <link rel="stylesheet" href="/src/styles/bottomSheet.css" />
+  <link rel="stylesheet" href="/src/styles/spotCard.css" />
+  <link rel="stylesheet" href="/src/styles/filters.css" />
+</head>
+<body>
+
+  <!-- ─── Header ─────────────────────────────────────────────────────────── -->
+  <header id="app-header" class="app-header">
+    <span class="app-logo">Perch</span>
+    <span class="app-tagline">no login required</span>
+    <!-- Hamburger — visible on mobile only (CSS controls display) -->
+    <button id="menu-toggle" class="btn-icon" aria-label="Open menu" aria-expanded="false">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </button>
+  </header>
+
+  <!-- ─── Main layout ─────────────────────────────────────────────────────── -->
+  <!--
+    Desktop: two-column grid (map | sidebar)
+    Mobile:  map full-screen + bottom sheet overlay
+    Layout switching is handled entirely by CSS (no JS class toggling for layout).
+  -->
+  <main id="app-layout" class="app-layout">
+
+    <!-- Google Maps renders into this element.
+         mapInit.js passes this id to the Maps constructor. -->
+    <div id="map-container" class="map-container" aria-label="Campus map"></div>
+
+    <!-- ─── Desktop sidebar / Mobile bottom sheet ─────────────────────────
+         Same element, same content — CSS repositions it.
+         JS populates #panel-content based on app state.
+    ──────────────────────────────────────────────────────────────────────── -->
+    <aside id="panel" class="panel" aria-label="Spot panel">
+      <!-- Drag handle — visible on mobile only -->
+      <div id="panel-handle" class="panel-handle" aria-hidden="true"></div>
+
+      <!-- Panel content is fully managed by ui/sidebar.js + ui/bottomSheet.js -->
+      <div id="panel-content" class="panel-content">
+        <!-- Default state: filter form (rendered by filterPanel.js on init) -->
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ─── Toast notifications ─────────────────────────────────────────────
+       Rendered by ui/toast.js. Lives outside #app-layout so it is never
+       clipped by overflow:hidden on the panel or map container.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <!-- ─── Generic modal ──────────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="modal-box" class="modal-box">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ─── Entry point ─────────────────────────────────────────────────────
+       type="module" enables ES6 imports. Vite handles bundling for prod.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <script type="module" src="/src/main.js"></script>
+
+</body>
+</html>

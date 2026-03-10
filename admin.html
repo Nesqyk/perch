@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Perch Admin</title>
+
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="stylesheet" href="/src/styles/main.css" />
+  <link rel="stylesheet" href="/src/styles/admin.css" />
+</head>
+<body class="admin-body">
+
+  <!-- ─── Admin header ────────────────────────────────────────────────────── -->
+  <header class="admin-header">
+    <span class="app-logo">Perch <span class="admin-badge">Admin</span></span>
+    <button id="admin-logout" class="btn btn-ghost">Log Out</button>
+  </header>
+
+  <!-- ─── Auth gate ────────────────────────────────────────────────────────
+       Shown before password is verified. admin.js hides this and reveals
+       #admin-app on success.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <div id="admin-gate" class="admin-gate">
+    <div class="admin-login-box">
+      <h1>Admin Access</h1>
+      <label for="admin-password">Password</label>
+      <input id="admin-password" type="password" class="input" placeholder="Enter admin password" />
+      <button id="admin-login-btn" class="btn btn-primary">Enter</button>
+      <p id="admin-login-error" class="admin-error" hidden>Incorrect password.</p>
+    </div>
+  </div>
+
+  <!-- ─── Admin app (hidden until auth passes) ──────────────────────────── -->
+  <div id="admin-app" class="admin-app" hidden>
+
+    <!-- Tab navigation -->
+    <nav class="admin-tabs" role="tablist">
+      <button class="admin-tab active" role="tab" data-tab="submissions" aria-selected="true">
+        Pending Submissions
+        <span id="submissions-badge" class="tab-badge">0</span>
+      </button>
+      <button class="admin-tab" role="tab" data-tab="spots" aria-selected="false">
+        Spots
+      </button>
+      <button class="admin-tab" role="tab" data-tab="schedule" aria-selected="false">
+        Schedule
+      </button>
+    </nav>
+
+    <!-- Tab panels — admin.js populates these -->
+    <main class="admin-main">
+
+      <section id="tab-submissions" class="admin-panel" role="tabpanel">
+        <!-- Populated by admin.js: submission cards with approve/reject -->
+      </section>
+
+      <section id="tab-spots" class="admin-panel" role="tabpanel" hidden>
+        <!-- Populated by admin.js: full spots table with edit/deactivate -->
+      </section>
+
+      <section id="tab-schedule" class="admin-panel" role="tabpanel" hidden>
+        <!-- Populated by admin.js: CSV upload + schedule_entries view -->
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Toast reused in admin context -->
+  <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
+
+  <script type="module" src="/src/admin.js"></script>
+
+</body>
+</html>
