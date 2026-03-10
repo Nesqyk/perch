@@ -1,0 +1,207 @@
+/* ============================================================
+   map.css — Google Maps container + custom overlay styles
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Map container
+   ------------------------------------------------------------------ */
+
+#map-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-surface);
+  overflow: hidden;
+}
+
+/* Google Maps renders into a div; make sure it fills */
+#map-container > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ------------------------------------------------------------------
+   Map controls wrapper (injected via mapControls.js)
+   ------------------------------------------------------------------ */
+
+.map-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.map-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font-size: 1.125rem;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+  user-select: none;
+}
+
+.map-control-btn:hover {
+  background: var(--color-surface-elevated);
+}
+
+.map-control-btn:active {
+  transform: scale(0.94);
+}
+
+.map-control-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Locate Me button — highlighted when tracking */
+.map-control-btn[data-active="true"] {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+/* ------------------------------------------------------------------
+   Custom map info-window reset
+   (Google renders its own bubble; we suppress default chrome)
+   ------------------------------------------------------------------ */
+
+.gm-style .gm-style-iw-c {
+  border-radius: var(--radius-lg) !important;
+  padding: 0 !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.gm-style .gm-style-iw-d {
+  overflow: hidden !important;
+}
+
+/* Hide the default close button X — we render our own */
+.gm-style .gm-style-iw-c button.gm-ui-hover-effect {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------
+   Pin animation keyframes
+   (applied via SVG marker / overlay div depending on status)
+   ------------------------------------------------------------------ */
+
+/* 🟢 Free — gentle pulse */
+@keyframes pin-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%       { transform: scale(1.18); opacity: 0.85; }
+}
+
+/* 🔵 Claimed — ripple ring */
+@keyframes pin-ripple {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}
+
+/* 🔴 Full — slow fade */
+@keyframes pin-fade {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.5; }
+}
+
+/* Marker wrapper injected by pins.js for animated overlays */
+.pin-overlay {
+  position: absolute;
+  transform: translate(-50%, -100%); /* anchor at bottom-center */
+  pointer-events: none;
+}
+
+.pin-overlay--free .pin-icon {
+  animation: pin-pulse 2s ease-in-out infinite;
+}
+
+.pin-overlay--claimed .pin-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 2px solid var(--color-claimed);
+  animation: pin-ripple 1.6s ease-out infinite;
+}
+
+.pin-overlay--full .pin-icon {
+  animation: pin-fade 2.4s ease-in-out infinite;
+}
+
+/* ------------------------------------------------------------------
+   Selected pin highlight ring
+   ------------------------------------------------------------------ */
+
+.pin-overlay--selected .pin-icon {
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.45));
+}
+
+/* ------------------------------------------------------------------
+   Cluster badge (if custom clustering is added later)
+   ------------------------------------------------------------------ */
+
+.pin-cluster {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  box-shadow: var(--shadow-md);
+  border: 2px solid #fff;
+}
+
+/* ------------------------------------------------------------------
+   Loading skeleton overlay while map tiles load
+   ------------------------------------------------------------------ */
+
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--color-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: opacity var(--transition-base);
+}
+
+.map-loading-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------------
+   Attribution / branding strip (bottom of map on mobile)
+   ------------------------------------------------------------------ */
+
+/* Push Google's own attribution above the bottom sheet peek */
+@media (max-width: 767px) {
+  .gm-style .gm-bundled-control,
+  .gm-style-cc {
+    bottom: calc(var(--bottom-sheet-peek, 42vh) + var(--space-2)) !important;
+  }
+}

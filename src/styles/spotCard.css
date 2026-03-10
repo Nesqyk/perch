@@ -1,0 +1,436 @@
+/* ============================================================
+   spotCard.css — Spot detail card rendered inside the panel
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Card root
+   ------------------------------------------------------------------ */
+
+.spot-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ------------------------------------------------------------------
+   Card header
+   ------------------------------------------------------------------ */
+
+.spot-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.spot-card__name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.25;
+}
+
+.spot-card__type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.spot-card__type-badge--oncampus {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+
+.spot-card__type-badge--offcampus {
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------------
+   Status row
+   ------------------------------------------------------------------ */
+
+.spot-card__status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.status-badge::before {
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-badge--free {
+  background: color-mix(in srgb, var(--color-free) 14%, transparent);
+  color: var(--color-free);
+}
+.status-badge--free::before { background: var(--color-free); }
+
+.status-badge--maybe {
+  background: color-mix(in srgb, var(--color-maybe) 14%, transparent);
+  color: color-mix(in srgb, var(--color-maybe) 80%, #000);
+}
+.status-badge--maybe::before { background: var(--color-maybe); }
+
+.status-badge--claimed {
+  background: color-mix(in srgb, var(--color-claimed) 14%, transparent);
+  color: var(--color-claimed);
+}
+.status-badge--claimed::before { background: var(--color-claimed); }
+
+.status-badge--full {
+  background: color-mix(in srgb, var(--color-full) 14%, transparent);
+  color: var(--color-full);
+}
+.status-badge--full::before { background: var(--color-full); }
+
+/* Confidence bar */
+.confidence-bar {
+  flex: 1;
+  min-width: 80px;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.confidence-bar__fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.confidence-bar__fill--free    { background: var(--color-free); }
+.confidence-bar__fill--maybe   { background: var(--color-maybe); }
+.confidence-bar__fill--claimed { background: var(--color-claimed); }
+.confidence-bar__fill--full    { background: var(--color-full); }
+
+.confidence-label {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+   Amenities grid
+   ------------------------------------------------------------------ */
+
+.amenities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: var(--space-2);
+}
+
+.amenity-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.amenity-chip__icon {
+  font-size: 1.125rem;
+}
+
+.amenity-chip--available {
+  border-color: var(--color-free);
+  color: var(--color-free);
+  background: color-mix(in srgb, var(--color-free) 8%, transparent);
+}
+
+.amenity-chip--unavailable {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------------
+   Schedule note
+   ------------------------------------------------------------------ */
+
+.schedule-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.schedule-note__icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.schedule-note--loading {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* ------------------------------------------------------------------
+   Claims section
+   ------------------------------------------------------------------ */
+
+.claims-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.claims-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.claims-count {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.claim-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.claim-item--mine {
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.claim-item__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.claim-item__avatar--mine {
+  background: var(--color-primary);
+}
+
+.claim-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.claim-item__label {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.claim-item__expires {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  margin-top: 1px;
+}
+
+/* Capacity bar */
+.capacity-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.capacity-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-border);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.capacity-bar__fill {
+  height: 100%;
+  background: var(--color-claimed);
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+.capacity-bar__fill--warning {
+  background: var(--color-maybe);
+}
+
+.capacity-bar__fill--full {
+  background: var(--color-full);
+}
+
+/* ------------------------------------------------------------------
+   Action buttons row
+   ------------------------------------------------------------------ */
+
+.spot-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Full-width action buttons */
+.spot-card__actions .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------------
+   Copy link row (inside claimPanel)
+   ------------------------------------------------------------------ */
+
+.copy-link-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.copy-link-input {
+  flex: 1;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+  user-select: all;
+}
+
+.copy-link-btn {
+  flex-shrink: 0;
+}
+
+/* Copied feedback */
+.copy-link-btn[data-copied="true"] {
+  background: var(--color-free);
+  border-color: var(--color-free);
+  color: #fff;
+}
+
+/* ------------------------------------------------------------------
+   Alternatives list (inside reportPanel)
+   ------------------------------------------------------------------ */
+
+.alternatives-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alternatives-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.alternative-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.alternative-item:hover {
+  background: var(--color-surface-elevated);
+  border-color: var(--color-primary);
+}
+
+.alternative-item__name {
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.alternative-item__meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Reason chips */
+.reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.reason-chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.reason-chip:hover {
+  border-color: var(--color-full);
+  color: var(--color-full);
+}
+
+.reason-chip--selected {
+  background: color-mix(in srgb, var(--color-full) 12%, transparent);
+  border-color: var(--color-full);
+  color: var(--color-full);
+  font-weight: 600;
+}

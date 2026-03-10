@@ -1,0 +1,246 @@
+/* ============================================================
+   filters.css — Smart Suggestions filter panel
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Filter panel root
+   ------------------------------------------------------------------ */
+
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ------------------------------------------------------------------
+   Filter group
+   ------------------------------------------------------------------ */
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.filter-group__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------------
+   Group size chips
+   ------------------------------------------------------------------ */
+
+.size-chips {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.size-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 60px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.size-chip:hover {
+  border-color: var(--color-primary);
+}
+
+.size-chip__icon {
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.size-chip__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.size-chip--selected {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border-color: var(--color-primary);
+}
+
+.size-chip--selected .size-chip__label {
+  color: var(--color-primary);
+}
+
+/* ------------------------------------------------------------------
+   Needs / amenity chips
+   ------------------------------------------------------------------ */
+
+.needs-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.needs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+  cursor: pointer;
+  user-select: none;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.needs-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-text-primary);
+}
+
+.needs-chip__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.needs-chip--selected {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------
+   Building dropdown
+   ------------------------------------------------------------------ */
+
+.building-select {
+  /* Inherits .select from main.css */
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------
+   Submit button
+   ------------------------------------------------------------------ */
+
+.filter-submit-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------------
+   Filter result count pill
+   ------------------------------------------------------------------ */
+
+.filter-result-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------------
+   Active filter summary bar
+   (Shown below the filter panel when filters are applied)
+   ------------------------------------------------------------------ */
+
+.active-filters-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+}
+
+.active-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.active-filter-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--color-primary);
+  opacity: 0.7;
+  font-size: 0.875rem;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.active-filter-pill__remove:hover {
+  opacity: 1;
+}
+
+.clear-all-filters {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-decoration: underline;
+  margin-left: auto;
+}
+
+.clear-all-filters:hover {
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------------
+   Filter panel skeleton (loading state)
+   ------------------------------------------------------------------ */
+
+.filter-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.skeleton-line {
+  height: 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-border);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-chips {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.skeleton-chip {
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1;   }
+  50%       { opacity: 0.4; }
+}

@@ -1,0 +1,489 @@
+/* ============================================================
+   admin.css — Admin panel styles (admin.html entry point)
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   CSS variables re-declared for admin (same palette, standalone file)
+   ------------------------------------------------------------------ */
+
+:root {
+  --admin-sidebar-width: 220px;
+  --admin-header-height: 56px;
+}
+
+/* ------------------------------------------------------------------
+   Admin layout
+   ------------------------------------------------------------------ */
+
+body.admin-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #f5f6f8;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+/* ------------------------------------------------------------------
+   Auth gate
+   ------------------------------------------------------------------ */
+
+#admin-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--space-4);
+}
+
+.admin-gate-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-lg);
+}
+
+.admin-gate-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.admin-gate-logo__icon {
+  font-size: 1.75rem;
+}
+
+.admin-gate-logo__name {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+}
+
+.admin-gate-logo__tag {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-surface-elevated);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+}
+
+.admin-gate-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-bottom: var(--space-5);
+}
+
+.admin-gate-error {
+  font-size: 0.8125rem;
+  color: var(--color-full);
+  background: color-mix(in srgb, var(--color-full) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-full) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  display: none;
+}
+
+.admin-gate-error.visible {
+  display: block;
+}
+
+/* ------------------------------------------------------------------
+   Admin app shell (shown after auth)
+   ------------------------------------------------------------------ */
+
+#admin-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.admin-header {
+  height: var(--admin-header-height);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-5);
+  gap: var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.admin-header__logo {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--color-text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.admin-header__tag {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.admin-header__spacer {
+  flex: 1;
+}
+
+.admin-header__user {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+/* ------------------------------------------------------------------
+   Tab navigation
+   ------------------------------------------------------------------ */
+
+.admin-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0 var(--space-5);
+  overflow-x: auto;
+}
+
+.admin-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--transition-fast), border-color var(--transition-fast);
+  user-select: none;
+}
+
+.admin-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.admin-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.admin-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 99px;
+  background: var(--color-full);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------
+   Tab panels
+   ------------------------------------------------------------------ */
+
+.admin-content {
+  flex: 1;
+  padding: var(--space-6);
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.admin-tab-panel {
+  display: none;
+}
+
+.admin-tab-panel.active {
+  display: block;
+}
+
+/* ------------------------------------------------------------------
+   Section header (inside each tab panel)
+   ------------------------------------------------------------------ */
+
+.admin-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-5);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.admin-section-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.admin-section-subtitle {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ------------------------------------------------------------------
+   Admin table
+   ------------------------------------------------------------------ */
+
+.admin-table-wrapper {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.admin-table thead {
+  background: var(--color-surface-elevated);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table th {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.admin-table td {
+  padding: var(--space-3) var(--space-4);
+  color: var(--color-text-secondary);
+  vertical-align: middle;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+
+/* Truncated cell */
+.admin-table .cell-truncate {
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------
+   Status pills (for spots table)
+   ------------------------------------------------------------------ */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.pill--free    { background: color-mix(in srgb, var(--color-free) 14%, transparent);    color: var(--color-free); }
+.pill--maybe   { background: color-mix(in srgb, var(--color-maybe) 14%, transparent);   color: color-mix(in srgb, var(--color-maybe) 80%, #000); }
+.pill--claimed { background: color-mix(in srgb, var(--color-claimed) 14%, transparent); color: var(--color-claimed); }
+.pill--full    { background: color-mix(in srgb, var(--color-full) 14%, transparent);    color: var(--color-full); }
+.pill--pending { background: color-mix(in srgb, var(--color-maybe) 14%, transparent);   color: color-mix(in srgb, var(--color-maybe) 80%, #000); }
+.pill--approved { background: color-mix(in srgb, var(--color-free) 14%, transparent);   color: var(--color-free); }
+.pill--rejected { background: color-mix(in srgb, var(--color-full) 14%, transparent);   color: var(--color-full); }
+
+/* ------------------------------------------------------------------
+   Spot form (Add/Edit spot modal content)
+   ------------------------------------------------------------------ */
+
+.admin-spot-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.admin-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.admin-form-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+/* ------------------------------------------------------------------
+   Submission review card
+   ------------------------------------------------------------------ */
+
+.submission-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.submission-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.submission-card__spot-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.submission-card__meta {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.submission-card__description {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-3);
+}
+
+.submission-card__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ------------------------------------------------------------------
+   Empty state
+   ------------------------------------------------------------------ */
+
+.admin-empty {
+  text-align: center;
+  padding: var(--space-10) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.admin-empty__icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-3);
+}
+
+.admin-empty__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.admin-empty__subtitle {
+  font-size: 0.875rem;
+}
+
+/* ------------------------------------------------------------------
+   Schedule editor (tab-schedule)
+   ------------------------------------------------------------------ */
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: auto repeat(7, 1fr);
+  gap: 2px;
+  font-size: 0.75rem;
+}
+
+.schedule-grid__header {
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: var(--space-1);
+}
+
+.schedule-grid__hour {
+  color: var(--color-text-muted);
+  padding: var(--space-1) var(--space-2) var(--space-1) 0;
+  text-align: right;
+  white-space: nowrap;
+  line-height: 28px;
+}
+
+.schedule-cell {
+  height: 28px;
+  border-radius: 3px;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.schedule-cell--class {
+  background: color-mix(in srgb, var(--color-full) 30%, transparent);
+  border-color: var(--color-full);
+}
+
+.schedule-cell--free {
+  background: color-mix(in srgb, var(--color-free) 20%, transparent);
+  border-color: var(--color-free);
+}
+
+/* ------------------------------------------------------------------
+   Responsive overrides for narrow admin screens
+   ------------------------------------------------------------------ */
+
+@media (max-width: 640px) {
+  .admin-content {
+    padding: var(--space-4);
+  }
+
+  .admin-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-table {
+    font-size: 0.8125rem;
+  }
+
+  .admin-table th,
+  .admin-table td {
+    padding: var(--space-2) var(--space-3);
+  }
+}

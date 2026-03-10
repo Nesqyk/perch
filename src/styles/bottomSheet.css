@@ -1,0 +1,191 @@
+/* ============================================================
+   bottomSheet.css — Mobile swipeable bottom sheet (<768px)
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Panel base — mobile only
+   The #panel element is positioned absolutely over the map.
+   bottomSheet.js manages height via inline style transforms.
+   ------------------------------------------------------------------ */
+
+@media (max-width: 767px) {
+  #panel {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+
+    background: var(--color-surface);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
+
+    /* Height driven by JS; default = closed */
+    height: 85vh;            /* max open height */
+    transform: translateY(100%);  /* start hidden */
+    will-change: transform;
+
+    /* Smooth snap after drag ends */
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Disable transition while actively dragging */
+  #panel.dragging {
+    transition: none;
+  }
+
+  /* ------------------------------------------------------------------
+     States set by bottomSheet.js via data-sheet-state attribute
+     ------------------------------------------------------------------ */
+
+  /* Closed — fully hidden below viewport */
+  #panel[data-sheet-state="closed"] {
+    transform: translateY(100%);
+  }
+
+  /* Peek — shows ~42vh of the sheet */
+  #panel[data-sheet-state="peek"] {
+    transform: translateY(calc(100% - 42vh));
+  }
+
+  /* Open — shows ~82vh of the sheet */
+  #panel[data-sheet-state="open"] {
+    transform: translateY(calc(100% - 82vh));
+  }
+
+  /* ------------------------------------------------------------------
+     Drag handle
+     ------------------------------------------------------------------ */
+
+  #panel-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    flex-shrink: 0;
+    cursor: grab;
+    touch-action: none; /* prevent scroll during drag */
+    padding-top: var(--space-2);
+  }
+
+  #panel-handle:active {
+    cursor: grabbing;
+  }
+
+  #panel-handle::before {
+    content: "";
+    display: block;
+    width: 36px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--color-border);
+  }
+
+  /* ------------------------------------------------------------------
+     Panel content scroll area
+     ------------------------------------------------------------------ */
+
+  #panel-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-3) var(--space-4) var(--space-6);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+
+    /* Prevent content scrolling from triggering sheet drag */
+    touch-action: pan-y;
+  }
+
+  /* Thin scrollbar on Android Chrome */
+  #panel-content::-webkit-scrollbar {
+    width: 3px;
+  }
+  #panel-content::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 99px;
+  }
+
+  /* ------------------------------------------------------------------
+     Scrim / backdrop (semi-transparent overlay behind sheet when open)
+     ------------------------------------------------------------------ */
+
+  #panel-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.3);
+    z-index: 99;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  #panel[data-sheet-state="open"] ~ #panel-scrim,
+  #panel[data-sheet-state="open"] + #panel-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* ------------------------------------------------------------------
+     Floating action chip (visible when sheet is closed or peeking)
+     Shows the currently selected spot name / suggestion count.
+     ------------------------------------------------------------------ */
+
+  .sheet-fab {
+    position: fixed;
+    bottom: calc(42vh + var(--space-3));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 101;
+
+    background: var(--color-primary);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 600;
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-lg);
+    white-space: nowrap;
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-fast), bottom var(--transition-base);
+  }
+
+  .sheet-fab.visible {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* When sheet opens, push FAB up or hide it */
+  #panel[data-sheet-state="open"] ~ .sheet-fab {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ------------------------------------------------------------------
+     Safe area insets (iPhone home bar)
+     ------------------------------------------------------------------ */
+
+  #panel-content {
+    padding-bottom: max(var(--space-6), env(safe-area-inset-bottom));
+  }
+}
+
+/* ------------------------------------------------------------------
+   Shared animation — sheet content fade-in on state change
+   ------------------------------------------------------------------ */
+
+.sheet-content-enter {
+  animation: sheetContentIn 0.22s ease forwards;
+}
+
+@keyframes sheetContentIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
