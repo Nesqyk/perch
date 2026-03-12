@@ -434,3 +434,33 @@
   color: var(--color-full);
   font-weight: 600;
 }
+
+/* ------------------------------------------------------------------
+   Perch Here — group pin drop button
+   Uses --group-color CSS variable injected inline by spotCard.js.
+   ------------------------------------------------------------------ */
+
+.btn-group-pin {
+  background:    var(--group-color, var(--color-brand));
+  color:         var(--color-white);
+  border:        none;
+  font-weight:   var(--font-bold);
+  letter-spacing: 0.01em;
+  transition:    filter var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-group-pin:hover {
+  filter: brightness(1.12);
+}
+
+.btn-group-pin:active {
+  transform: scale(0.98);
+}
+
+.btn-group-pin--end {
+  background: var(--color-gray-600);
+}
+
+.btn-group-pin--end:hover {
+  filter: brightness(1.15);
+}
