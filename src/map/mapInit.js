@@ -31,10 +31,8 @@ const DEFAULT_CENTER = {
 const DEFAULT_ZOOM = 17; // street-level zoom appropriate for a campus
 
 // CartoDB Positron tile URL — muted, label-light, free tier, no API key.
-const TILE_URL         = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
-  '&copy; <a href="https://carto.com/attributions">CARTO</a>';
+// Attribution: © OpenStreetMap contributors © CARTO (hidden in UI via attributionControl: false)
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
 /**
  * Initialise the Leaflet map instance and mount it to #map-container.
@@ -49,15 +47,15 @@ export function initMap() {
   }
 
   _map = L.map(container, {
-    center:      [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
-    zoom:        DEFAULT_ZOOM,
-    zoomControl: false,   // we provide our own controls via mapControls.js
+    center:           [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
+    zoom:             DEFAULT_ZOOM,
+    zoomControl:      false,   // we provide our own controls via mapControls.js
+    attributionControl: false, // attribution hidden from UI (tiles: OSM + CARTO)
   });
 
   L.tileLayer(TILE_URL, {
-    attribution: TILE_ATTRIBUTION,
-    maxZoom:     19,
-    subdomains:  'abcd',
+    maxZoom:    19,
+    subdomains: 'abcd',
   }).addTo(_map);
 
   // Signal to the rest of the app that the map is ready to receive markers.
