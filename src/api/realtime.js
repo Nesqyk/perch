@@ -100,7 +100,7 @@ export function subscribeToRealtime() {
 
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
-        console.info('[realtime] Connected to perch-spots channel');
+        console.warn('[realtime] Connected to perch-spots channel');
       }
       if (status === 'CHANNEL_ERROR') {
         console.warn('[realtime] Channel error — will attempt reconnect');

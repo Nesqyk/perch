@@ -27,6 +27,8 @@ export default [
         fetch: 'readonly',
         CustomEvent: 'readonly',
         EventTarget: 'readonly',
+        navigator: 'readonly',
+        requestAnimationFrame: 'readonly',
         // Node / Vitest globals (for test files).
         process: 'readonly',
       },

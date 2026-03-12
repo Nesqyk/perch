@@ -54,7 +54,7 @@ function _onSpotDeselected() {
   _renderView('filters');
 }
 
-function _onClaimUpdated(e) {
+function _onClaimUpdated(_e) {
   const { myActiveClaim, selectedSpotId } = getState();
   // Switch to claim panel when this session's own claim is added.
   if (myActiveClaim && myActiveClaim.spotId === selectedSpotId) {

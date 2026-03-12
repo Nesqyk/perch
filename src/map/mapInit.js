@@ -18,14 +18,14 @@ import { emit, EVENTS }   from '../core/events.js';
 let _map = null;
 
 /**
- * Default campus center coordinates.
- * Replace lat/lng with the actual campus location before launch.
+ * CTU Main Campus, Cebu City, Philippines.
+ * Centered on the main building cluster at the heart of campus.
  *
  * @type {{ lat: number, lng: number }}
  */
 const DEFAULT_CENTER = {
-  lat: 10.3157,   // placeholder — update to actual campus lat
-  lng: 123.8854,  // placeholder — update to actual campus lng
+  lat: 10.2936,   // CTU Main Campus, Cebu City
+  lng: 123.8809,  // CTU Main Campus, Cebu City
 };
 
 const DEFAULT_ZOOM = 17; // street-level zoom appropriate for a campus

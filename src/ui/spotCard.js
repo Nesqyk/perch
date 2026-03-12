@@ -14,7 +14,7 @@ import { emit, EVENTS }         from '../core/events.js';
 import { getState }              from '../core/store.js';
 import { formatConfidence }      from '../utils/confidence.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
-import { timeAgo, formatTime }   from '../utils/time.js';
+import { timeAgo, formatTime as _formatTime }   from '../utils/time.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 
 /**
@@ -80,7 +80,7 @@ function _buildHeader(spot) {
   return div;
 }
 
-function _buildStatusBadge(confDisplay, status) {
+function _buildStatusBadge(confDisplay, _status) {
   const div       = document.createElement('div');
   div.className   = `spot-status-badge ${confDisplay.cssClass}`;
 

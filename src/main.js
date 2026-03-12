@@ -188,7 +188,7 @@ async function boot() {
     }
   });
 
-  console.info('[Perch] App ready.');
+  console.warn('[Perch] App ready.');
 }
 
 // ─── Geolocation helper ──────────────────────────────────────────────────────
