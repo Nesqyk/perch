@@ -9,7 +9,7 @@
  * the same spot while this panel is open.
  */
 
-import { on, off, emit, EVENTS }  from '../core/events.js';
+import { on, off as _off, emit, EVENTS }  from '../core/events.js';
 import { getState, dispatch }      from '../core/store.js';
 import { calcRemainingCapacity }   from '../utils/capacity.js';
 import { getActiveClaimsForSpot }  from '../state/spotState.js';

@@ -19,7 +19,7 @@ import { getState, dispatch } from '../core/store.js';
 import { createClaim, cancelClaim } from '../api/claims.js';
 import { GROUP_SIZE_CONFIG }  from '../utils/capacity.js';
 import { showToast }          from '../ui/toast.js';
-import { openModal }          from '../ui/modal.js';
+import { openModal as _openModal }          from '../ui/modal.js';
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 

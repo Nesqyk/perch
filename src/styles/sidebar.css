@@ -214,3 +214,263 @@
   background: var(--color-border);
   margin: var(--space-4) 0;
 }
+
+/* ==================================================================
+   Group panel — rendered by ui/groupPanel.js
+   ================================================================== */
+
+/* ── Group panel header ── */
+.group-panel-header {
+  display:        flex;
+  align-items:    center;
+  gap:            var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom:  1px solid var(--color-border);
+  margin-bottom:  var(--space-4);
+}
+
+.group-panel-color-swatch {
+  width:         12px;
+  height:        12px;
+  border-radius: var(--radius-full);
+  flex-shrink:   0;
+}
+
+.group-panel-name {
+  font-size:   var(--text-base);
+  font-weight: var(--font-bold);
+  flex:        1;
+  white-space: nowrap;
+  overflow:    hidden;
+  text-overflow: ellipsis;
+}
+
+.group-scout-badge {
+  display:       inline-flex;
+  align-items:   center;
+  gap:           var(--space-1);
+  padding:       2px var(--space-2);
+  font-size:     var(--text-xs);
+  font-weight:   var(--font-medium);
+  background:    var(--color-brand-light);
+  color:         var(--color-brand);
+  border-radius: var(--radius-full);
+}
+
+/* ── Invite row ── */
+.group-invite-row {
+  display:        flex;
+  align-items:    center;
+  gap:            var(--space-2);
+  margin-bottom:  var(--space-4);
+}
+
+.group-code-display {
+  flex:          1;
+  font-size:     var(--text-sm);
+  font-weight:   var(--font-medium);
+  font-family:   var(--font-mono);
+  background:    var(--color-surface-alt);
+  border:        var(--border);
+  border-radius: var(--radius-md);
+  padding:       var(--space-2) var(--space-3);
+  color:         var(--color-text);
+  letter-spacing: 0.1em;
+}
+
+/* ── Empty state ── */
+.group-panel-empty {
+  text-align:  center;
+  padding:     var(--space-10) var(--space-4);
+  color:       var(--color-text-muted);
+  font-size:   var(--text-sm);
+}
+
+.group-panel-empty__icon {
+  font-size:     2rem;
+  margin-bottom: var(--space-3);
+}
+
+/* ── Pin card shared base ── */
+.group-pin-card {
+  padding:       var(--space-3) var(--space-4);
+  border:        1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  background:    var(--color-surface);
+  transition:    box-shadow var(--transition-fast);
+}
+
+.group-pin-card:last-child {
+  margin-bottom: 0;
+}
+
+/* ── Live pin card ── */
+.group-pin-card--live {
+  border-color: var(--color-brand);
+  box-shadow:   0 0 0 2px rgba(26,107,60,.12);
+}
+
+/* ── Saved pin card ── */
+.group-pin-card--saved {
+  opacity: 0.85;
+}
+
+/* ── Pin card internals ── */
+.group-pin-card__header {
+  display:     flex;
+  align-items: center;
+  gap:         var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.group-pin-card__name {
+  font-weight: var(--font-medium);
+  font-size:   var(--text-sm);
+  flex:        1;
+  white-space: nowrap;
+  overflow:    hidden;
+  text-overflow: ellipsis;
+}
+
+.group-pin-card__status {
+  font-size:     var(--text-xs);
+  font-weight:   var(--font-medium);
+  padding:       2px var(--space-2);
+  border-radius: var(--radius-full);
+  background:    var(--color-gray-100);
+  color:         var(--color-text-muted);
+}
+
+.group-pin-card__status--scouting  { background: var(--color-yellow-400); color: #000; }
+.group-pin-card__status--perched   { background: var(--color-green-500);  color: #fff; }
+.group-pin-card__status--filling   { background: var(--color-yellow-700); color: #fff; }
+.group-pin-card__status--expiring  { background: var(--color-red-500);    color: #fff; }
+
+.group-pin-card__spot {
+  font-size:   var(--text-xs);
+  color:       var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.group-pin-card__joiners {
+  display:     flex;
+  align-items: center;
+  gap:         var(--space-2);
+  flex-wrap:   wrap;
+}
+
+/* ── Transit dots (in pin card) ── */
+.transit-dot {
+  display:       inline-flex;
+  align-items:   center;
+  justify-content: center;
+  width:         24px;
+  height:        24px;
+  border-radius: var(--radius-full);
+  font-size:     var(--text-xs);
+  font-weight:   var(--font-bold);
+  color:         var(--color-white);
+  border:        2px solid var(--color-white);
+  box-shadow:    var(--shadow-sm);
+}
+
+/* ── Vibe confirm button ── */
+.vibe-btn {
+  margin-top:    var(--space-2);
+  padding:       var(--space-2) var(--space-3);
+  font-size:     var(--text-xs);
+  background:    var(--color-surface-alt, var(--color-gray-100));
+  border:        var(--border);
+  border-radius: var(--radius-md);
+  color:         var(--color-text-muted);
+  cursor:        pointer;
+  transition:    background var(--transition-fast);
+}
+
+.vibe-btn:hover {
+  background: var(--color-gray-200);
+}
+
+/* ── Vibe picker (inline popover) ── */
+.vibe-picker {
+  position:      absolute;
+  z-index:       300;
+  background:    var(--color-surface);
+  border:        var(--border);
+  border-radius: var(--radius-md);
+  box-shadow:    var(--shadow-md);
+  display:       flex;
+  flex-direction: column;
+  overflow:      hidden;
+  min-width:     160px;
+}
+
+.vibe-option {
+  padding:    var(--space-3) var(--space-4);
+  font-size:  var(--text-sm);
+  cursor:     pointer;
+  border:     none;
+  background: none;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.vibe-option:hover {
+  background: var(--color-gray-100);
+}
+
+/* ── Group form (create / join modal) ── */
+.group-form {
+  display:        flex;
+  flex-direction: column;
+  gap:            var(--space-4);
+}
+
+.form-field {
+  display:        flex;
+  flex-direction: column;
+  gap:            var(--space-2);
+}
+
+.form-label {
+  font-size:   var(--text-sm);
+  font-weight: var(--font-medium);
+  color:       var(--color-text);
+}
+
+.form-hint {
+  font-size: var(--text-xs);
+  color:     var(--color-text-muted);
+}
+
+/* ── Group code input (4-char, mono, large) ── */
+.group-code-input {
+  font-family:   var(--font-mono);
+  font-size:     var(--text-xl);
+  letter-spacing: 0.25em;
+  text-align:    center;
+  text-transform: uppercase;
+  padding:       var(--space-3);
+}
+
+/* ── Leave group row ── */
+.group-leave-row {
+  margin-top:  var(--space-5);
+  padding-top: var(--space-4);
+  border-top:  1px solid var(--color-border);
+  text-align:  center;
+}
+
+.group-leave-btn {
+  font-size:  var(--text-xs);
+  color:      var(--color-text-muted);
+  background: none;
+  border:     none;
+  cursor:     pointer;
+  text-decoration: underline;
+}
+
+.group-leave-btn:hover {
+  color: var(--color-red-500);
+}

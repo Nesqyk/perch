@@ -25,6 +25,15 @@
   <header id="app-header" class="app-header">
     <span class="app-logo">Perch</span>
     <span class="app-tagline">no login required</span>
+    <!-- Group action buttons — always visible, collapse on mobile via CSS -->
+    <div class="header-group-actions">
+      <button id="btn-new-group" class="btn-header-group" aria-label="Create a new group">
+        New Group
+      </button>
+      <button id="btn-join-group" class="btn-header-group btn-header-group--secondary" aria-label="Join an existing group">
+        Join Group
+      </button>
+    </div>
     <!-- Hamburger — visible on mobile only (CSS controls display) -->
     <button id="menu-toggle" class="btn-icon" aria-label="Open menu" aria-expanded="false">
       <span class="hamburger-line"></span>

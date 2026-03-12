@@ -9,7 +9,7 @@
  * so they can immediately move on to the next spot.
  */
 
-import { on, emit, EVENTS }    from '../core/events.js';
+import { on as _on, emit, EVENTS }    from '../core/events.js';
 import { getState, dispatch }  from '../core/store.js';
 import { formatConfidence }    from '../utils/confidence.js';
 import { deriveSpotStatus }    from '../state/spotState.js';
@@ -132,7 +132,7 @@ function _buildAlternativeRow(spot) {
  * @param {object}   filters    - current filter state to narrow alternatives
  * @returns {object[]}
  */
-function _pickAlternatives(excludeId, spots, confidence, filters) {
+function _pickAlternatives(excludeId, spots, confidence, _filters) {
   return spots
     .filter(s => s.id !== excludeId && deriveSpotStatus(s.id) !== 'full')
     .sort((a, b) => {

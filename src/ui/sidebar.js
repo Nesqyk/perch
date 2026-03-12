@@ -20,6 +20,7 @@ import { renderFilterPanel, initFilterPanel } from './filterPanel.js';
 import { renderSpotCard }      from './spotCard.js';
 import { renderClaimPanel, initClaimPanel }   from './claimPanel.js';
 import { renderReportPanel }   from './reportPanel.js';
+import { renderGroupPanel, initGroupPanel }   from './groupPanel.js';
 
 let _currentView = 'filters';
 
@@ -28,11 +29,14 @@ let _currentView = 'filters';
 export function initSidebar() {
   initFilterPanel();
   initClaimPanel();
+  initGroupPanel();
 
-  on(EVENTS.SPOT_SELECTED,   _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED, _onSpotDeselected);
-  on(EVENTS.CLAIM_UPDATED,   _onClaimUpdated);
+  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
+  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
   on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
+  on(EVENTS.GROUP_JOINED,     _onGroupJoined);
+  on(EVENTS.GROUP_LEFT,       _onGroupLeft);
 
   // Render the default filter view on startup.
   _renderView('filters');
@@ -54,7 +58,7 @@ function _onSpotDeselected() {
   _renderView('filters');
 }
 
-function _onClaimUpdated(e) {
+function _onClaimUpdated(_e) {
   const { myActiveClaim, selectedSpotId } = getState();
   // Switch to claim panel when this session's own claim is added.
   if (myActiveClaim && myActiveClaim.spotId === selectedSpotId) {
@@ -67,6 +71,14 @@ function _onCorrectionFiled(e) {
   if (e.detail.spotId === selectedSpotId) {
     _renderView('report', selectedSpotId);
   }
+}
+
+function _onGroupJoined() {
+  _renderView('group');
+}
+
+function _onGroupLeft() {
+  _renderView('filters');
 }
 
 // ─── View renderer ────────────────────────────────────────────────────────────
@@ -91,6 +103,9 @@ function _renderView(view, spotId) {
       break;
     case 'report':
       renderReportPanel(container, spotId);
+      break;
+    case 'group':
+      renderGroupPanel(container);
       break;
   }
 }

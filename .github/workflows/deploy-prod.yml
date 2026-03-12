@@ -1,0 +1,64 @@
+# .github/workflows/deploy-prod.yml
+#
+# Perch Production Deploy — runs only when a PR is merged into main.
+#
+# Steps:
+#   1. Vite production build (using production secrets)
+#   2. Push DB migrations to Supabase (supabase db push)
+#   3. Deploy to Vercel production
+
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Build → Migrate → Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Node setup ────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # ── Install dependencies ───────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Production build ───────────────────────────────────────────────────
+      - name: Build (Vite)
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
+      # ── Supabase CLI setup ─────────────────────────────────────────────────
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # ── Run DB migrations ──────────────────────────────────────────────────
+      # Pushes all pending migration files in supabase/migrations/ to the
+      # linked Supabase project. Requires SUPABASE_ACCESS_TOKEN and
+      # SUPABASE_PROJECT_ID to be set as GitHub Actions secrets.
+      - name: Push DB migrations
+        run: supabase db push --project-ref ${{ secrets.SUPABASE_PROJECT_ID }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      # ── Deploy to Vercel (production) ──────────────────────────────────────
+      - name: Deploy to Vercel
+        run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

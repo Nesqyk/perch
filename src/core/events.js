@@ -104,6 +104,13 @@ export const EVENTS = Object.freeze({
   MAP_READY:              'map:ready',
   MAP_PIN_CLICKED:        'map:pinClicked',
 
+  // ── Store: groups ────────────────────────────────────────────────────────
+  GROUP_JOINED:           'state:groupJoined',
+  GROUP_LEFT:             'state:groupLeft',
+  GROUP_PINS_UPDATED:     'state:groupPinsUpdated',
+  GROUP_PIN_JOINS_UPDATED:'state:groupPinJoinsUpdated',
+  GROUP_CONFIRMATIONS_UPDATED: 'state:groupConfirmationsUpdated',
+
   // ── UI ───────────────────────────────────────────────────────────────────
   UI_CLAIM_REQUESTED:     'ui:claimRequested',
   UI_REPORT_REQUESTED:    'ui:reportRequested',
@@ -111,4 +118,6 @@ export const EVENTS = Object.freeze({
   UI_FILTER_SUBMITTED:    'ui:filterSubmitted',
   UI_SUGGEST_OPENED:      'ui:suggestOpened',
   UI_PANEL_CLOSED:        'ui:panelClosed',
+  UI_GROUP_CREATE:        'ui:groupCreate',
+  UI_GROUP_JOIN:          'ui:groupJoin',
 });

@@ -14,8 +14,9 @@ import { emit, EVENTS }         from '../core/events.js';
 import { getState }              from '../core/store.js';
 import { formatConfidence }      from '../utils/confidence.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
-import { timeAgo, formatTime }   from '../utils/time.js';
+import { timeAgo, formatTime as _formatTime }   from '../utils/time.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
+import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
 
 /**
  * Render the spot detail card into a container element.
@@ -33,14 +34,15 @@ export function renderSpotCard(container, spotId) {
   const status       = deriveSpotStatus(spotId);
   const activeClaims = getActiveClaimsForSpot(spotId, claims);
   const capacity     = calcRemainingCapacity(spot.rough_capacity, activeClaims);
+  const { group, myGroupPinId } = getState();
 
   container.innerHTML = '';
-  container.appendChild(_buildCard(spot, confDisplay, status, activeClaims, capacity));
+  container.appendChild(_buildCard(spot, confDisplay, status, activeClaims, capacity, group, myGroupPinId));
 }
 
 // ─── Card builder ────────────────────────────────────────────────────────────
 
-function _buildCard(spot, confDisplay, status, activeClaims, capacity) {
+function _buildCard(spot, confDisplay, status, activeClaims, capacity, group, myGroupPinId) {
   const card       = document.createElement('div');
   card.className   = 'spot-card';
 
@@ -49,7 +51,7 @@ function _buildCard(spot, confDisplay, status, activeClaims, capacity) {
   card.appendChild(_buildAmenities(spot));
   card.appendChild(_buildScheduleNote(spot));
   card.appendChild(_buildClaimsSection(activeClaims, capacity));
-  card.appendChild(_buildActions(spot.id, status));
+  card.appendChild(_buildActions(spot.id, status, group, myGroupPinId));
 
   return card;
 }
@@ -80,7 +82,7 @@ function _buildHeader(spot) {
   return div;
 }
 
-function _buildStatusBadge(confDisplay, status) {
+function _buildStatusBadge(confDisplay, _status) {
   const div       = document.createElement('div');
   div.className   = `spot-status-badge ${confDisplay.cssClass}`;
 
@@ -158,10 +160,35 @@ function _buildClaimsSection(activeClaims, capacity) {
   return section;
 }
 
-function _buildActions(spotId, status) {
+function _buildActions(spotId, status, group, myGroupPinId) {
   const actions    = document.createElement('div');
   actions.className = 'spot-actions';
 
+  // ── Perch Here (group pin drop) ── visible only when in a group
+  if (group) {
+    const perchBtn       = document.createElement('button');
+    perchBtn.type        = 'button';
+    perchBtn.className   = 'btn btn-group-pin btn-full';
+
+    if (myGroupPinId) {
+      // Pinner already has a live pin — let them end it from here.
+      perchBtn.textContent = 'End My Pin';
+      perchBtn.classList.add('btn-group-pin--end');
+      perchBtn.addEventListener('click', () => {
+        emit(GROUP_PIN_EVENTS.END_REQUESTED, { pinId: myGroupPinId });
+      });
+    } else {
+      perchBtn.textContent = 'Perch Here';
+      perchBtn.style.setProperty('--group-color', group.color);
+      perchBtn.addEventListener('click', () => {
+        emit(GROUP_PIN_EVENTS.DROP_REQUESTED, { spotId });
+      });
+    }
+
+    actions.appendChild(perchBtn);
+  }
+
+  // ── I'm Going Here (anonymous claim) ──
   if (status !== 'full') {
     const claimBtn       = document.createElement('button');
     claimBtn.type        = 'button';
@@ -173,6 +200,7 @@ function _buildActions(spotId, status) {
     actions.appendChild(claimBtn);
   }
 
+  // ── It's Full ──
   const reportBtn       = document.createElement('button');
   reportBtn.type        = 'button';
   reportBtn.className   = 'btn btn-danger btn-full';

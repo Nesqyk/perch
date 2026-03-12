@@ -10,36 +10,55 @@
  *   claimed  → blue   (#3b82f6)  ripple animation
  *   full     → red    (#ef4444)  fades / dim
  *
- * On-campus spots use a pointed teardrop marker SVG.
- * Off-campus spots use a circular marker SVG.
+ * On-campus spots use a pointed teardrop SVG icon.
+ * Off-campus spots use a circular SVG icon.
+ *
+ * Group live pins are rendered as a separate layer on top of spot pins.
+ * Each group pin uses a coloured teardrop with member initials and a
+ * joiner count badge; transit "on the way" joiners appear as small dots
+ * orbiting the pin.
  *
  * This module never touches the sidebar or bottom sheet.
  * It only emits MAP_PIN_CLICKED — the UI layer decides what to render.
  */
 
-import { on, emit, EVENTS }  from '../core/events.js';
-import { getState }           from '../core/store.js';
-import { getMap }             from './mapInit.js';
-import { deriveSpotStatus }   from '../state/spotState.js';
+import { L }                    from './mapLoader.js';
+import { on, emit, EVENTS }     from '../core/events.js';
+import { getState }              from '../core/store.js';
+import { getMap }                from './mapInit.js';
+import { deriveSpotStatus }      from '../state/spotState.js';
 
-/** @type {Map<string, google.maps.Marker>}  spotId → Marker */
+/** @type {Map<string, import('leaflet').Marker>}  spotId → Marker */
 const _markers = new Map();
 
-// ─── Initialise ──────────────────────────────────────────────────────────────
+/** @type {Map<string, import('leaflet').Marker>}  pinId → Marker for group live pins */
+const _groupMarkers = new Map();
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Maps status string → hex color. Must stay in sync with CSS variables. */
+export const PIN_COLORS = {
+  free:    '#22c55e',
+  maybe:   '#eab308',
+  claimed: '#3b82f6',
+  full:    '#ef4444',
+};
+
+// ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
  * Wire up all store event listeners.
  * Called once from main.js after initMap().
  */
 export function initPins() {
-  on(EVENTS.SPOTS_LOADED,    _onSpotsLoaded);
-  on(EVENTS.CLAIM_UPDATED,   _onClaimUpdated);
+  on(EVENTS.SPOTS_LOADED,     _onSpotsLoaded);
+  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
   on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
-  on(EVENTS.SPOT_SELECTED,   _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED, _onSpotDeselected);
+  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
 }
 
-// ─── Event handlers ──────────────────────────────────────────────────────────
+// ─── Event handlers ───────────────────────────────────────────────────────────
 
 function _onSpotsLoaded() {
   const { spots } = getState();
@@ -47,7 +66,7 @@ function _onSpotsLoaded() {
   const incomingIds = new Set(spots.map(s => s.id));
   for (const [id, marker] of _markers) {
     if (!incomingIds.has(id)) {
-      marker.setMap(null);
+      marker.remove();
       _markers.delete(id);
     }
   }
@@ -74,10 +93,10 @@ function _onCorrectionFiled(e) {
 
 function _onSpotSelected(e) {
   const { spotId } = e.detail;
-  // Scale up the selected marker slightly.
+  // Scale up the selected marker slightly via zIndexOffset.
   for (const [id, marker] of _markers) {
     const isSelected = id === spotId;
-    marker.setZIndex(isSelected ? 999 : 1);
+    marker.setZIndexOffset(isSelected ? 999 : 0);
     marker.setIcon(_buildIcon(
       getState().spots.find(s => s.id === id),
       isSelected
@@ -90,104 +109,246 @@ function _onSpotDeselected() {
   getState().spots.forEach(spot => {
     const marker = _markers.get(spot.id);
     if (marker) {
-      marker.setZIndex(1);
+      marker.setZIndexOffset(0);
       marker.setIcon(_buildIcon(spot, false));
     }
   });
 }
 
-// ─── Marker CRUD ─────────────────────────────────────────────────────────────
+// ─── Marker CRUD ──────────────────────────────────────────────────────────────
 
 /**
- * Create or update a marker for a given spot.
+ * Create or update a Leaflet marker for a given spot.
+ *
  * @param {object} spot - Row from the spots table.
  */
 function _upsertMarker(spot) {
-  const map    = getMap();
-  const status = deriveSpotStatus(spot.id);
-  const icon   = _buildIcon(spot, spot.id === getState().selectedSpotId);
+  const map  = getMap();
+  const icon = _buildIcon(spot, spot.id === getState().selectedSpotId);
 
   if (_markers.has(spot.id)) {
     const marker = _markers.get(spot.id);
     marker.setIcon(icon);
-    marker.setTitle(spot.name);
   } else {
-    const marker = new google.maps.Marker({
-      position: { lat: spot.lat, lng: spot.lng },
-      map,
-      title:    spot.name,
-      icon,
-      zIndex:   1,
-    });
+    const marker = L.marker([spot.lat, spot.lng], { icon, title: spot.name })
+      .addTo(map);
 
-    marker.addListener('click', () => {
+    marker.on('click', () => {
       emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id });
     });
 
     _markers.set(spot.id, marker);
   }
-
-  // Apply CSS animation class via the marker's DOM element.
-  // Google Maps exposes the marker DOM after it has been added to the map.
-  google.maps.event.addListenerOnce(_markers.get(spot.id), 'idle', () => {
-    // Animation is handled via CSS classes on the SVG wrapper.
-    // We store the status as a data attribute for the CSS to target.
-    const el = _markers.get(spot.id)?.getIcon()?.url;
-    // Note: advanced animation (pulsing, ripple) is handled
-    // using OverlayView or CSS-animated divs in Phase 2.
-    // For Phase 1 the color alone communicates status.
-  });
 }
 
-// ─── Icon factory ────────────────────────────────────────────────────────────
+// ─── Icon factory ─────────────────────────────────────────────────────────────
 
 /**
- * Derive the status string and return a Google Maps icon descriptor.
+ * Build a Leaflet DivIcon with an inline SVG for the given spot + selection state.
  *
  * @param {object}  spot
  * @param {boolean} selected
- * @returns {google.maps.Icon}
+ * @returns {import('leaflet').DivIcon}
  */
 function _buildIcon(spot, selected) {
-  const status = deriveSpotStatus(spot.id);
-  const color  = PIN_COLORS[status] ?? PIN_COLORS.maybe;
-  const scale  = selected ? 1.35 : 1;
+  const status  = deriveSpotStatus(spot.id);
+  const color   = PIN_COLORS[status] ?? PIN_COLORS.maybe;
+  const opacity = status === 'full' ? 0.5 : 1;
+  const scale   = selected ? 1.35 : 1;
 
-  // On-campus → pointed teardrop; off-campus → circle
-  const path   = spot.on_campus ? TEARDROP_PATH : CIRCLE_PATH;
+  if (spot.on_campus) {
+    // Teardrop: 24×36 natural size, tip at bottom-centre.
+    const w = Math.round(24 * scale);
+    const h = Math.round(36 * scale);
+    return L.divIcon({
+      html:        _teardropSvg(color, opacity, w, h),
+      className:   '',              // suppress Leaflet's default white square
+      iconSize:    [w, h],
+      iconAnchor:  [w / 2, h],     // tip of the teardrop
+    });
+  }
 
-  return {
-    path,
-    fillColor:    color,
-    fillOpacity:  status === 'full' ? 0.5 : 1,
-    strokeColor:  '#ffffff',
-    strokeWeight: 2,
-    scale,
-    anchor:       spot.on_campus
-      ? new google.maps.Point(12, 36)   // teardrop tip
-      : new google.maps.Point(12, 12),  // circle centre
-  };
+  // Circle: 24×24 natural size, anchor at centre.
+  const d = Math.round(24 * scale);
+  return L.divIcon({
+    html:       _circleSvg(color, opacity, d),
+    className:  '',
+    iconSize:   [d, d],
+    iconAnchor: [d / 2, d / 2],
+  });
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-/** Maps status string → hex color. Must stay in sync with CSS variables. */
-const PIN_COLORS = {
-  free:    '#22c55e',
-  maybe:   '#eab308',
-  claimed: '#3b82f6',
-  full:    '#ef4444',
-};
+/**
+ * Inline SVG string for an on-campus (teardrop) pin.
+ *
+ * @param {string} color   - Hex fill color.
+ * @param {number} opacity - Fill opacity (0–1).
+ * @param {number} w       - Rendered width in pixels.
+ * @param {number} h       - Rendered height in pixels.
+ * @returns {string}
+ */
+function _teardropSvg(color, opacity, w, h) {
+  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 36">
+    <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z"
+      fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+  </svg>`;
+}
 
 /**
- * SVG path for an on-campus pin (pointed teardrop, 24×36 viewBox).
- * Defined as a Google Maps SymbolPath-compatible path string.
+ * Inline SVG string for an off-campus (circle) pin.
+ *
+ * @param {string} color   - Hex fill color.
+ * @param {number} opacity - Fill opacity (0–1).
+ * @param {number} d       - Rendered diameter in pixels.
+ * @returns {string}
  */
-const TEARDROP_PATH =
-  'M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z';
+function _circleSvg(color, opacity, d) {
+  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 24 24">
+    <circle cx="12" cy="12" r="11"
+      fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+  </svg>`;
+}
+
+// ─── Group pin layer ──────────────────────────────────────────────────────────
 
 /**
- * SVG path for an off-campus pin (circle, 24×24 viewBox).
+ * Wire up group pin layer listeners.
+ * Call once from main.js after initMap(), after initPins().
  */
-const CIRCLE_PATH =
-  'M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0z';
+export function initGroupPinLayer() {
+  on(EVENTS.GROUP_PINS_UPDATED,       _onGroupPinsUpdated);
+  on(EVENTS.GROUP_PIN_JOINS_UPDATED,  _onGroupPinsUpdated);
+  on(EVENTS.GROUP_LEFT,               _clearGroupPinLayer);
+}
+
+/**
+ * Rebuild the group pin markers from current state.
+ * Triggered when group pins or joins change.
+ */
+function _onGroupPinsUpdated() {
+  const { groupPins, groupPinJoins, group } = getState();
+  if (!group) {
+    _clearGroupPinLayer();
+    return;
+  }
+  updateGroupPinLayer(groupPins, groupPinJoins, group.color);
+}
+
+/**
+ * Remove all group pin markers from the map.
+ */
+function _clearGroupPinLayer() {
+  for (const marker of _groupMarkers.values()) {
+    marker.remove();
+  }
+  _groupMarkers.clear();
+}
+
+/**
+ * Sync the group pin marker layer with the provided pins + joins.
+ * Called by feature module after a realtime update.
+ *
+ * @param {object[]} pins       - Array of group_pin rows.
+ * @param {object[]} joins      - Array of group_pin_join rows.
+ * @param {string}   color      - Hex colour for the group (e.g. '#7c3aed').
+ */
+export function updateGroupPinLayer(pins, joins, color) {
+  const map = getMap();
+
+  // Remove stale markers for pins no longer in the list.
+  const incomingIds = new Set(pins.map(p => p.id));
+  for (const [id, marker] of _groupMarkers) {
+    if (!incomingIds.has(id)) {
+      marker.remove();
+      _groupMarkers.delete(id);
+    }
+  }
+
+  // Upsert markers for each active pin.
+  for (const pin of pins) {
+    if (pin.status === 'ended') {
+      // Remove ended pins from the map.
+      if (_groupMarkers.has(pin.id)) {
+        _groupMarkers.get(pin.id).remove();
+        _groupMarkers.delete(pin.id);
+      }
+      continue;
+    }
+
+    const pinJoins    = joins.filter(j => j.pin_id === pin.id);
+    const transitCount = pinJoins.filter(j => j.status === 'heading').length;
+    const icon        = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
+
+    if (_groupMarkers.has(pin.id)) {
+      _groupMarkers.get(pin.id).setIcon(icon);
+    } else {
+      const marker = L.marker([pin.lat, pin.lng], {
+        icon,
+        title: `Group pin (${pin.status})`,
+        zIndexOffset: 500, // render above spot pins
+      }).addTo(map);
+      _groupMarkers.set(pin.id, marker);
+    }
+  }
+}
+
+/**
+ * Build a Leaflet DivIcon for a group pin.
+ * Renders a coloured teardrop with member initials, a joiner badge,
+ * and small transit dots for members heading to the pin.
+ *
+ * @param {object}   pin          - group_pin row (must have lat, lng, status, display_name).
+ * @param {object[]} joins        - group_pin_join rows for this pin.
+ * @param {string}   color        - Group hex color.
+ * @param {number}   transitCount - Number of members currently in transit.
+ * @returns {import('leaflet').DivIcon}
+ */
+function _buildGroupPinIcon(pin, joins, color, transitCount) {
+  const initials = _initials(pin.display_name ?? '?');
+  const badge    = transitCount > 0
+    ? /* html */`<span class="group-pin-badge">${transitCount}</span>`
+    : '';
+
+  // Transit dots: one small dot per member heading there (max 5).
+  const dots = joins
+    .filter(j => j.status === 'heading')
+    .slice(0, 5)
+    .map(() => /* html */`<span class="group-transit-dot" style="background:${color}"></span>`)
+    .join('');
+
+  const dotsRow = dots
+    ? /* html */`<div class="group-transit-dots">${dots}</div>`
+    : '';
+
+  const html = /* html */`
+    <div class="group-pin-wrapper">
+      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="44" viewBox="0 0 24 36" class="group-pin-svg">
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z"
+          fill="${color}" stroke="#ffffff" stroke-width="2"/>
+        <text x="12" y="14" text-anchor="middle" dominant-baseline="middle"
+          font-family="system-ui,sans-serif" font-size="9" font-weight="700"
+          fill="#ffffff">${initials}</text>
+      </svg>
+      ${badge}
+      ${dotsRow}
+    </div>`;
+
+  return L.divIcon({
+    html,
+    className:  '',
+    iconSize:   [40, 52],
+    iconAnchor: [16, 44],
+  });
+}
+
+/**
+ * Extract up to 2 initials from a display name.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function _initials(name) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
