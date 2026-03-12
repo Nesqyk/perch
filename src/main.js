@@ -13,29 +13,30 @@
  *  6. loadGoogleMaps()  → initMap()  — load Maps SDK then mount the map
  *  7. initPins()        — register map pin listeners (needs map ready)
  *  8. initGroupPinLayer() — register group pin overlay listeners
- *  9. addMapControls()  — inject zoom + locate-me buttons into the map
- * 10. initRealtime()    — open Supabase Realtime channel
- * 11. fetchSpots()      — load spots + confidence → dispatch SPOTS_LOADED
- * 12. fetchActiveClaims() — load current claims → dispatch CLAIMS_LOADED
- * 13. Restore selected spot from URL (if ?spot= present)
- * 14. initSmartSuggestions() — wire F1 filter-submission listener
- * 15. initClaim()            — wire F2 claim flow listener
- * 16. initReportFull()       — wire F3 report-full flow listener
- * 17. initGroups()           — wire F4 group create/join listeners
- * 18. initGroupPins()        — wire F5 group pin lifecycle listeners
- * 19. initFilterPanel()      — render + wire filter UI
- * 20. initSidebar() / initBottomSheet() — wire panel controller for viewport
- * 21. Wire URL sync on store events
- * 22. Wire geolocation (request permission, update store on change)
- * 23. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
- * 24. Wire header group buttons → open modals
- * 25. Handle ?join= URL param → auto-open join modal
+ *  9. initMapPopup()    — register floating map popup listeners
+ * 10. addMapControls()  — inject zoom + locate-me buttons into the map
+ * 11. initRealtime()    — open Supabase Realtime channel
+ * 12. fetchSpots()      — load spots + confidence → dispatch SPOTS_LOADED
+ * 13. fetchActiveClaims() — load current claims → dispatch CLAIMS_LOADED
+ * 14. Restore selected spot from URL (if ?spot= present)
+ * 15. initSmartSuggestions() — wire F1 filter-submission listener
+ * 16. initClaim()            — wire F2 claim flow listener
+ * 17. initReportFull()       — wire F3 report-full flow listener
+ * 18. initGroups()           — wire F4 group create/join listeners
+ * 19. initGroupPins()        — wire F5 group pin lifecycle listeners
+ * 20. initFilterPanel()      — render + wire filter UI
+ * 21. initSidebar() / initBottomSheet() — wire panel controller for viewport
+ * 22. Wire URL sync on store events
+ * 23. Wire geolocation (request permission, update store on change)
+ * 24. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
+ * 25. Handle ?join= URL param → pre-fill inline join form
  */
 
 // ─── CSS side-effects (Vite bundles these) ────────────────────────────────────
 
 import './styles/main.css';
 import './styles/map.css';
+import './styles/mapPopup.css';
 import './styles/sidebar.css';
 import './styles/bottomSheet.css';
 import './styles/spotCard.css';
@@ -78,8 +79,7 @@ import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
-import { openGroupCreateModal } from './ui/groupCreateModal.js';
-import { openGroupJoinModal }   from './ui/groupJoinModal.js';
+import { initMapPopup }    from './ui/mapPopup.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -112,6 +112,7 @@ async function boot() {
   initPins();
   initGroupPinLayer();
   initMapControls();
+  initMapPopup();
 
   // ── 9. Realtime ───────────────────────────────────────────────────────────────
   subscribeToRealtime();
@@ -203,26 +204,14 @@ async function boot() {
     }
   });
 
-  // ── 23. Header group action buttons ──────────────────────────────────────────
-  const newGroupBtn  = document.getElementById('btn-new-group');
-  const joinGroupBtn = document.getElementById('btn-join-group');
-
-  if (newGroupBtn) {
-    newGroupBtn.addEventListener('click', () => openGroupCreateModal());
-  }
-
-  if (joinGroupBtn) {
-    joinGroupBtn.addEventListener('click', () => openGroupJoinModal({}));
-  }
-
-  // ── 24. ?join= URL param → auto-open join modal ───────────────────────────────
+  // ── 23. ?join= URL param → pre-fill filter panel join form ──────────────────
   if (groupCode) {
-    // Clear the param from the URL bar so a refresh doesn't re-trigger.
-    const cleanUrl = window.location.pathname + (urlState.filters.groupSize || urlState.filters.needs.length || urlState.filters.nearBuilding ? window.location.search.replace(/[?&]join=[^&]*/g, '').replace(/^&/, '?') : '');
-    history.replaceState(null, '', cleanUrl || window.location.pathname);
-
-    // Open the join modal with the code pre-filled.
-    openGroupJoinModal({ prefillCode: groupCode });
+    // Clear the join code from the URL bar so a refresh doesn't re-trigger.
+    const cleanUrl = window.location.pathname;
+    history.replaceState(null, '', cleanUrl);
+    // The inline join form in filterPanel.js is the entry point — no modal needed.
+    // Store the code so the filter panel can read it on next render if needed.
+    sessionStorage.setItem('perch_prefill_join_code', groupCode);
   }
 
   console.warn('[Perch] App ready.');

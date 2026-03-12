@@ -14,6 +14,7 @@
   <!-- All styles are CSS-module-free; one cascade, CSS variables for theming -->
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link rel="stylesheet" href="/src/styles/map.css" />
+  <link rel="stylesheet" href="/src/styles/mapPopup.css" />
   <link rel="stylesheet" href="/src/styles/sidebar.css" />
   <link rel="stylesheet" href="/src/styles/bottomSheet.css" />
   <link rel="stylesheet" href="/src/styles/spotCard.css" />
@@ -23,16 +24,21 @@
 
   <!-- ─── Header ─────────────────────────────────────────────────────────── -->
   <header id="app-header" class="app-header">
-    <span class="app-logo">Perch</span>
-    <span class="app-tagline">no login required</span>
-    <!-- Group action buttons — always visible, collapse on mobile via CSS -->
-    <div class="header-group-actions">
-      <button id="btn-new-group" class="btn-header-group" aria-label="Create a new group">
-        New Group
-      </button>
-      <button id="btn-join-group" class="btn-header-group btn-header-group--secondary" aria-label="Join an existing group">
-        Join Group
-      </button>
+    <!-- Owl logo SVG + wordmark -->
+    <div class="app-logo-lockup">
+      <svg class="app-logo-owl" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
+        <!-- Teal circle background -->
+        <circle cx="24" cy="24" r="22" fill="#3eb489"/>
+        <!-- Left eye -->
+        <circle cx="17" cy="21" r="5" fill="#ffffff"/>
+        <circle cx="17" cy="21" r="2.5" fill="#1a6b3c"/>
+        <!-- Right eye -->
+        <circle cx="31" cy="21" r="5" fill="#ffffff"/>
+        <circle cx="31" cy="21" r="2.5" fill="#1a6b3c"/>
+        <!-- Beak -->
+        <polygon points="24,27 20,33 28,33" fill="#f59e0b"/>
+      </svg>
+      <span class="app-logo-text">Perch</span>
     </div>
     <!-- Hamburger — visible on mobile only (CSS controls display) -->
     <button id="menu-toggle" class="btn-icon" aria-label="Open menu" aria-expanded="false">
@@ -50,9 +56,15 @@
   -->
   <main id="app-layout" class="app-layout">
 
-    <!-- Google Maps renders into this element.
-         mapInit.js passes this id to the Maps constructor. -->
-    <div id="map-container" class="map-container" aria-label="Campus map"></div>
+    <!-- Leaflet renders into this element. mapInit.js passes this id. -->
+    <div id="map-container" class="map-container" aria-label="Campus map">
+      <!-- Map legend — bottom-centre pill -->
+      <div class="map-legend" aria-label="Map legend">
+        <span class="map-legend-dot map-legend-dot--free"></span><span>Free</span>
+        <span class="map-legend-dot map-legend-dot--maybe"></span><span>Maybe</span>
+        <span class="map-legend-dot map-legend-dot--full"></span><span>Full</span>
+      </div>
+    </div>
 
     <!-- ─── Desktop sidebar / Mobile bottom sheet ─────────────────────────
          Same element, same content — CSS repositions it.

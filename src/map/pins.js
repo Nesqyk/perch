@@ -179,7 +179,7 @@ function _buildIcon(spot, selected) {
 }
 
 /**
- * Inline SVG string for an on-campus (teardrop) pin.
+ * Inline SVG string for an on-campus (teardrop) pin with a clipboard icon.
  *
  * @param {string} color   - Hex fill color.
  * @param {number} opacity - Fill opacity (0–1).
@@ -191,11 +191,12 @@ function _teardropSvg(color, opacity, w, h) {
   return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 36">
     <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+    ${_clipboardPath()}
   </svg>`;
 }
 
 /**
- * Inline SVG string for an off-campus (circle) pin.
+ * Inline SVG string for an off-campus (circle) pin with a clipboard icon.
  *
  * @param {string} color   - Hex fill color.
  * @param {number} opacity - Fill opacity (0–1).
@@ -206,7 +207,46 @@ function _circleSvg(color, opacity, d) {
   return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="11"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+    ${_clipboardPathCircle()}
   </svg>`;
+}
+
+/**
+ * White clipboard icon path centred in a 24×36 teardrop viewBox (upper circle portion).
+ * Rendered at approx 10×13px centred at (12, 11).
+ *
+ * @returns {string}
+ */
+function _clipboardPath() {
+  return /* html */`<g transform="translate(7, 4)" fill="#ffffff">
+    <!-- clipboard body -->
+    <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
+    <!-- clipboard clip at top -->
+    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" fill="${'#ffffff'}" opacity="0.9"/>
+    <!-- lines on clipboard -->
+    <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
+  </g>`;
+}
+
+/**
+ * White clipboard icon path centred in a 24×24 circle viewBox.
+ * Rendered at approx 10×12px centred at (12, 12).
+ *
+ * @returns {string}
+ */
+function _clipboardPathCircle() {
+  return /* html */`<g transform="translate(7, 5)" fill="#ffffff">
+    <!-- clipboard body -->
+    <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
+    <!-- clipboard clip at top -->
+    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" opacity="0.9"/>
+    <!-- lines on clipboard -->
+    <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
+  </g>`;
 }
 
 // ─── Group pin layer ──────────────────────────────────────────────────────────

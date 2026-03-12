@@ -1,5 +1,5 @@
 /* ============================================================
-   map.css — Google Maps container + custom overlay styles
+   map.css — Leaflet map container + custom overlay styles
    ============================================================ */
 
 /* ------------------------------------------------------------------
@@ -14,11 +14,49 @@
   overflow: hidden;
 }
 
-/* Google Maps renders into a div; make sure it fills */
-#map-container > div {
+/* Leaflet renders into a div; make sure it fills */
+#map-container > div:not(.map-legend) {
   width: 100% !important;
   height: 100% !important;
 }
+
+/* ------------------------------------------------------------------
+   Map legend — bottom-centre pill
+   ------------------------------------------------------------------ */
+
+.map-legend {
+  position:        absolute;
+  bottom:          var(--space-3);
+  left:            50%;
+  transform:       translateX(-50%);
+  z-index:         400;
+  display:         inline-flex;
+  align-items:     center;
+  gap:             var(--space-3);
+  padding:         var(--space-2) var(--space-4);
+  background:      var(--color-white);
+  border:          var(--border);
+  border-radius:   var(--radius-full);
+  box-shadow:      var(--shadow-md);
+  font-size:       var(--text-xs);
+  font-weight:     var(--font-medium);
+  color:           var(--color-text-muted);
+  white-space:     nowrap;
+  pointer-events:  none;
+}
+
+.map-legend-dot {
+  display:         inline-block;
+  width:           10px;
+  height:          10px;
+  border-radius:   var(--radius-full);
+  flex-shrink:     0;
+  margin-right:    4px;
+}
+
+.map-legend-dot--free  { background: var(--pin-free);  }
+.map-legend-dot--maybe { background: var(--pin-maybe); }
+.map-legend-dot--full  { background: var(--pin-full);  }
 
 /* ------------------------------------------------------------------
    Map controls wrapper (injected via mapControls.js)
@@ -66,26 +104,6 @@
   background: var(--color-primary);
   color: #fff;
   border-color: var(--color-primary);
-}
-
-/* ------------------------------------------------------------------
-   Custom map info-window reset
-   (Google renders its own bubble; we suppress default chrome)
-   ------------------------------------------------------------------ */
-
-.gm-style .gm-style-iw-c {
-  border-radius: var(--radius-lg) !important;
-  padding: 0 !important;
-  box-shadow: var(--shadow-lg) !important;
-}
-
-.gm-style .gm-style-iw-d {
-  overflow: hidden !important;
-}
-
-/* Hide the default close button X — we render our own */
-.gm-style .gm-style-iw-c button.gm-ui-hover-effect {
-  display: none !important;
 }
 
 /* ------------------------------------------------------------------
@@ -195,13 +213,12 @@
 }
 
 /* ------------------------------------------------------------------
-   Attribution / branding strip (bottom of map on mobile)
+   Attribution / branding strip (Leaflet attribution stays in place)
    ------------------------------------------------------------------ */
 
-/* Push Google's own attribution above the bottom sheet peek */
+/* Push Leaflet attribution above the bottom sheet peek on mobile */
 @media (max-width: 767px) {
-  .gm-style .gm-bundled-control,
-  .gm-style-cc {
-    bottom: calc(var(--bottom-sheet-peek, 42vh) + var(--space-2)) !important;
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(var(--bottom-sheet-peek, 42vh) + var(--space-2));
   }
 }
