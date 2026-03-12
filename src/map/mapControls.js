@@ -1,7 +1,7 @@
 /**
  * src/map/mapControls.js
  *
- * Custom map controls that replace Google Maps' default UI.
+ * Custom map controls that replace Leaflet's default zoom UI.
  * Wired up after initMap() resolves.
  *
  * Controls provided:
@@ -10,16 +10,16 @@
  *  - Locate Me (centers map on user's geolocation)
  *
  * These match the wireframe: [+][-] [📍 Me] in the bottom-left of the map.
- * All buttons are plain HTML elements injected into the Maps control layer
- * so they render inside the map frame and respond to the same CSS variables.
+ * Each control is a Leaflet L.Control subclass so it renders inside the map
+ * frame and respects Leaflet's stacking / z-index management.
  */
 
+import { L }              from './mapLoader.js';
 import { getMap, panTo }  from './mapInit.js';
-import { getState }       from '../core/store.js';
-import { dispatch }       from '../core/store.js';
+import { getState, dispatch } from '../core/store.js';
 import { on, EVENTS }     from '../core/events.js';
 
-// ─── Initialise ──────────────────────────────────────────────────────────────
+// ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
  * Build and inject the custom controls into the map.
@@ -28,28 +28,44 @@ import { on, EVENTS }     from '../core/events.js';
 export function initMapControls() {
   const map = getMap();
 
-  const controlWrapper = _buildControlWrapper();
-  map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(controlWrapper);
+  _ZoomControl.addTo(map);
+  _LocateMeControl.addTo(map);
 
   // If location becomes available after init, update the Locate Me button.
   on(EVENTS.LOCATION_SET, () => {
-    const btn = controlWrapper.querySelector('#ctrl-locate');
+    const btn = document.getElementById('ctrl-locate');
     if (btn) btn.classList.add('has-location');
   });
 }
 
-// ─── DOM builders ────────────────────────────────────────────────────────────
+// ─── Zoom control ─────────────────────────────────────────────────────────────
 
-function _buildControlWrapper() {
-  const wrapper    = document.createElement('div');
-  wrapper.className = 'map-controls';
+const _ZoomControl = L.control({ position: 'bottomleft' });
+
+_ZoomControl.onAdd = function () {
+  const wrapper    = L.DomUtil.create('div', 'map-controls map-zoom-controls');
+  L.DomEvent.disableClickPropagation(wrapper);
 
   wrapper.appendChild(_buildZoomInBtn());
   wrapper.appendChild(_buildZoomOutBtn());
+
+  return wrapper;
+};
+
+// ─── Locate-me control ────────────────────────────────────────────────────────
+
+const _LocateMeControl = L.control({ position: 'bottomleft' });
+
+_LocateMeControl.onAdd = function () {
+  const wrapper = L.DomUtil.create('div', 'map-controls map-locate-controls');
+  L.DomEvent.disableClickPropagation(wrapper);
+
   wrapper.appendChild(_buildLocateMeBtn());
 
   return wrapper;
-}
+};
+
+// ─── DOM builders ─────────────────────────────────────────────────────────────
 
 function _buildZoomInBtn() {
   const btn       = document.createElement('button');
@@ -95,7 +111,7 @@ function _buildLocateMeBtn() {
     // Request geolocation if not yet granted.
     if (!navigator.geolocation) return;
 
-    btn.disabled   = true;
+    btn.disabled    = true;
     btn.textContent = '…';
 
     navigator.geolocation.getCurrentPosition(

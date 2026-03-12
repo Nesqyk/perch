@@ -13,7 +13,8 @@
     "lint": "eslint src/**/*.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.43.4"
+    "@supabase/supabase-js": "^2.43.4",
+    "leaflet": "^1.9.4"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.0.18",

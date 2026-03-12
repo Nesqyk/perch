@@ -1,23 +1,27 @@
 /**
  * src/map/mapInit.js
  *
- * Constructs and configures the Google Maps instance.
- * Called once from main.js after loadGoogleMaps() resolves.
+ * Constructs and configures the Leaflet map instance.
+ * Called once from main.js after loadGoogleMaps() resolves (now a no-op).
+ *
+ * Tile layer: CartoDB Positron — free, no API key required, muted palette
+ * that lets the coloured spot pins dominate visually.
  *
  * The map object is module-level so other map/ modules can import it
  * via getMap() without prop-drilling through the whole app.
  */
 
-import { emit, EVENTS } from '../core/events.js';
+import { L }              from './mapLoader.js';
+import { emit, EVENTS }   from '../core/events.js';
 
-/** @type {google.maps.Map | null} */
+/** @type {import('leaflet').Map | null} */
 let _map = null;
 
 /**
  * Default campus center coordinates.
  * Replace lat/lng with the actual campus location before launch.
- * This is intentionally left as a placeholder — the campus coords
- * will be set when the first real spot data is seeded by the admin.
+ *
+ * @type {{ lat: number, lng: number }}
  */
 const DEFAULT_CENTER = {
   lat: 10.3157,   // placeholder — update to actual campus lat
@@ -26,26 +30,16 @@ const DEFAULT_CENTER = {
 
 const DEFAULT_ZOOM = 17; // street-level zoom appropriate for a campus
 
-/**
- * Google Maps styling that matches Perch's neutral, map-focused aesthetic.
- * Suppresses POI clutter (cafes, shops) so our custom pins dominate.
- * Uses the same muted palette referenced in main.css CSS variables.
- */
-const MAP_STYLES = [
-  { featureType: 'poi',             elementType: 'labels',      stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.school',      elementType: 'geometry',    stylers: [{ color: '#e8f0e8' }] },
-  { featureType: 'transit',         elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'road',            elementType: 'geometry',    stylers: [{ color: '#f5f5f5' }] },
-  { featureType: 'road',            elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-  { featureType: 'water',           elementType: 'geometry',    stylers: [{ color: '#c8dfc8' }] },
-  { featureType: 'landscape',       elementType: 'geometry',    stylers: [{ color: '#f0f4f0' }] },
-  { featureType: 'administrative',  elementType: 'geometry.stroke', stylers: [{ color: '#c9c9c9' }] },
-];
+// CartoDB Positron tile URL — muted, label-light, free tier, no API key.
+const TILE_URL         = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors ' +
+  '&copy; <a href="https://carto.com/attributions">CARTO</a>';
 
 /**
- * Initialise the Google Maps instance and mount it to #map-container.
+ * Initialise the Leaflet map instance and mount it to #map-container.
  *
- * @returns {google.maps.Map}
+ * @returns {import('leaflet').Map}
  */
 export function initMap() {
   const container = document.getElementById('map-container');
@@ -54,20 +48,17 @@ export function initMap() {
     throw new Error('[mapInit] #map-container element not found in the DOM');
   }
 
-  _map = new google.maps.Map(container, {
-    center:            DEFAULT_CENTER,
-    zoom:              DEFAULT_ZOOM,
-    styles:            MAP_STYLES,
-
-    // Disable the default Google Maps UI controls — we provide our own
-    // minimal controls via mapControls.js so the UI matches the wireframe.
-    disableDefaultUI:    true,
-    gestureHandling:     'greedy',    // single-finger pan on mobile (no two-finger conflict)
-    clickableIcons:      false,       // prevent Google POI popups
-    mapTypeControl:      false,
-    streetViewControl:   false,
-    fullscreenControl:   false,
+  _map = L.map(container, {
+    center:      [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
+    zoom:        DEFAULT_ZOOM,
+    zoomControl: false,   // we provide our own controls via mapControls.js
   });
+
+  L.tileLayer(TILE_URL, {
+    attribution: TILE_ATTRIBUTION,
+    maxZoom:     19,
+    subdomains:  'abcd',
+  }).addTo(_map);
 
   // Signal to the rest of the app that the map is ready to receive markers.
   emit(EVENTS.MAP_READY, { map: _map });
@@ -79,7 +70,7 @@ export function initMap() {
  * Returns the shared map instance.
  * Throws if called before initMap().
  *
- * @returns {google.maps.Map}
+ * @returns {import('leaflet').Map}
  */
 export function getMap() {
   if (!_map) {
@@ -97,6 +88,9 @@ export function getMap() {
  */
 export function panTo(position, zoom) {
   if (!_map) return;
-  _map.panTo(position);
-  if (zoom !== undefined) _map.setZoom(zoom);
+  if (zoom !== undefined) {
+    _map.setView([position.lat, position.lng], zoom);
+  } else {
+    _map.panTo([position.lat, position.lng]);
+  }
 }

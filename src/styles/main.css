@@ -8,6 +8,8 @@
  * Every other stylesheet references these variables — nothing is hardcoded.
  */
 
+@import 'leaflet/dist/leaflet.css';
+
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
 :root {
   /* Colour — base palette */

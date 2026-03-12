@@ -243,7 +243,6 @@ function spot(overrides = {}) {
 |---|---|---|
 | `VITE_SUPABASE_URL` | Yes | `supabaseClient.js` |
 | `VITE_SUPABASE_ANON_KEY` | Yes | `supabaseClient.js` |
-| `VITE_GOOGLE_MAPS_API_KEY` | Yes | `mapLoader.js` |
 | `VITE_ADMIN_PASSWORD` | Yes | `admin.js` |
 
 Copy `.env.example` to `.env` and fill in values before running `npm run dev`.
