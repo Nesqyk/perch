@@ -15,8 +15,9 @@
   overflow: hidden;
 }
 
-/* Leaflet renders into a div; make sure it fills */
-#map-container > div:not(.map-legend) {
+/* Leaflet renders into a div; make sure it fills.
+   Exclude our overlay divs so they aren't force-stretched. */
+#map-container > div:not(.map-legend):not(#map-spot-popup) {
   width: 100% !important;
   height: 100% !important;
 }
@@ -30,7 +31,7 @@
   bottom:          var(--space-3);
   left:            50%;
   transform:       translateX(-50%);
-  z-index:         400;
+  z-index:         1000;
   display:         inline-flex;
   align-items:     center;
   gap:             var(--space-3);
@@ -60,51 +61,62 @@
 .map-legend-dot--full  { background: var(--pin-full);  }
 
 /* ------------------------------------------------------------------
-   Map controls wrapper (injected via mapControls.js)
+   Map controls — single grouped card (bottom-left)
    ------------------------------------------------------------------ */
 
 .map-controls {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3);
+  display:          flex;
+  flex-direction:   column;
+  align-items:      center;
+  background:       var(--color-white);
+  border:           1px solid var(--color-border);
+  border-radius:    var(--radius-lg);
+  box-shadow:       var(--shadow-md);
+  overflow:         hidden;
+  /* Leaflet positions the control; we just define its shape */
+  margin:           0 0 var(--space-4) var(--space-4);
 }
 
 .map-control-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  cursor: pointer;
-  color: var(--color-text-primary);
-  font-size: 1.125rem;
-  transition: background var(--transition-fast), transform var(--transition-fast);
-  user-select: none;
+  display:          flex;
+  align-items:      center;
+  justify-content:  center;
+  width:            40px;
+  height:           40px;
+  background:       transparent;
+  border:           none;
+  color:            var(--color-gray-600);
+  cursor:           pointer;
+  transition:       background var(--transition-fast), color var(--transition-fast);
+  user-select:      none;
+  flex-shrink:      0;
 }
 
 .map-control-btn:hover {
-  background: var(--color-surface-elevated);
+  background: var(--color-gray-100);
+  color:      var(--color-gray-900);
 }
 
 .map-control-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.92);
 }
 
 .map-control-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
+  outline:        2px solid var(--color-brand);
+  outline-offset: -2px;
 }
 
-/* Locate Me button — highlighted when tracking */
 .map-control-btn[data-active="true"] {
-  background: var(--color-primary);
-  color: #fff;
-  border-color: var(--color-primary);
+  color: var(--color-brand);
+}
+
+.map-control-divider {
+  width:      24px;
+  height:     1px;
+  border:     none;
+  background: var(--color-border);
+  margin:     0;
+  flex-shrink: 0;
 }
 
 /* ------------------------------------------------------------------
