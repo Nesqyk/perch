@@ -8,23 +8,28 @@
  *  1. Import CSS (Vite processes these as side-effect imports)
  *  2. initStore()       — prime the state container
  *  3. initSession()     — ensure anonymous session token in localStorage
- *  4. readUrlParams()   — parse ?spot=, ?size=, ?needs=, ?building=
+ *  4. readUrlParams()   — parse ?spot=, ?size=, ?needs=, ?building=, ?join=
  *  5. Restore filters from URL into store
  *  6. loadGoogleMaps()  → initMap()  — load Maps SDK then mount the map
  *  7. initPins()        — register map pin listeners (needs map ready)
- *  8. addMapControls()  — inject zoom + locate-me buttons into the map
- *  9. initRealtime()    — open Supabase Realtime channel
- * 10. fetchSpots()      — load spots + confidence → dispatch SPOTS_LOADED
- * 11. fetchActiveClaims() — load current claims → dispatch CLAIMS_LOADED
- * 12. Restore selected spot from URL (if ?spot= present)
- * 13. initSmartSuggestions() — wire F1 filter-submission listener
- * 14. initClaim()            — wire F2 claim flow listener
- * 15. initReportFull()       — wire F3 report-full flow listener
- * 16. initFilterPanel()      — render + wire filter UI
- * 17. initSidebar() / initBottomSheet() — wire panel controller for viewport
- * 18. Wire URL sync on store events
- * 19. Wire geolocation (request permission, update store on change)
- * 20. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
+ *  8. initGroupPinLayer() — register group pin overlay listeners
+ *  9. addMapControls()  — inject zoom + locate-me buttons into the map
+ * 10. initRealtime()    — open Supabase Realtime channel
+ * 11. fetchSpots()      — load spots + confidence → dispatch SPOTS_LOADED
+ * 12. fetchActiveClaims() — load current claims → dispatch CLAIMS_LOADED
+ * 13. Restore selected spot from URL (if ?spot= present)
+ * 14. initSmartSuggestions() — wire F1 filter-submission listener
+ * 15. initClaim()            — wire F2 claim flow listener
+ * 16. initReportFull()       — wire F3 report-full flow listener
+ * 17. initGroups()           — wire F4 group create/join listeners
+ * 18. initGroupPins()        — wire F5 group pin lifecycle listeners
+ * 19. initFilterPanel()      — render + wire filter UI
+ * 20. initSidebar() / initBottomSheet() — wire panel controller for viewport
+ * 21. Wire URL sync on store events
+ * 22. Wire geolocation (request permission, update store on change)
+ * 23. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
+ * 24. Wire header group buttons → open modals
+ * 25. Handle ?join= URL param → auto-open join modal
  */
 
 // ─── CSS side-effects (Vite bundles these) ────────────────────────────────────
@@ -39,8 +44,8 @@ import './styles/filters.css';
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
 import { initStore, dispatch, getState } from './core/store.js';
-import { on, EVENTS }                    from './core/events.js';
-import { readUrlParams, writeUrlParams, clearUrlParams } from './core/router.js';
+import { on, EVENTS }             from './core/events.js';
+import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode } from './core/router.js';
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
@@ -50,8 +55,8 @@ import { initSession }  from './utils/session.js';
 
 import { loadGoogleMaps }  from './map/mapLoader.js';
 import { initMap }         from './map/mapInit.js';
-import { initPins }        from './map/pins.js';
-import { initMapControls } from './map/mapControls.js';
+import { initPins, initGroupPinLayer } from './map/pins.js';
+import { initMapControls }             from './map/mapControls.js';
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
@@ -64,6 +69,8 @@ import { subscribeToRealtime } from './api/realtime.js';
 import { initSmartSuggestions } from './features/smartSuggestions.js';
 import { initClaim }            from './features/claim.js';
 import { initReportFull }       from './features/reportFull.js';
+import { initGroups }           from './features/groups.js';
+import { initGroupPins }        from './features/groupPins.js';
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 
@@ -71,6 +78,8 @@ import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
+import { openGroupCreateModal } from './ui/groupCreateModal.js';
+import { openGroupJoinModal }   from './ui/groupJoinModal.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -82,7 +91,8 @@ async function boot() {
   initSession();
 
   // ── 4 & 5. URL params → restore filters + selected spot ──────────────────────
-  const urlState = readUrlParams();
+  const urlState   = readUrlParams();
+  const groupCode  = readGroupCode();
 
   if (urlState.filters.groupSize || urlState.filters.needs.length || urlState.filters.nearBuilding) {
     dispatch('SET_FILTERS', urlState.filters);
@@ -100,6 +110,7 @@ async function boot() {
 
   // ── 7 & 8. Map pins + controls ───────────────────────────────────────────────
   initPins();
+  initGroupPinLayer();
   initMapControls();
 
   // ── 9. Realtime ───────────────────────────────────────────────────────────────
@@ -144,20 +155,24 @@ async function boot() {
   initClaim();
   initReportFull();
 
-  // ── 16. Filter panel UI ───────────────────────────────────────────────────────
+  // ── 16–17. Group feature modules ─────────────────────────────────────────────
+  initGroups();
+  initGroupPins();
+
+  // ── 18. Filter panel UI ───────────────────────────────────────────────────────
   const panelContent = document.getElementById('panel-content');
   if (panelContent) {
     initFilterPanel(panelContent);
   }
 
-  // ── 17. Panel controller (responsive) ────────────────────────────────────────
+  // ── 19. Panel controller (responsive) ────────────────────────────────────────
   if (window.matchMedia('(min-width: 768px)').matches) {
     initSidebar();
   } else {
     initBottomSheet();
   }
 
-  // ── 18. URL sync on state changes ────────────────────────────────────────────
+  // ── 20. URL sync on state changes ────────────────────────────────────────────
   on(EVENTS.SPOT_SELECTED, (e) => {
     const state = getState();
     writeUrlParams({ selectedSpotId: e.detail.spotId, filters: state.filters });
@@ -172,10 +187,10 @@ async function boot() {
     writeUrlParams({ selectedSpotId: state.selectedSpotId, filters: state.filters });
   });
 
-  // ── 19. Geolocation ───────────────────────────────────────────────────────────
+  // ── 21. Geolocation ───────────────────────────────────────────────────────────
   _initGeolocation();
 
-  // ── 20. Map pin clicks ────────────────────────────────────────────────────────
+  // ── 22. Map pin clicks ────────────────────────────────────────────────────────
   on(EVENTS.MAP_PIN_CLICKED, (e) => {
     const { spotId } = e.detail;
     const current = getState().selectedSpotId;
@@ -187,6 +202,28 @@ async function boot() {
       dispatch('SELECT_SPOT', { spotId });
     }
   });
+
+  // ── 23. Header group action buttons ──────────────────────────────────────────
+  const newGroupBtn  = document.getElementById('btn-new-group');
+  const joinGroupBtn = document.getElementById('btn-join-group');
+
+  if (newGroupBtn) {
+    newGroupBtn.addEventListener('click', () => openGroupCreateModal());
+  }
+
+  if (joinGroupBtn) {
+    joinGroupBtn.addEventListener('click', () => openGroupJoinModal({}));
+  }
+
+  // ── 24. ?join= URL param → auto-open join modal ───────────────────────────────
+  if (groupCode) {
+    // Clear the param from the URL bar so a refresh doesn't re-trigger.
+    const cleanUrl = window.location.pathname + (urlState.filters.groupSize || urlState.filters.needs.length || urlState.filters.nearBuilding ? window.location.search.replace(/[?&]join=[^&]*/g, '').replace(/^&/, '?') : '');
+    history.replaceState(null, '', cleanUrl || window.location.pathname);
+
+    // Open the join modal with the code pre-filled.
+    openGroupJoinModal({ prefillCode: groupCode });
+  }
 
   console.warn('[Perch] App ready.');
 }

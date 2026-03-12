@@ -24,6 +24,7 @@ import { renderFilterPanel }    from './filterPanel.js';
 import { renderSpotCard }       from './spotCard.js';
 import { renderClaimPanel }     from './claimPanel.js';
 import { renderReportPanel }    from './reportPanel.js';
+import { renderGroupPanel, initGroupPanel } from './groupPanel.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -57,6 +58,10 @@ export function initBottomSheet() {
   on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
   on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
   on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
+  on(EVENTS.GROUP_JOINED,     _onGroupJoined);
+  on(EVENTS.GROUP_LEFT,       _onGroupLeft);
+
+  initGroupPanel();
 
   // Default render — filter form.
   _renderView('filters');
@@ -97,6 +102,18 @@ function _onCorrectionFiled(e) {
     _renderView('report', selectedSpotId);
     _setSheetState('open');
   }
+}
+
+function _onGroupJoined() {
+  if (_isDesktop()) return;
+  _renderView('group');
+  _setSheetState('open');
+}
+
+function _onGroupLeft() {
+  if (_isDesktop()) return;
+  _renderView('filters');
+  _setSheetState('peek');
 }
 
 // ─── Gesture handlers ────────────────────────────────────────────────────────
@@ -181,6 +198,9 @@ function _renderView(view, spotId) {
       break;
     case 'report':
       renderReportPanel(container, spotId);
+      break;
+    case 'group':
+      renderGroupPanel(container);
       break;
   }
 }

@@ -14,6 +14,7 @@
  *   /?spot=<uuid>                  → opens spot detail directly
  *   /?size=small&needs=outlet,wifi&building=main  → pre-fills filters
  *   /?spot=<uuid>&size=...         → both (claim link with filter context)
+ *   /?join=CODE                    → auto-open group join modal with code pre-filled
  *
  * Nothing here touches the DOM or the store directly.
  * main.js reads the result of readUrlParams() and calls dispatch() itself.
@@ -93,4 +94,16 @@ export function buildSpotShareUrl(spotId) {
   const url = new URL(window.location.origin + window.location.pathname);
   url.searchParams.set('spot', spotId);
   return url.toString();
+}
+
+/**
+ * Read the ?join= param from the current URL.
+ * Returns the 4-character group code if present, or null.
+ *
+ * @returns {string | null}
+ */
+export function readGroupCode() {
+  const p    = new URLSearchParams(window.location.search);
+  const code = p.get('join');
+  return code ? code.toUpperCase() : null;
 }

@@ -82,8 +82,40 @@ const _state = {
     spotsLoading:       false,
     claimPending:       false,
     correctionPending:  false,
+    groupPending:       false,
     error:              null,   // string | null
   },
+
+  // ── Groups ────────────────────────────────────────────────────────────────
+
+  /**
+   * The group this session currently belongs to.
+   * null until the user creates or joins a group.
+   */
+  group: null,                  // { id, name, code, color, context } | null
+
+  /**
+   * This session's member record for the current group.
+   * null until group is joined.
+   */
+  groupMember: null,            // { id, groupId, sessionId, displayName, scoutPoints } | null
+
+  /**
+   * Live and saved pins for the current group, keyed by pin id.
+   */
+  groupPins: {},                // Record<pinId, GroupPin>
+
+  /**
+   * Transit joins keyed by group_pin_id.
+   * Each value is an array of join records.
+   */
+  groupPinJoins: {},            // Record<pinId, GroupPinJoin[]>
+
+  /**
+   * The active live pin placed by this session.
+   * null when the session has no live pin in the current group.
+   */
+  myGroupPinId: null,           // string (uuid) | null
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -234,6 +266,75 @@ export function dispatch(action, payload) {
       break;
     }
 
+    // ── Groups ───────────────────────────────────────────────────────────────
+    case 'GROUP_JOINED': {
+      const { group, member } = payload;
+      _state.group       = group;
+      _state.groupMember = member;
+      _state.groupPins   = {};
+      _state.groupPinJoins = {};
+      _state.myGroupPinId  = null;
+      emit(EVENTS.GROUP_JOINED, { group, member });
+      break;
+    }
+
+    case 'GROUP_LEFT': {
+      _state.group         = null;
+      _state.groupMember   = null;
+      _state.groupPins     = {};
+      _state.groupPinJoins = {};
+      _state.myGroupPinId  = null;
+      emit(EVENTS.GROUP_LEFT, {});
+      break;
+    }
+
+    case 'GROUP_PINS_LOADED': {
+      // Bulk replace — used at join time after fetching existing pins.
+      const pins = payload.pins ?? [];
+      _state.groupPins = pins.reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+      emit(EVENTS.GROUP_PINS_UPDATED, { groupPins: getState().groupPins });
+      break;
+    }
+
+    case 'GROUP_PIN_UPSERTED': {
+      const { pin } = payload;
+      _state.groupPins = { ..._state.groupPins, [pin.id]: pin };
+      // Track our own live pin.
+      if (pin.session_id === _mySessionId() && pin.pin_type === 'live' && !pin.ended_at) {
+        _state.myGroupPinId = pin.id;
+      } else if (_state.myGroupPinId === pin.id && pin.ended_at) {
+        _state.myGroupPinId = null;
+      }
+      emit(EVENTS.GROUP_PINS_UPDATED, { groupPins: getState().groupPins });
+      break;
+    }
+
+    case 'GROUP_PIN_ENDED': {
+      const { pinId } = payload;
+      const existing = _state.groupPins[pinId];
+      if (existing) {
+        _state.groupPins = {
+          ..._state.groupPins,
+          [pinId]: { ...existing, ended_at: new Date().toISOString() },
+        };
+      }
+      if (_state.myGroupPinId === pinId) _state.myGroupPinId = null;
+      emit(EVENTS.GROUP_PINS_UPDATED, { groupPins: getState().groupPins });
+      break;
+    }
+
+    case 'GROUP_PIN_JOIN_UPSERTED': {
+      const { join } = payload;
+      const pinId    = join.group_pin_id;
+      const existing = (_state.groupPinJoins[pinId] ?? []).filter(j => j.id !== join.id);
+      _state.groupPinJoins = {
+        ..._state.groupPinJoins,
+        [pinId]: [...existing, join],
+      };
+      emit(EVENTS.GROUP_PIN_JOINS_UPDATED, { groupPinJoins: getState().groupPinJoins });
+      break;
+    }
+
     default:
       console.warn(`[store] Unknown action: "${action}"`);
   }
@@ -250,6 +351,20 @@ export function initStore() {
 }
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Read the session id from localStorage without importing session.js
+ * (which would create a circular dependency through store → session → store).
+ *
+ * @returns {string | null}
+ */
+function _mySessionId() {
+  try {
+    return localStorage.getItem('perch_session_id');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Build the shareable URL for a claimed spot.
