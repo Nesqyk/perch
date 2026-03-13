@@ -124,12 +124,14 @@ function _repositionPopup() {
   if (!_popup || !_pinLatLng) return;
 
   const map = getMap();
-  // latLngToContainerPoint returns coords relative to the Leaflet pane origin,
-  // which sits MAP_PADDING_PX inside the padded #map-container element.
+  // latLngToContainerPoint returns pixel coords measured from the outer
+  // top-left of #map-container (border edge). CSS `absolute` positioning
+  // measures from the content edge (padding edge), which is MAP_PADDING_PX
+  // inset. Subtract the padding so the two coordinate systems align.
   const pt = map.latLngToContainerPoint([_pinLatLng.lat, _pinLatLng.lng]);
 
-  _popup.style.left = `${pt.x + MAP_PADDING_PX}px`;
-  _popup.style.top  = `${pt.y + MAP_PADDING_PX}px`;
+  _popup.style.left = `${pt.x - MAP_PADDING_PX}px`;
+  _popup.style.top  = `${pt.y - MAP_PADDING_PX}px`;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
