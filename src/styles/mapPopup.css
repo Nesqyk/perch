@@ -1,20 +1,31 @@
 /**
  * src/styles/mapPopup.css
  *
- * Floating spot-info popup card anchored above a selected map pin.
- * Rendered by src/ui/mapPopup.js into #map-container.
+ * Styles for the spot-info card rendered inside a Leaflet native tooltip.
+ * Leaflet wraps tooltip content in `.leaflet-tooltip.map-spot-tooltip-wrapper`.
+ * That wrapper is reset here so only the inner `.map-spot-popup` card shows.
  *
- * Positioning: absolute within #map-container (which is position:relative).
- * The JS sets left/top to the pin's container-point coordinates.
- * transform: translate(-50%, calc(-100% - 16px)) centres the card above the pin.
+ * Positioning is handled entirely by Leaflet (direction: 'top', offset: [0, -4]).
+ * No absolute positioning or coordinate math is needed here.
  */
+
+/* ─── Reset Leaflet's default tooltip chrome ─────────────────────────────── */
+
+.map-spot-tooltip-wrapper {
+  background:  transparent;
+  border:      none;
+  box-shadow:  none;
+  padding:     0;
+}
+
+/* Suppress Leaflet's default tooltip tip arrow */
+.map-spot-tooltip-wrapper::before {
+  display: none;
+}
 
 /* ─── Popup card ─────────────────────────────────────────────────────────── */
 
 .map-spot-popup {
-  position:       absolute;
-  z-index:        1100;
-  transform:      translate(-50%, calc(-100% - 16px));
   width:          200px;
   background:     var(--color-white);
   border:         var(--border);
@@ -22,25 +33,6 @@
   box-shadow:     var(--shadow-lg);
   overflow:       hidden;
   pointer-events: none;   /* let map events pass through; popup is display-only */
-  animation:      popup-in var(--transition-fast) ease both;
-}
-
-@keyframes popup-in {
-  from { opacity: 0; transform: translate(-50%, calc(-100% - 8px)); }
-  to   { opacity: 1; transform: translate(-50%, calc(-100% - 16px)); }
-}
-
-/* Small caret / tail pointing down at the pin */
-.map-spot-popup::after {
-  content:      '';
-  position:     absolute;
-  bottom:       -7px;
-  left:         50%;
-  transform:    translateX(-50%);
-  border-left:  7px solid transparent;
-  border-right: 7px solid transparent;
-  border-top:   7px solid var(--color-white);
-  filter:       drop-shadow(0 2px 2px rgba(0,0,0,.08));
 }
 
 /* ─── Header row (name + status badge) ──────────────────────────────────── */
@@ -54,11 +46,11 @@
 }
 
 .map-spot-popup__name {
-  font-size:   var(--text-sm);
-  font-weight: var(--font-bold);
-  color:       var(--color-text);
-  white-space: nowrap;
-  overflow:    hidden;
+  font-size:     var(--text-sm);
+  font-weight:   var(--font-bold);
+  color:         var(--color-text);
+  white-space:   nowrap;
+  overflow:      hidden;
   text-overflow: ellipsis;
 }
 
@@ -109,6 +101,6 @@
 }
 
 .map-spot-popup__amenities {
-  font-size: 0.85rem;
+  font-size:      0.85rem;
   letter-spacing: 2px;
 }

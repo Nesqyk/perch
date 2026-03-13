@@ -27,6 +27,7 @@ import { on, emit, EVENTS }     from '../core/events.js';
 import { getState }              from '../core/store.js';
 import { getMap }                from './mapInit.js';
 import { deriveSpotStatus }      from '../state/spotState.js';
+import { formatConfidence }      from '../utils/confidence.js';
 
 /** @type {Map<string, import('leaflet').Marker>}  spotId → Marker */
 const _markers = new Map();
@@ -129,6 +130,8 @@ function _upsertMarker(spot) {
   if (_markers.has(spot.id)) {
     const marker = _markers.get(spot.id);
     marker.setIcon(icon);
+    // Refresh tooltip content so status badge stays current.
+    marker.setTooltipContent(_buildTooltipHtml(spot));
   } else {
     const marker = L.marker([spot.lat, spot.lng], { icon, title: spot.name })
       .addTo(map);
@@ -137,16 +140,88 @@ function _upsertMarker(spot) {
       emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id });
     });
 
-    marker.on('mouseover', () => {
-      emit(EVENTS.MAP_PIN_HOVERED, { spotId: spot.id });
-    });
-
-    marker.on('mouseout', () => {
-      emit(EVENTS.MAP_PIN_UNHOVERED, { spotId: spot.id });
+    marker.bindTooltip(_buildTooltipHtml(spot), {
+      direction:  'top',
+      permanent:  false,
+      opacity:    1,
+      className:  'map-spot-tooltip-wrapper',
+      offset:     [0, -4],
     });
 
     _markers.set(spot.id, marker);
   }
+}
+
+// ─── Tooltip HTML factory ─────────────────────────────────────────────────────
+
+/**
+ * Build the HTML string injected into a Leaflet tooltip for a spot marker.
+ * Leaflet wraps this in `.leaflet-tooltip.map-spot-tooltip-wrapper`; our CSS
+ * resets that wrapper and styles the inner `.map-spot-popup` card.
+ *
+ * @param {object} spot
+ * @returns {string}
+ */
+function _buildTooltipHtml(spot) {
+  const status    = deriveSpotStatus(spot.id);
+  const conf      = getState().confidence[spot.id];
+  const confLabel = formatConfidence(conf?.score).label;
+
+  const amenities = _amenityIcons(spot);
+
+  return /* html */`
+    <div class="map-spot-popup">
+      <div class="map-spot-popup__header">
+        <span class="map-spot-popup__name">${_escapeHtml(spot.name)}</span>
+        <span class="map-spot-popup__badge map-spot-popup__badge--${status}">${confLabel}</span>
+      </div>
+      <div class="map-spot-popup__photo-placeholder" aria-hidden="true"></div>
+      <div class="map-spot-popup__meta">
+        <span class="map-spot-popup__capacity">👤 ${_capacityNum(spot.rough_capacity)}</span>
+        <span class="map-spot-popup__amenities">${amenities}</span>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Approximate head-count for a rough_capacity tier.
+ *
+ * @param {string} rough
+ * @returns {number|string}
+ */
+function _capacityNum(rough) {
+  const sizes = { small: 8, medium: 20, large: 40 };
+  return sizes[rough] ?? '—';
+}
+
+/**
+ * Render amenity emoji for a spot.
+ *
+ * @param {object} spot
+ * @returns {string}
+ */
+function _amenityIcons(spot) {
+  const icons = [];
+  if (spot.noise_baseline === 'quiet')                      icons.push('🔇');
+  if (spot.has_outlets)                                     icons.push('⚡');
+  if (spot.wifi_strength && spot.wifi_strength !== 'none')  icons.push('📶');
+  if (spot.has_food)                                        icons.push('🍔');
+  return icons.join(' ');
+}
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function _escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ─── Icon factory ─────────────────────────────────────────────────────────────
