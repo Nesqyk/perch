@@ -137,6 +137,14 @@ function _upsertMarker(spot) {
       emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id });
     });
 
+    marker.on('mouseover', () => {
+      emit(EVENTS.MAP_PIN_HOVERED, { spotId: spot.id });
+    });
+
+    marker.on('mouseout', () => {
+      emit(EVENTS.MAP_PIN_UNHOVERED, { spotId: spot.id });
+    });
+
     _markers.set(spot.id, marker);
   }
 }

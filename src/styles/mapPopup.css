@@ -13,7 +13,7 @@
 
 .map-spot-popup {
   position:       absolute;
-  z-index:        450;
+  z-index:        1100;
   transform:      translate(-50%, calc(-100% - 16px));
   width:          200px;
   background:     var(--color-white);

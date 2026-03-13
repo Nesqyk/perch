@@ -103,6 +103,8 @@ export const EVENTS = Object.freeze({
   // ── Map ──────────────────────────────────────────────────────────────────
   MAP_READY:              'map:ready',
   MAP_PIN_CLICKED:        'map:pinClicked',
+  MAP_PIN_HOVERED:        'map:pinHovered',
+  MAP_PIN_UNHOVERED:      'map:pinUnhovered',
 
   // ── Store: groups ────────────────────────────────────────────────────────
   GROUP_JOINED:           'state:groupJoined',

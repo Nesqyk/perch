@@ -1,19 +1,20 @@
 /**
  * src/ui/mapPopup.js
  *
- * Floating spot-info popup card rendered on the map when a pin is clicked.
- * Appears anchored above the selected pin; hides when deselected.
+ * Floating spot-info popup card shown when the user hovers a map pin.
+ * Hides when the cursor leaves the pin.
  *
- * The popup is a positioned <div> injected into #map-container.
- * It is repositioned using Leaflet's latLngToContainerPoint() and updated
- * on map move/zoom so it stays locked to the pin.
- *
- * This module never touches the sidebar. It is purely additive —
- * pin click still routes the full detail card to the sidebar as before.
+ * The popup is a positioned <div> inside #map-container.
+ * Coordinates come from Leaflet's latLngToContainerPoint() which gives
+ * pixels relative to the map tile layer, not the container element.
+ * Because #map-container has padding: var(--space-4) (16 px), the
+ * Leaflet coordinate origin is offset by that amount; we subtract it
+ * when setting left/top so the popup anchors correctly over the pin.
  *
  * Emits nothing. Listens to:
- *   EVENTS.SPOT_SELECTED   — show popup for selected spot
- *   EVENTS.SPOT_DESELECTED — hide popup
+ *   EVENTS.MAP_PIN_HOVERED   — show popup for the hovered spot
+ *   EVENTS.MAP_PIN_UNHOVERED — hide popup
+ *   EVENTS.MAP_READY         — grab the map ref for move/zoom repositioning
  */
 
 import { on, EVENTS }           from '../core/events.js';
@@ -22,12 +23,17 @@ import { getMap }                from '../map/mapInit.js';
 import { deriveSpotStatus }      from '../state/spotState.js';
 import { formatConfidence }      from '../utils/confidence.js';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Must match padding: var(--space-4) on #map-container in map.css */
+const MAP_PADDING_PX = 16;
+
 // ─── Module state ─────────────────────────────────────────────────────────────
 
 /** @type {HTMLElement | null} */
 let _popup = null;
 
-/** @type {{ lat: number, lng: number } | null} Current pin position. */
+/** @type {{ lat: number, lng: number } | null} */
 let _pinLatLng = null;
 
 // ─── Initialise ───────────────────────────────────────────────────────────────
@@ -36,22 +42,24 @@ let _pinLatLng = null;
  * Wire up event listeners. Call once from main.js after initMap().
  */
 export function initMapPopup() {
-  on(EVENTS.SPOT_SELECTED,   _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED, _onSpotDeselected);
-  on(EVENTS.MAP_READY,       _onMapReady);
+  on(EVENTS.MAP_PIN_HOVERED,   _onPinHovered);
+  on(EVENTS.MAP_PIN_UNHOVERED, _onPinUnhovered);
+  on(EVENTS.MAP_READY,         _onMapReady);
 }
 
 // ─── Map ready ────────────────────────────────────────────────────────────────
 
 function _onMapReady() {
   const map = getMap();
-  // Reposition the popup whenever the map moves or zooms.
   map.on('move zoom', _repositionPopup);
 }
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
-function _onSpotSelected(e) {
+/**
+ * @param {CustomEvent} e
+ */
+function _onPinHovered(e) {
   const { spotId } = e.detail;
   const { spots }  = getState();
   const spot       = spots.find(s => s.id === spotId);
@@ -61,26 +69,28 @@ function _onSpotSelected(e) {
   _renderPopup(spot);
 }
 
-function _onSpotDeselected() {
+function _onPinUnhovered() {
   _hidePopup();
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
+/**
+ * @param {object} spot
+ */
 function _renderPopup(spot) {
   const container = document.getElementById('map-container');
   if (!container) return;
 
-  // Remove any existing popup.
   _hidePopup();
 
-  const status     = deriveSpotStatus(spot.id);
-  const conf       = getState().confidence[spot.id];
-  const confLabel  = formatConfidence(conf?.score).label;
+  const status    = deriveSpotStatus(spot.id);
+  const conf      = getState().confidence[spot.id];
+  const confLabel = formatConfidence(conf?.score).label;
 
-  const popup      = document.createElement('div');
-  popup.className  = 'map-spot-popup';
-  popup.id         = 'map-spot-popup';
+  const popup     = document.createElement('div');
+  popup.className = 'map-spot-popup';
+  popup.id        = 'map-spot-popup';
 
   popup.innerHTML = /* html */`
     <div class="map-spot-popup__header">
@@ -114,39 +124,39 @@ function _repositionPopup() {
   if (!_popup || !_pinLatLng) return;
 
   const map = getMap();
-  const pt  = map.latLngToContainerPoint([_pinLatLng.lat, _pinLatLng.lng]);
+  // latLngToContainerPoint returns coords relative to the Leaflet pane origin,
+  // which sits MAP_PADDING_PX inside the padded #map-container element.
+  const pt = map.latLngToContainerPoint([_pinLatLng.lat, _pinLatLng.lng]);
 
-  // Anchor the popup so its bottom-centre sits above the pin.
-  // We use CSS transform to keep it centred; just set left/top here.
-  _popup.style.left = `${pt.x}px`;
-  _popup.style.top  = `${pt.y}px`;
+  _popup.style.left = `${pt.x + MAP_PADDING_PX}px`;
+  _popup.style.top  = `${pt.y + MAP_PADDING_PX}px`;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Approximate head-count for a rough_capacity tier.
+ * Approximate head-count label for a rough_capacity tier.
  *
  * @param {string} rough
- * @returns {number}
+ * @returns {number|string}
  */
 function _capacityNum(rough) {
-  const map = { small: 8, medium: 20, large: 40 };
-  return map[rough] ?? '—';
+  const sizes = { small: 8, medium: 20, large: 40 };
+  return sizes[rough] ?? '—';
 }
 
 /**
- * Render a small row of amenity icons based on spot fields.
+ * Render a small row of amenity emoji based on spot fields.
  *
  * @param {object} spot
  * @returns {string}
  */
 function _amenityIcons(spot) {
   const icons = [];
-  if (spot.noise_baseline === 'quiet') icons.push('🔇');
-  if (spot.has_outlets)                icons.push('⚡');
-  if (spot.wifi_strength && spot.wifi_strength !== 'none') icons.push('📶');
-  if (spot.has_food)                   icons.push('🍔');
+  if (spot.noise_baseline === 'quiet')                       icons.push('🔇');
+  if (spot.has_outlets)                                      icons.push('⚡');
+  if (spot.wifi_strength && spot.wifi_strength !== 'none')   icons.push('📶');
+  if (spot.has_food)                                         icons.push('🍔');
   return icons.join(' ');
 }
 
