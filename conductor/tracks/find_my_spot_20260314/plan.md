@@ -2,11 +2,11 @@
 
 This plan outlines the steps to implement the "Find My Spot" feature, extending the existing smart suggestions logic and UI.
 
-## Phase 1: Enhanced Ranking Logic
+## Phase 1: Enhanced Ranking Logic [checkpoint: 206006f]
 - [x] Task: Write tests for distance-based ranking logic (enhancing existing tests in `tests/unit/smartSuggestions.test.js`) 41cd5dc
 - [x] Task: Update `smartSuggestions.js`: Implement GPS distance calculation and refine `_rankSpots` to handle city vs campus contexts 41cd5dc
 - [x] Task: Update `_effectiveScore` to handle walk time penalties robustly for both city and campus 41cd5dc
-- [ ] Task: Conductor - User Manual Verification 'Enhanced Ranking Logic' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Enhanced Ranking Logic' (Protocol in workflow.md) 206006f
 
 ## Phase 2: Suggestions Results UI
 - [ ] Task: Write tests for the `SuggestionsList` component
