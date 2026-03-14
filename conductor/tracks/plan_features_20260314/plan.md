@@ -13,7 +13,7 @@
 - [x] Task: Conductor - User Manual Verification 'Feature Re-evaluation and Prioritization' (Protocol in workflow.md) f21766e
 
 ## Phase 3: Design Process and UX Mapping
-- [ ] Task: Map the user journey for the core "find and claim a spot" flow
+- [x] Task: Map the user journey for the core "find and claim a spot" flow b607f5b
 - [ ] Task: Define the visual design principles and branding guidelines
 - [ ] Task: Create wireframes or low-fidelity sketches for core screens
 - [ ] Task: Conductor - User Manual Verification 'Design Process and UX Mapping' (Protocol in workflow.md)
