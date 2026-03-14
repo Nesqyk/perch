@@ -15,5 +15,5 @@
 ## Phase 3: Design Process and UX Mapping
 - [x] Task: Map the user journey for the core "find and claim a spot" flow b607f5b
 - [x] Task: Define the visual design principles and branding guidelines e33fefe
-- [ ] Task: Create wireframes or low-fidelity sketches for core screens
+- [x] Task: Create wireframes or low-fidelity sketches for core screens abacd03
 - [ ] Task: Conductor - User Manual Verification 'Design Process and UX Mapping' (Protocol in workflow.md)
