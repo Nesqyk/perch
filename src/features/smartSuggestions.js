@@ -16,7 +16,7 @@
  * all spots; the filter is a view-layer concern, not a data concern).
  */
 
-import { on, EVENTS }               from '../core/events.js';
+import { on, emit, EVENTS }               from '../core/events.js';
 import { getState }                  from '../core/store.js';
 import { fetchScheduleForSpot }      from '../api/spots.js';
 import { formatTime }                from '../utils/time.js';
