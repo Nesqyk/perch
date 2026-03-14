@@ -9,5 +9,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Understand the status and existing implementation of perch; all of them.**
+- [x] **Track: Understand the status and existing implementation of perch; all of them.**
   *Link: [./tracks/understand_perch_20260314/](./tracks/understand_perch_20260314/)*
