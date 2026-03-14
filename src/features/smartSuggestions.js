@@ -57,26 +57,58 @@ async function _onSpotSelected(e) {
  *
  * Ranking criteria (in order):
  *  1. Meets all required filter criteria (hard filter)
- *  2. Sorted by confidence score descending
- *  3. Off-campus spots ranked after on-campus (walk penalty)
+ *  2. If viewMode is 'campus', prioritize on-campus spots
+ *  3. Sorted by effective score (confidence + distance penalty) descending
  *
  * @param {object[]} spots
  * @param {object}   confidence  - Record<spotId, { score }>
- * @param {object}   filters     - { groupSize, needs, nearBuilding }
+ * @param {object}   filters     - { groupSize, needs, nearBuilding, userLocation, viewMode }
  * @returns {object[]} filtered + ranked spots
  */
 export function _rankSpots(spots, confidence, filters) {
+  const { userLocation, viewMode = 'campus' } = filters;
+
   return spots
     .filter(spot => _matchesFilters(spot, filters))
     .map(spot => ({
       ...spot,
-      _score: _effectiveScore(spot, confidence),
+      _distance: userLocation ? _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng }) : null,
+      _score: _effectiveScore(spot, confidence, userLocation),
     }))
     .sort((a, b) => {
-      // On-campus spots first, then by score.
-      if (a.on_campus !== b.on_campus) return a.on_campus ? -1 : 1;
+      // 1. Contextual priority (Campus mode)
+      if (viewMode === 'campus') {
+        if (a.on_campus !== b.on_campus) return a.on_campus ? -1 : 1;
+      }
+
+      // 2. Score (includes confidence and distance penalty)
       return b._score - a._score;
     });
+}
+
+/**
+ * Calculate the great-circle distance between two points (Haversine formula).
+ * Returns distance in meters.
+ *
+ * @param {{lat: number, lng: number}} p1
+ * @param {{lat: number, lng: number}} p2
+ * @returns {number} meters
+ */
+function _calculateDistance(p1, p2) {
+  if (!p1 || !p2 || p1.lat === undefined || p2.lat === undefined) return Infinity;
+
+  const R = 6371e3; // Earth radius in meters
+  const φ1 = p1.lat * Math.PI / 180;
+  const φ2 = p2.lat * Math.PI / 180;
+  const Δφ = (p2.lat - p1.lat) * Math.PI / 180;
+  const Δλ = (p2.lng - p1.lng) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
 }
 
 function _matchesFilters(spot, filters) {
@@ -103,13 +135,28 @@ function _matchesFilters(spot, filters) {
   return true;
 }
 
-function _effectiveScore(spot, confidence) {
+function _effectiveScore(spot, confidence, userLocation) {
   const conf = confidence[spot.id];
-  if (!conf) return 0.5;
-  if (conf.validUntil && new Date(conf.validUntil) < new Date()) return 0.5;
-  // Small walk penalty for off-campus spots.
-  const walkPenalty = spot.on_campus ? 0 : 0.05 * (spot.walk_time_min ?? 0);
-  return Math.max(0, (conf.score ?? 0.5) - walkPenalty);
+  let baseScore = 0.5;
+
+  if (conf) {
+    const isValid = !conf.validUntil || new Date(conf.validUntil) > new Date();
+    if (isValid) baseScore = conf.score ?? 0.5;
+  }
+
+  let walkPenalty = 0;
+
+  if (userLocation && spot.lat !== undefined && spot.lng !== undefined) {
+    // 1. Calculate distance-based penalty (assuming 84m/min walking speed)
+    const distanceMeters = _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng });
+    const walkMins      = distanceMeters / 84;
+    walkPenalty         = 0.05 * walkMins;
+  } else if (!spot.on_campus) {
+    // 2. Fallback to static walk_time_min for off-campus spots if GPS unavailable
+    walkPenalty = 0.05 * (spot.walk_time_min ?? 0);
+  }
+
+  return Math.max(0, baseScore - walkPenalty);
 }
 
 // ─── Map highlight ────────────────────────────────────────────────────────────
