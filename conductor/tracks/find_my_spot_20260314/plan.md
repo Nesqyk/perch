@@ -9,9 +9,9 @@ This plan outlines the steps to implement the "Find My Spot" feature, extending 
 - [x] Task: Conductor - User Manual Verification 'Enhanced Ranking Logic' (Protocol in workflow.md) 206006f
 
 ## Phase 2: Suggestions Results UI
-- [ ] Task: Write tests for the `SuggestionsList` component
-- [ ] Task: Create `src/ui/suggestionsList.js` component (reusing existing UI patterns and styles)
-- [ ] Task: Integrate `SuggestionsList` into `sidebar.js` and `bottomSheet.js` (standardizing view management)
+- [x] Task: Write tests for the `SuggestionsList` component 3d1d1e6
+- [x] Task: Create `src/ui/suggestionsList.js` component (reusing existing UI patterns and styles) 3d1d1e6
+- [x] Task: Integrate `SuggestionsList` into `sidebar.js` and `bottomSheet.js` (standardizing view management) 3d1d1e6
 - [ ] Task: Conductor - User Manual Verification 'Suggestions Results UI' (Protocol in workflow.md)
 
 ## Phase 3: Integration and Navigation
