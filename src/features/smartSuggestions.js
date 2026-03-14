@@ -32,14 +32,15 @@ export function initSmartSuggestions() {
 
 function _onFilterSubmitted(e) {
   const { filters }   = e.detail;
-  const { spots, confidence } = getState();
+  const { spots, confidence, userLocation, viewMode } = getState();
 
-  const ranked = _rankSpots(spots, confidence, filters);
+  const ranked = _rankSpots(spots, confidence, { ...filters, userLocation, viewMode });
 
-  // Update the map by adding a visual class to matching vs non-matching pins.
-  // Pins module reads confidence + claims for colour; we annotate the spot
-  // elements with a data attribute so CSS can dim non-results.
+  // 1. Update the map highlights (highlights all matches)
   _applyMapHighlight(ranked.map(s => s.id));
+
+  // 2. Notify the UI to show the top 3 results
+  emit(EVENTS.UI_SUGGEST_OPENED, { rankedSpots: ranked });
 }
 
 async function _onSpotSelected(e) {

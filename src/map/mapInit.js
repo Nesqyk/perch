@@ -12,7 +12,8 @@
  */
 
 import { L }              from './mapLoader.js';
-import { emit, EVENTS }   from '../core/events.js';
+import { on, emit, EVENTS }   from '../core/events.js';
+import { getState } from '../core/store.js';
 
 /** @type {import('leaflet').Map | null} */
 let _map = null;
@@ -46,11 +47,18 @@ export function initMap() {
     throw new Error('[mapInit] #map-container element not found in the DOM');
   }
 
+  const campusBounds = L.latLngBounds([
+    [10.2916, 123.8789],
+    [10.2956, 123.8829]
+  ]);
+
   _map = L.map(container, {
-    center:           [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
-    zoom:             DEFAULT_ZOOM,
-    zoomControl:      false,   // we provide our own controls via mapControls.js
+    center:             [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
+    zoom:               DEFAULT_ZOOM,
+    zoomControl:        false,   // we provide our own controls via mapControls.js
     attributionControl: false, // attribution hidden from UI (tiles: OSM + CARTO)
+    maxBounds:          campusBounds.pad(0.3),
+    minZoom:            16,
   });
 
   L.tileLayer(TILE_URL, {
@@ -61,7 +69,20 @@ export function initMap() {
   // Signal to the rest of the app that the map is ready to receive markers.
   emit(EVENTS.MAP_READY, { map: _map });
 
+  on(EVENTS.SPOT_SELECTED, _onSpotSelected);
+
   return _map;
+}
+
+function _onSpotSelected(e) {
+  if (!e.detail.navigate) return;
+
+  const { spots } = getState();
+  const spot = spots.find(s => s.id === e.detail.spotId);
+  
+  if (spot && spot.lat && spot.lng) {
+    panTo({ lat: spot.lat, lng: spot.lng }, 18);
+  }
 }
 
 /**

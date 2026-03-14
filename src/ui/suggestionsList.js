@@ -8,6 +8,7 @@
 import { X, Navigation } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
 import { formatConfidence } from '../utils/confidence.js';
+import { formatWalkTime } from '../utils/time.js';
 import { iconSvg } from './icons.js';
 
 // ─── Logic ───────────────────────────────────────────────────────────────────
@@ -22,8 +23,7 @@ export function formatSuggestions(rankedSpots) {
   return rankedSpots.slice(0, 3).map(spot => {
     const formatted = { ...spot };
     if (spot._distance !== undefined && spot._distance !== null) {
-      const mins = Math.floor(spot._distance / 84);
-      formatted.walkTimeLabel = mins === 0 ? '< 1 min walk' : `${mins} min walk`;
+      formatted.walkTimeLabel = formatWalkTime(spot._distance);
     }
     return formatted;
   });
