@@ -18,25 +18,26 @@ import { on, EVENTS }         from '../core/events.js';
 import { getState }            from '../core/store.js';
 import { renderFilterPanel, initFilterPanel } from './filterPanel.js';
 import { renderSpotCard }      from './spotCard.js';
-import { renderClaimPanel, initClaimPanel }   from './claimPanel.js';
 import { renderReportPanel }   from './reportPanel.js';
-import { renderGroupPanel, initGroupPanel }   from './groupPanel.js';
+import { renderSuggestionsList } from './suggestionsList.js';
 
 let _currentView = 'filters';
+let _lastRanked = [];
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 
 export function initSidebar() {
   initFilterPanel();
-  initClaimPanel();
-  initGroupPanel();
 
-  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
-  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
-  on(EVENTS.GROUP_JOINED,     _onGroupJoined);
-  on(EVENTS.GROUP_LEFT,       _onGroupLeft);
+  on(EVENTS.SPOT_SELECTED,      _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
+  on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
+  on(EVENTS.CLAIM_REMOVED,      _onClaimUpdated);
+  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
+  on(EVENTS.GROUP_JOINED,       _onGroupJoined);
+  on(EVENTS.GROUP_LEFT,         _onGroupLeft);
+  on(EVENTS.GROUP_PINS_UPDATED, _onGroupPinsUpdated);
+  on(EVENTS.UI_SUGGEST_OPENED,  _onSuggestOpened);
 
   // Render the default filter view on startup.
   _renderView('filters');
@@ -44,37 +45,45 @@ export function initSidebar() {
 
 // ─── Event handlers ──────────────────────────────────────────────────────────
 
+function _onSuggestOpened(e) {
+  _lastRanked = e.detail.rankedSpots;
+  _renderView('suggestions');
+}
+
 function _onSpotSelected(e) {
-  const { myActiveClaim } = getState();
-  // If the selected spot is already claimed by this session, show claim panel.
-  if (myActiveClaim?.spotId === e.detail.spotId) {
-    _renderView('claim', e.detail.spotId);
-  } else {
-    _renderView('spotCard', e.detail.spotId);
-  }
+  // Always show the spotCard in the sidebar — the floating overlay handles claims.
+  _renderView('spotCard', e.detail.spotId);
 }
 
 function _onSpotDeselected() {
   _renderView('filters');
 }
 
-function _onClaimUpdated(_e) {
-  const { myActiveClaim, selectedSpotId } = getState();
-  // Switch to claim panel when this session's own claim is added.
-  if (myActiveClaim && myActiveClaim.spotId === selectedSpotId) {
-    _renderView('claim', selectedSpotId);
+function _onClaimUpdated() {
+  // Re-render the spotCard so the inline claim section appears/disappears.
+  const { selectedSpotId } = getState();
+  if (selectedSpotId && _currentView === 'spotCard') {
+    _renderView('spotCard', selectedSpotId);
   }
+}
+
+function _onGroupPinsUpdated() {
+  const { selectedSpotId } = getState();
+  _renderView(_currentView, selectedSpotId);
 }
 
 function _onCorrectionFiled(e) {
-  const { selectedSpotId } = getState();
-  if (e.detail.spotId === selectedSpotId) {
-    _renderView('report', selectedSpotId);
-  }
+  // Report panel is now a modal — open it without switching the sidebar view.
+  renderReportPanel(null, e.detail.spotId);
 }
 
 function _onGroupJoined() {
-  _renderView('group');
+  const { selectedSpotId } = getState();
+  if (selectedSpotId && _currentView === 'spotCard') {
+    _renderView('spotCard', selectedSpotId);
+  } else {
+    _renderView('filters');
+  }
 }
 
 function _onGroupLeft() {
@@ -98,14 +107,8 @@ function _renderView(view, spotId) {
     case 'spotCard':
       renderSpotCard(container, spotId);
       break;
-    case 'claim':
-      renderClaimPanel(container, spotId);
-      break;
-    case 'report':
-      renderReportPanel(container, spotId);
-      break;
-    case 'group':
-      renderGroupPanel(container);
+    case 'suggestions':
+      renderSuggestionsList(container, _lastRanked);
       break;
   }
 }
