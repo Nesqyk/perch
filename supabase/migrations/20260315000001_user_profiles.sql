@@ -16,15 +16,22 @@ alter table public.user_profiles enable row level security;
 -- ─── RLS Policies ────────────────────────────────────────────────────────────
 
 -- Everyone can see nicknames (to display who claimed a spot or is in a group).
+drop policy if exists "user_profiles: public read" on public.user_profiles;
 create policy "user_profiles: public read"
   on public.user_profiles for select
   to anon
   using (true);
 
--- Users can create or update their own nickname.
 -- Identified by the custom x-perch-session header.
-create policy "user_profiles: owner can upsert"
-  on public.user_profiles for all
+drop policy if exists "user_profiles: owner can upsert" on public.user_profiles;
+
+create policy "user_profiles: owner insert"
+  on public.user_profiles for insert
+  to anon
+  with check (session_id = current_setting('request.headers', true)::json->>'x-perch-session');
+
+create policy "user_profiles: owner update"
+  on public.user_profiles for update
   to anon
   using (session_id = current_setting('request.headers', true)::json->>'x-perch-session')
   with check (session_id = current_setting('request.headers', true)::json->>'x-perch-session');
