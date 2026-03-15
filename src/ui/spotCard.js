@@ -546,11 +546,21 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
       avatar.textContent = initials;
       row.appendChild(avatar);
 
-      // Location
+      // Name & Location
+      const nameLoc = document.createElement('div');
+      nameLoc.className = 'spot-card__gm-name-loc';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'spot-card__gm-member-name';
+      nameSpan.textContent = pin.display_name ?? 'Someone';
+      nameLoc.appendChild(nameSpan);
+
       const loc     = document.createElement('span');
       loc.className = 'spot-card__gm-location';
       loc.textContent = spotName;
-      row.appendChild(loc);
+      nameLoc.appendChild(loc);
+
+      row.appendChild(nameLoc);
 
       // Join count
       const joinCount     = document.createElement('span');

@@ -79,3 +79,52 @@ update public.claims
  where public.claims.session_id = up.session_id
    and public.claims.cancelled_at is null
    and public.claims.expires_at > now();
+
+-- ─── groups enhancement ──────────────────────────────────────────────────────
+
+-- Add display_name column to group_pins if it doesn't exist
+alter table public.group_pins add column if not exists display_name text;
+
+-- Trigger to sync nickname on group_members (when joining)
+create or replace function public.sync_nickname_on_group_member()
+returns trigger language plpgsql as $$
+begin
+  select nickname into new.display_name
+    from public.user_profiles
+   where session_id = new.session_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_nickname_on_group_member_trigger on public.group_members;
+create trigger sync_nickname_on_group_member_trigger
+  before insert on public.group_members
+  for each row execute function public.sync_nickname_on_group_member();
+
+-- Trigger to sync nickname on group_pins (when dropping a pin)
+create or replace function public.sync_nickname_on_group_pin()
+returns trigger language plpgsql as $$
+begin
+  select nickname into new.display_name
+    from public.user_profiles
+   where session_id = new.session_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_nickname_on_group_pin_trigger on public.group_pins;
+create trigger sync_nickname_on_group_pin_trigger
+  before insert on public.group_pins
+  for each row execute function public.sync_nickname_on_group_pin();
+
+-- Backfill existing group members and pins
+update public.group_members
+   set display_name = up.nickname
+  from public.user_profiles up
+ where public.group_members.session_id = up.session_id;
+
+update public.group_pins
+   set display_name = up.nickname
+  from public.user_profiles up
+ where public.group_pins.session_id = up.session_id
+   and public.group_pins.ended_at is null;

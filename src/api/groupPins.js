@@ -27,7 +27,7 @@ export async function fetchGroupPins(groupId) {
   const { data, error } = await supabase
     .from('group_pins')
     .select(`
-      id, group_id, spot_id, session_id, pin_type,
+      id, group_id, spot_id, session_id, display_name, pin_type,
       vibe, note, custom_name, pinned_at, expires_at, ended_at
     `)
     .eq('group_id', groupId)
