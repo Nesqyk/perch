@@ -62,6 +62,7 @@ import { initMapControls }             from './map/mapControls.js';
 
 import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
+import { getProfile }        from './api/profile.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
 // ─── Features ────────────────────────────────────────────────────────────────
@@ -91,6 +92,13 @@ async function boot() {
 
   // ── 3.5 UI Header ──────────────────────────────────────────────────────────
   initHeader();
+
+  // ── 3.6 Fetch user profile ──────────────────────────────────────────────────
+  getProfile().then(profile => {
+    if (profile?.nickname) {
+      dispatch('SET_NICKNAME', profile.nickname);
+    }
+  });
 
   // ── 4 & 5. URL params → restore filters + selected spot ──────────────────────
   const urlState   = readUrlParams();
