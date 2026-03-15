@@ -53,8 +53,8 @@ import { initSession }  from './utils/session.js';
 
 // ─── Map ──────────────────────────────────────────────────────────────────────
 
-import { loadGoogleMaps }  from './map/mapLoader.js';
-import { initMap }         from './map/mapInit.js';
+import { loadGoogleMaps }          from './map/mapLoader.js';
+import { initMap, clearClickMarker } from './map/mapInit.js';
 import { initPins, initGroupPinLayer } from './map/pins.js';
 import { initMapControls }             from './map/mapControls.js';
 
@@ -63,6 +63,7 @@ import { initMapControls }             from './map/mapControls.js';
 import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
 import { getProfile }        from './api/profile.js';
+import { fetchCampuses }     from './api/campuses.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
 // ─── Features ────────────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { initHeader }      from './ui/header.js';
 import { showToast }       from './ui/toast.js';
+import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -126,6 +128,15 @@ async function boot() {
   // ── 9. Realtime ───────────────────────────────────────────────────────────────
   subscribeToRealtime();
 
+  // ── 9.5. Fetch campuses (needed before map flyToBounds) ─────────────────────────
+  try {
+    const campuses = await fetchCampuses();
+    dispatch('CAMPUSES_LOADED', { campuses });
+  } catch (err) {
+    // Non-fatal — app still works with default CTU bounds baked into mapInit.
+    console.warn('[main] fetchCampuses failed:', err);
+  }
+
   // ── 10. Fetch spots ───────────────────────────────────────────────────────────
   dispatch('SET_STATUS', { spotsLoading: true });
   try {
@@ -164,6 +175,7 @@ async function boot() {
   initSmartSuggestions();
   initClaim();
   initReportFull();
+  initSubmitSpotPanel();
 
   // ── 16–17. Group feature modules ─────────────────────────────────────────────
   initGroups();
@@ -222,6 +234,10 @@ async function boot() {
     // Store the code so the filter panel can read it on next render if needed.
     sessionStorage.setItem('perch_prefill_join_code', groupCode);
   }
+
+  // ── 24. Clear map click marker on panel close ─────────────────────────────────
+  on(EVENTS.UI_PANEL_CLOSED, clearClickMarker);
+  on(EVENTS.SPOT_SELECTED, clearClickMarker);
 
   console.warn('[Perch] App ready.');
 }

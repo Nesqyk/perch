@@ -37,8 +37,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
       if (sessionId) {
         // Ensure options.headers is an object we can modify.
-        // If it's a Headers instance, use .set().
-        if (options.headers instanceof Headers) {
+        // If it's a Headers instance from the browser, use .set().
+        if (typeof window !== 'undefined' && options.headers instanceof window.Headers) {
           options.headers.set('x-perch-session', sessionId);
         } else {
           options.headers = {

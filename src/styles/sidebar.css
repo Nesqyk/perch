@@ -137,7 +137,7 @@
 
 .suggestion-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-md);

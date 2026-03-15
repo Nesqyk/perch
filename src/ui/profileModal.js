@@ -5,7 +5,6 @@
  * Interacts with the profile API and the central store.
  */
 
-import { on, emit, EVENTS } from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
 import { upsertProfile } from '../api/profile.js';
 import { showToast } from './toast.js';

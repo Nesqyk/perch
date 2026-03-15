@@ -2,8 +2,25 @@
 
 ```mermaid
 erDiagram
+    campuses {
+        uuid id PK
+        text name
+        text short_name
+        text city
+        numeric lat
+        numeric lng
+        numeric bounds_sw_lat
+        numeric bounds_sw_lng
+        numeric bounds_ne_lat
+        numeric bounds_ne_lng
+        integer default_zoom
+        boolean is_active
+        timestamptz created_at
+    }
+
     spots {
         uuid id PK
+        uuid campus_id FK
         text name
         text type
         boolean on_campus
@@ -64,13 +81,19 @@ erDiagram
 
     spot_submissions {
         uuid id PK
+        uuid campus_id FK
         text spot_name
         text description
         text submitted_by
+        text session_id
         text status
+        numeric lat
+        numeric lng
         timestamptz created_at
     }
 
+    campuses ||--o{ spots : "has spots"
+    campuses ||--o{ spot_submissions : "receives submissions"
     spots ||--|| spot_confidence : "has score"
     spots ||--o{ claims : "claimed at"
     spots ||--o{ corrections : "reported at"
@@ -89,3 +112,4 @@ erDiagram
 - `group_size_key`: `solo` | `small` | `medium` | `large`
 - `corrections.reason`: `locked` | `occupied` | `overcrowded` | `event`
 - `spot_submissions.status`: `pending` | `approved` | `rejected`
+- `campuses`: Each row holds map center + bounding box. Used by `mapInit.js` for `flyToBounds`/`maxBounds`.

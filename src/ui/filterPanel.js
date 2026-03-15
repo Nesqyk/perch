@@ -17,12 +17,11 @@
 import { on, emit, EVENTS }   from '../core/events.js';
 import { getState, dispatch }  from '../core/store.js';
 import { GROUP_SIZE_CONFIG }   from '../utils/capacity.js';
-import { Users, LogOut, ThumbsUp, Copy } from 'lucide';
+import { LogOut, Copy, Link }  from 'lucide';
 import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { iconSvg }   from './icons.js';
-import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
-import { leaveGroup } from '../features/groups.js';
+import { leaveGroup, buildGroupJoinUrl } from '../features/groups.js';
 
 const _GROUP_SIZE_LABELS = {
   solo:   'Just Me',
@@ -240,9 +239,9 @@ function _buildFindButton() {
  * @returns {HTMLElement}
  */
 function _buildGroupSection() {
-  const { group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots } = getState();
+  const { group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots, groupMembers } = getState();
   if (group) {
-    return _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots);
+    return _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, groupPinJoins, myGroupPinId, spots);
   }
 
   const section     = document.createElement('div');
@@ -494,17 +493,18 @@ function _populateBuildingDropdown() {
 
 /**
  * Replaces the Create/Join form when the user is already in a group.
- * Renders: group header, scrollable member rows, invite code.
+ * Renders: group header, scrollable member rows, invite code/link.
  *
  * @param {object}      group
  * @param {object|null} groupMember
+ * @param {object[]}    groupMembers  - All members from store (real list from DB)
  * @param {object}      groupPins     - Record<pinId, GroupPin>
  * @param {object}      groupPinJoins - Record<pinId, GroupPinJoin[]>
  * @param {string|null} myGroupPinId
  * @param {object[]}    spots
  * @returns {HTMLElement}
  */
-function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots) {
+function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, groupPinJoins, myGroupPinId, spots) {
   const section     = document.createElement('div');
   section.className = 'spot-card__group-members-section';
 
@@ -544,27 +544,30 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
 
   section.appendChild(header);
 
-  // ── Member count ──────────────────────────────────────────────────────────
-  const livePins = Object.values(groupPins).filter(p => p.pin_type === 'live' && !p.ended_at);
+  // ── Member count (from actual members list) ──────────────────────────────
+  const memberCount = groupMembers.length || 1;
 
   const count     = document.createElement('p');
   count.className = 'spot-card__gm-count';
-  count.textContent = `${livePins.length || 1} Member${(livePins.length || 1) !== 1 ? 's' : ''}`;
+  count.textContent = `${memberCount} Member${memberCount !== 1 ? 's' : ''}`;
   section.appendChild(count);
 
-  // ── Members table (scrollable) ────────────────────────────────────────────
-  if (livePins.length > 0) {
-    const table     = document.createElement('div');
-    table.className = 'spot-card__gm-table';
+  // ── Members table (real members from DB) ─────────────────────────────────
+  const table     = document.createElement('div');
+  table.className = 'spot-card__gm-table';
 
-    livePins.sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at)).forEach(pin => {
-      const isMine   = pin.id === myGroupPinId;
-      const joins    = (groupPinJoins[pin.id] ?? []).filter(j => j.status === 'heading');
-      const spotName = pin.spot_id
-        ? (spots.find(s => s.id === pin.spot_id)?.name ?? 'Unknown')
-        : 'En Route';
+  if (groupMembers.length > 0) {
+    groupMembers.forEach(mem => {
+      const isMine   = mem.session_id === _mySessionId();
+      const initials = _toInitials(mem.display_name ?? '?');
 
-      const initials = _toInitials(pin.display_name ?? groupMember?.displayName ?? '?');
+      // Find if this member has a live pin
+      const livePins = Object.values(groupPins).filter(
+        p => p.session_id === mem.session_id && p.pin_type === 'live' && !p.ended_at
+      );
+      const spotName = livePins.length
+        ? (spots.find(s => s.id === livePins[0].spot_id)?.name ?? 'En Route')
+        : 'Browsing';
 
       const row     = document.createElement('div');
       row.className = `spot-card__gm-row${isMine ? ' spot-card__gm-row--mine' : ''}`;
@@ -576,50 +579,41 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
       avatar.textContent = initials;
       row.appendChild(avatar);
 
-      // Location
+      // Name + location
+      const info     = document.createElement('div');
+      info.className = 'spot-card__gm-info';
+
+      const displayName     = document.createElement('span');
+      displayName.className = 'spot-card__gm-display-name';
+      displayName.textContent = mem.display_name + (isMine ? ' (you)' : '');
+      info.appendChild(displayName);
+
       const loc     = document.createElement('span');
       loc.className = 'spot-card__gm-location';
       loc.textContent = spotName;
-      row.appendChild(loc);
+      info.appendChild(loc);
 
-      // Join count
-      const joinCount     = document.createElement('span');
-      joinCount.className = 'spot-card__gm-joins';
-      joinCount.innerHTML = `${iconSvg(Users, 14)} ${joins.length}`;
-      row.appendChild(joinCount);
+      row.appendChild(info);
 
-      // Thumbs-up (heading join)
-      const alreadyJoined = (groupPinJoins[pin.id] ?? []).some(
-        j => j.status === 'heading' && j.session_id === _mySessionId(),
-      );
-      const thumbBtn     = document.createElement('button');
-      thumbBtn.type      = 'button';
-      thumbBtn.className = `spot-card__gm-thumb${alreadyJoined ? ' spot-card__gm-thumb--active' : ''}`;
-      thumbBtn.setAttribute('aria-label', 'Heading there');
-      thumbBtn.innerHTML = iconSvg(ThumbsUp, 16);
-      if (!isMine) {
-        thumbBtn.addEventListener('click', () => {
-          emit(GROUP_PIN_EVENTS.JOIN_REQUESTED, { pinId: pin.id, status: 'heading' });
-        });
-      } else {
-        thumbBtn.disabled = true;
-        thumbBtn.setAttribute('aria-label', 'Your pin');
-      }
-      row.appendChild(thumbBtn);
+      // Scout points
+      const pts     = document.createElement('span');
+      pts.className = 'spot-card__gm-pts';
+      pts.textContent = `${mem.scout_points ?? 0}pt`;
+      row.appendChild(pts);
 
       table.appendChild(row);
     });
-
-    section.appendChild(table);
-  } else if (groupMember) {
-    // No live pins yet — show a placeholder row for this member
+  } else {
+    // Fallback: show the current member at minimum
     const placeholder     = document.createElement('p');
     placeholder.className = 'spot-card__gm-empty';
-    placeholder.textContent = 'No members heading anywhere yet. Drop a pin!';
-    section.appendChild(placeholder);
+    placeholder.textContent = 'Loading members...';
+    table.appendChild(placeholder);
   }
 
-  // ── Code + copy row ──────────────────────────────────────────────────────
+  section.appendChild(table);
+
+  // ── Code + share link row ───────────────────────────────────────────────
   const codeRow     = document.createElement('div');
   codeRow.className = 'spot-card__gm-code-row';
 
@@ -628,13 +622,14 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
   codeText.innerHTML = `Code: <strong>${group.code}</strong>`;
   codeRow.appendChild(codeText);
 
+  // Copy share link button (uses buildGroupJoinUrl — the ?join=CODE URL)
   const copyBtn     = document.createElement('button');
   copyBtn.type      = 'button';
   copyBtn.className = 'spot-card__gm-copy';
-  copyBtn.setAttribute('aria-label', 'Copy invite code');
-  copyBtn.innerHTML = iconSvg(Copy, 16);
+  copyBtn.setAttribute('aria-label', 'Copy invite link');
+  copyBtn.innerHTML = iconSvg(Link, 16);
   copyBtn.addEventListener('click', async () => {
-    const url = `${window.location.origin}${window.location.pathname}?group=${group.code}`;
+    const url = buildGroupJoinUrl(group.code);
     try {
       await navigator.clipboard.writeText(url);
       showToast('Invite link copied! Share it with your group.', 'success');
@@ -643,6 +638,22 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
     }
   });
   codeRow.appendChild(copyBtn);
+
+  // Copy code button
+  const codeCopyBtn     = document.createElement('button');
+  codeCopyBtn.type      = 'button';
+  codeCopyBtn.className = 'spot-card__gm-copy';
+  codeCopyBtn.setAttribute('aria-label', 'Copy group code');
+  codeCopyBtn.innerHTML = iconSvg(Copy, 16);
+  codeCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(group.code);
+      showToast(`Code ${group.code} copied!`, 'success');
+    } catch {
+      showToast(`Share this code: ${group.code}`, 'success');
+    }
+  });
+  codeRow.appendChild(codeCopyBtn);
 
   section.appendChild(codeRow);
   return section;

@@ -13,7 +13,8 @@
 
 import { on, emit, EVENTS }                    from '../core/events.js';
 import { dispatch }                             from '../core/store.js';
-import { createGroup, joinGroup }               from '../api/groups.js';
+import { createGroup, joinGroup,
+         fetchGroupMembers }                    from '../api/groups.js';
 import { fetchGroupPins, fetchGroupPinJoins }   from '../api/groupPins.js';
 import { subscribeToGroupRealtime,
          unsubscribeFromGroupRealtime }          from '../api/realtime.js';
@@ -101,6 +102,10 @@ async function _activateGroup(group, member) {
   };
 
   dispatch('GROUP_JOINED', { group, member: normMember });
+
+  // Fetch full members list and push to store so UI can render them.
+  const members = await fetchGroupMembers(group.id);
+  dispatch('GROUP_MEMBERS_UPDATED', { members });
 
   // Fetch existing pins.
   const pins = await fetchGroupPins(group.id);

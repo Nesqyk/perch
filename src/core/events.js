@@ -113,13 +113,22 @@ export const EVENTS = Object.freeze({
   GROUP_PIN_JOINS_UPDATED:'state:groupPinJoinsUpdated',
   GROUP_CONFIRMATIONS_UPDATED: 'state:groupConfirmationsUpdated',
 
+  // ── Store: campus ────────────────────────────────────────────────────────
+  CAMPUSES_LOADED:        'state:campusesLoaded',
+  CAMPUS_SELECTED:        'state:campusSelected',
+
+  // ── Store: groups ────────────────────────────────────────────────────────
+  GROUP_MEMBERS_UPDATED:  'state:groupMembersUpdated',
+
   // ── UI ───────────────────────────────────────────────────────────────────
-  UI_CLAIM_REQUESTED:     'ui:claimRequested',
-  UI_REPORT_REQUESTED:    'ui:reportRequested',
-  UI_CANCEL_CLAIM:        'ui:cancelClaim',
-  UI_FILTER_SUBMITTED:    'ui:filterSubmitted',
-  UI_SUGGEST_OPENED:      'ui:suggestOpened',
-  UI_PANEL_CLOSED:        'ui:panelClosed',
-  UI_GROUP_CREATE:        'ui:groupCreate',
-  UI_GROUP_JOIN:          'ui:groupJoin',
+  UI_CLAIM_REQUESTED:          'ui:claimRequested',
+  UI_REPORT_REQUESTED:         'ui:reportRequested',
+  UI_CANCEL_CLAIM:             'ui:cancelClaim',
+  UI_FILTER_SUBMITTED:         'ui:filterSubmitted',
+  UI_SUGGEST_OPENED:           'ui:suggestOpened',
+  UI_PANEL_CLOSED:             'ui:panelClosed',
+  UI_GROUP_CREATE:             'ui:groupCreate',
+  UI_GROUP_JOIN:               'ui:groupJoin',
+  UI_SUBMIT_SPOT_REQUESTED:    'ui:submitSpotRequested',
+  UI_CAMPUS_CHANGE_REQUESTED:  'ui:campusChangeRequested',
 });

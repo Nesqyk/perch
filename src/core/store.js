@@ -34,6 +34,15 @@ const _state = {
    */
   viewMode: 'campus',           // 'campus' | 'city'
 
+  /**
+   * All active campuses from the database.
+   * Populated on boot. Used by campus selector UI and mapInit.
+   */
+  campuses: [],                 // Campus[]
+
+  /** The id of the currently selected campus. null = no campus constraint. */
+  selectedCampusId: null,       // string (uuid) | null
+
   /** Active filter selections driven by the filter panel. */
   filters: {
     groupSize:    null,         // 'solo' | 'small' | 'medium' | 'large' | null
@@ -126,6 +135,12 @@ const _state = {
    * null when the session has no live pin in the current group.
    */
   myGroupPinId: null,           // string (uuid) | null
+
+  /**
+   * All members of the current group, fetched on join and refreshed on demand.
+   * Keyed by member id for fast lookup.
+   */
+  groupMembers: [],             // GroupMember[]
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -288,14 +303,32 @@ export function dispatch(action, payload) {
       break;
     }
 
+    // ── Campuses ────────────────────────────────────────────────────────
+    case 'CAMPUSES_LOADED': {
+      _state.campuses = payload.campuses ?? [];
+      // Auto-select the first campus if none is selected yet.
+      if (!_state.selectedCampusId && _state.campuses.length > 0) {
+        _state.selectedCampusId = _state.campuses[0].id;
+      }
+      emit(EVENTS.CAMPUSES_LOADED, { campuses: _state.campuses });
+      break;
+    }
+
+    case 'CAMPUS_SELECTED': {
+      _state.selectedCampusId = payload.campusId;
+      emit(EVENTS.CAMPUS_SELECTED, { campusId: payload.campusId });
+      break;
+    }
+
     // ── Groups ───────────────────────────────────────────────────────────────
     case 'GROUP_JOINED': {
       const { group, member } = payload;
-      _state.group       = group;
-      _state.groupMember = member;
-      _state.groupPins   = {};
+      _state.group         = group;
+      _state.groupMember   = member;
+      _state.groupPins     = {};
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
+      _state.groupMembers  = [];
       emit(EVENTS.GROUP_JOINED, { group, member });
       break;
     }
@@ -306,7 +339,14 @@ export function dispatch(action, payload) {
       _state.groupPins     = {};
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
+      _state.groupMembers  = [];
       emit(EVENTS.GROUP_LEFT, {});
+      break;
+    }
+
+    case 'GROUP_MEMBERS_UPDATED': {
+      _state.groupMembers = payload.members ?? [];
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
       break;
     }
 
