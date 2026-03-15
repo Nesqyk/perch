@@ -11,6 +11,7 @@
 
 ## UI/UX Principles
 - **Clarity**: Status changes (claims, reports) must be visually clear and immediate.
+- **Personalization**: Use the user's chosen nickname across all interactions to humanize the experience while maintaining anonymity.
 - **Top Suggestions**: Provide a focused list of the top 3 spots to reduce 'choice paralysis' during high-stress situations.
 - **Simplicity**: No account needed; minimize the steps between opening the app and finding a spot.
 - **Map-Centric**: The map is the primary navigation; keep controls within easy reach.
