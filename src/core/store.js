@@ -24,6 +24,9 @@ const _state = {
   /** Geolocation. null until the user grants permission. */
   userLocation: null,           // { lat: number, lng: number } | null
 
+  /** The user's manually set nickname. Fetched from Supabase on init. */
+  nickname: null,               // string | null
+
   /**
    * Current macro view of the map.
    * 'campus' restricts viewport and filters for on-campus locations.
@@ -155,6 +158,12 @@ export function dispatch(action, payload) {
     case 'SET_VIEW_MODE': {
       _state.viewMode = payload; // 'campus' | 'city'
       emit(EVENTS.VIEW_MODE_CHANGED, { viewMode: payload });
+      break;
+    }
+
+    case 'SET_NICKNAME': {
+      _state.nickname = payload; // string | null
+      emit(EVENTS.NICKNAME_UPDATED, { nickname: payload });
       break;
     }
 

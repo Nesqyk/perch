@@ -80,6 +80,7 @@ export const EVENTS = Object.freeze({
   // ── Store: location ──────────────────────────────────────────────────────
   LOCATION_SET:           'state:locationSet',
   VIEW_MODE_CHANGED:      'state:viewModeChanged',
+  NICKNAME_UPDATED:       'state:nicknameUpdated',
 
   // ── Store: filters ───────────────────────────────────────────────────────
   FILTERS_CHANGED:        'state:filtersChanged',
