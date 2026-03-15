@@ -22,9 +22,8 @@ import { on, emit, EVENTS }    from '../core/events.js';
 import { getState }             from '../core/store.js';
 import { renderFilterPanel }    from './filterPanel.js';
 import { renderSpotCard }       from './spotCard.js';
-import { renderClaimPanel }     from './claimPanel.js';
 import { renderReportPanel }    from './reportPanel.js';
-import { renderGroupPanel, initGroupPanel } from './groupPanel.js';
+import { renderSuggestionsList } from './suggestionsList.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,6 +36,7 @@ const DRAG_THRESHOLD  = 50;   // px drag needed to trigger state change
 let _sheetState = 'peek'; // 'closed' | 'peek' | 'open'
 let _dragStartY = 0;
 let _dragStartH = 0;
+let _lastRanked = [];
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 
@@ -54,14 +54,15 @@ export function initBottomSheet() {
   document.addEventListener('pointerup',   _onDragEnd);
 
   // Respond to store events.
-  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
-  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
-  on(EVENTS.GROUP_JOINED,     _onGroupJoined);
-  on(EVENTS.GROUP_LEFT,       _onGroupLeft);
-
-  initGroupPanel();
+  on(EVENTS.SPOT_SELECTED,      _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
+  on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
+  on(EVENTS.CLAIM_REMOVED,      _onClaimUpdated);
+  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
+  on(EVENTS.GROUP_JOINED,       _onGroupJoined);
+  on(EVENTS.GROUP_LEFT,         _onGroupLeft);
+  on(EVENTS.GROUP_PINS_UPDATED, _onGroupPinsUpdated);
+  on(EVENTS.UI_SUGGEST_OPENED,  _onSuggestOpened);
 
   // Default render — filter form.
   _renderView('filters');
@@ -69,14 +70,17 @@ export function initBottomSheet() {
 
 // ─── Event handlers ──────────────────────────────────────────────────────────
 
+function _onSuggestOpened(e) {
+  if (_isDesktop()) return;
+  _lastRanked = e.detail.rankedSpots;
+  _renderView('suggestions');
+  _setSheetState('open');
+}
+
 function _onSpotSelected(e) {
   if (_isDesktop()) return;
-  const { myActiveClaim } = getState();
-  if (myActiveClaim?.spotId === e.detail.spotId) {
-    _renderView('claim', e.detail.spotId);
-  } else {
-    _renderView('spotCard', e.detail.spotId);
-  }
+  // Always show the spotCard in the sheet — the overlay handles claims.
+  _renderView('spotCard', e.detail.spotId);
   _setSheetState('open');
 }
 
@@ -88,25 +92,37 @@ function _onSpotDeselected() {
 
 function _onClaimUpdated() {
   if (_isDesktop()) return;
-  const { myActiveClaim, selectedSpotId } = getState();
-  if (myActiveClaim && myActiveClaim.spotId === selectedSpotId) {
-    _renderView('claim', selectedSpotId);
-    _setSheetState('open');
+  // Re-render the spotCard so the inline claim section appears/disappears.
+  const { selectedSpotId } = getState();
+  if (selectedSpotId) {
+    _renderView('spotCard', selectedSpotId);
+  }
+}
+
+function _onGroupPinsUpdated() {
+  if (_isDesktop()) return;
+  const { selectedSpotId } = getState();
+  if (selectedSpotId) {
+    _renderView('spotCard', selectedSpotId);
+  } else {
+    _renderView('filters');
   }
 }
 
 function _onCorrectionFiled(e) {
   if (_isDesktop()) return;
-  const { selectedSpotId } = getState();
-  if (e.detail.spotId === selectedSpotId) {
-    _renderView('report', selectedSpotId);
-    _setSheetState('open');
-  }
+  // Report panel is now a modal — open it without changing the bottom sheet view.
+  renderReportPanel(null, e.detail.spotId);
 }
 
 function _onGroupJoined() {
   if (_isDesktop()) return;
-  _renderView('group');
+  const { selectedSpotId } = getState();
+  if (selectedSpotId) {
+    _renderView('spotCard', selectedSpotId);
+  } else {
+    _renderView('filters');
+  }
   _setSheetState('open');
 }
 
@@ -193,14 +209,8 @@ function _renderView(view, spotId) {
     case 'spotCard':
       renderSpotCard(container, spotId);
       break;
-    case 'claim':
-      renderClaimPanel(container, spotId);
-      break;
-    case 'report':
-      renderReportPanel(container, spotId);
-      break;
-    case 'group':
-      renderGroupPanel(container);
+    case 'suggestions':
+      renderSuggestionsList(container, _lastRanked);
       break;
   }
 }

@@ -14,6 +14,7 @@
   <!-- All styles are CSS-module-free; one cascade, CSS variables for theming -->
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link rel="stylesheet" href="/src/styles/map.css" />
+  <link rel="stylesheet" href="/src/styles/mapPopup.css" />
   <link rel="stylesheet" href="/src/styles/sidebar.css" />
   <link rel="stylesheet" href="/src/styles/bottomSheet.css" />
   <link rel="stylesheet" href="/src/styles/spotCard.css" />
@@ -23,16 +24,10 @@
 
   <!-- ─── Header ─────────────────────────────────────────────────────────── -->
   <header id="app-header" class="app-header">
-    <span class="app-logo">Perch</span>
-    <span class="app-tagline">no login required</span>
-    <!-- Group action buttons — always visible, collapse on mobile via CSS -->
-    <div class="header-group-actions">
-      <button id="btn-new-group" class="btn-header-group" aria-label="Create a new group">
-        New Group
-      </button>
-      <button id="btn-join-group" class="btn-header-group btn-header-group--secondary" aria-label="Join an existing group">
-        Join Group
-      </button>
+    <!-- Owl logo SVG + wordmark -->
+    <div class="app-logo-lockup">
+      <img class="app-logo-owl" src="/logo.svg" alt="Perch owl logo" width="40" height="40" />
+      <span class="app-logo-text">Perch</span>
     </div>
     <!-- Hamburger — visible on mobile only (CSS controls display) -->
     <button id="menu-toggle" class="btn-icon" aria-label="Open menu" aria-expanded="false">
@@ -50,9 +45,16 @@
   -->
   <main id="app-layout" class="app-layout">
 
-    <!-- Google Maps renders into this element.
-         mapInit.js passes this id to the Maps constructor. -->
-    <div id="map-container" class="map-container" aria-label="Campus map"></div>
+    <!-- Leaflet renders into this element. mapInit.js passes this id. -->
+    <div id="map-container" class="map-container" aria-label="Campus map">
+      <!-- Map legend — bottom-centre pill -->
+      <div class="map-legend" aria-label="Map legend">
+        <span class="map-legend-dot map-legend-dot--free"></span><span>Free</span>
+        <span class="map-legend-dot map-legend-dot--maybe"></span><span>Maybe</span>
+        <span class="map-legend-dot map-legend-dot--full"></span><span>Full</span>
+      </div>
+    </div>
+
 
     <!-- ─── Desktop sidebar / Mobile bottom sheet ─────────────────────────
          Same element, same content — CSS repositions it.
@@ -80,6 +82,16 @@
   <div id="modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="modal-box" class="modal-box">
       <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ─── Report ("It's Full") modal ─────────────────────────────────────────
+       Dedicated modal so it can be opened without disturbing the sidebar or
+       the generic confirmation modal.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <div id="report-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="report-modal-box" class="modal-box modal-box--report">
+      <div id="report-modal-content"></div>
     </div>
   </div>
 

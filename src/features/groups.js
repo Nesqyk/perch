@@ -121,7 +121,7 @@ async function _activateGroup(group, member) {
 
 /**
  * Leave the current group — tears down realtime and clears store.
- * Exported so groupPanel.js can call it from a "Leave group" button.
+ * Exported so spotCard.js can call it from a "Leave group" button.
  */
 export function leaveGroup() {
   unsubscribeFromGroupRealtime();

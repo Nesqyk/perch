@@ -184,15 +184,49 @@ describe('_rankSpots — nearBuilding filter', () => {
   });
 });
 
-describe('_rankSpots — walk penalty', () => {
-  it('applies walk penalty to off-campus spot scores', () => {
-    const near = spot({ id: 'walk-near', on_campus: false, walk_time_min: 1 });
-    const far  = spot({ id: 'walk-far',  on_campus: false, walk_time_min: 10 });
+describe('_rankSpots — distance-based ranking', () => {
+  it('prioritizes closer spots when userLocation is provided', () => {
+    // a is far, b is near
+    const a = spot({ id: 'far', lat: 10.3, lng: 123.9 });
+    const b = spot({ id: 'near', lat: 10.2936, lng: 123.8809 });
+    const userLocation = { lat: 10.2935, lng: 123.8808 };
+    
+    const result = _rankSpots([a, b], {}, { ...noFilters, userLocation });
+    expect(result[0].id).toBe('near');
+  });
+
+  it('still respects confidence scores alongside distance', () => {
+    // near has low confidence, far has high confidence
+    const near = spot({ id: 'near', lat: 10.2936, lng: 123.8809 });
+    const far  = spot({ id: 'far',  lat: 10.296,  lng: 123.883  }); // ~350m away
+    const userLocation = { lat: 10.2935, lng: 123.8808 };
+    
     const confidence = {
-      [near.id]: conf(0.8),
-      [far.id]:  conf(0.8),
+      [near.id]: conf(0.1),
+      [far.id]:  conf(0.9),
     };
-    const result = _rankSpots([far, near], confidence, noFilters);
-    expect(result[0].id).toBe('walk-near');
+    
+    const result = _rankSpots([near, far], confidence, { ...noFilters, userLocation });
+    expect(result[0].id).toBe('far');
+  });
+});
+
+describe('_rankSpots — viewMode context', () => {
+  it('prioritizes on-campus spots in campus mode even if far', () => {
+    const onCampusFar = spot({ id: 'on-far', on_campus: true,  lat: 10.4, lng: 124.0 });
+    const offCampusNear = spot({ id: 'off-near', on_campus: false, lat: 10.2936, lng: 123.8809 });
+    const userLocation = { lat: 10.2935, lng: 123.8808 };
+    
+    const result = _rankSpots([onCampusFar, offCampusNear], {}, { ...noFilters, userLocation, viewMode: 'campus' });
+    expect(result[0].id).toBe('on-far');
+  });
+
+  it('prioritizes nearest spots in city mode regardless of campus status', () => {
+    const onCampusFar = spot({ id: 'on-far', on_campus: true,  lat: 10.4, lng: 124.0 });
+    const offCampusNear = spot({ id: 'off-near', on_campus: false, lat: 10.2936, lng: 123.8809 });
+    const userLocation = { lat: 10.2935, lng: 123.8808 };
+    
+    const result = _rankSpots([onCampusFar, offCampusNear], {}, { ...noFilters, userLocation, viewMode: 'city' });
+    expect(result[0].id).toBe('off-near');
   });
 });

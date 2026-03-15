@@ -28,14 +28,14 @@
  * 21. Wire URL sync on store events
  * 22. Wire geolocation (request permission, update store on change)
  * 23. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
- * 24. Wire header group buttons → open modals
- * 25. Handle ?join= URL param → auto-open join modal
+ * 24. Handle ?join= URL param → pre-fill inline join form
  */
 
 // ─── CSS side-effects (Vite bundles these) ────────────────────────────────────
 
 import './styles/main.css';
 import './styles/map.css';
+import './styles/mapPopup.css';
 import './styles/sidebar.css';
 import './styles/bottomSheet.css';
 import './styles/spotCard.css';
@@ -78,8 +78,6 @@ import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
-import { openGroupCreateModal } from './ui/groupCreateModal.js';
-import { openGroupJoinModal }   from './ui/groupJoinModal.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -203,26 +201,14 @@ async function boot() {
     }
   });
 
-  // ── 23. Header group action buttons ──────────────────────────────────────────
-  const newGroupBtn  = document.getElementById('btn-new-group');
-  const joinGroupBtn = document.getElementById('btn-join-group');
-
-  if (newGroupBtn) {
-    newGroupBtn.addEventListener('click', () => openGroupCreateModal());
-  }
-
-  if (joinGroupBtn) {
-    joinGroupBtn.addEventListener('click', () => openGroupJoinModal({}));
-  }
-
-  // ── 24. ?join= URL param → auto-open join modal ───────────────────────────────
+  // ── 23. ?join= URL param → pre-fill filter panel join form ──────────────────
   if (groupCode) {
-    // Clear the param from the URL bar so a refresh doesn't re-trigger.
-    const cleanUrl = window.location.pathname + (urlState.filters.groupSize || urlState.filters.needs.length || urlState.filters.nearBuilding ? window.location.search.replace(/[?&]join=[^&]*/g, '').replace(/^&/, '?') : '');
-    history.replaceState(null, '', cleanUrl || window.location.pathname);
-
-    // Open the join modal with the code pre-filled.
-    openGroupJoinModal({ prefillCode: groupCode });
+    // Clear the join code from the URL bar so a refresh doesn't re-trigger.
+    const cleanUrl = window.location.pathname;
+    history.replaceState(null, '', cleanUrl);
+    // The inline join form in filterPanel.js is the entry point — no modal needed.
+    // Store the code so the filter panel can read it on next render if needed.
+    sessionStorage.setItem('perch_prefill_join_code', groupCode);
   }
 
   console.warn('[Perch] App ready.');

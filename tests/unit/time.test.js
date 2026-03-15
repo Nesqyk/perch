@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { timeAgo, formatTime, claimExpiresIn } from '../../src/utils/time.js';
+import { timeAgo, formatTime, claimExpiresIn, formatWalkTime } from '../../src/utils/time.js';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -103,5 +103,19 @@ describe('claimExpiresIn', () => {
     // 18m 30s in the future → ceil to 19m
     const future = new Date(now.getTime() + 18 * 60_000 + 30_000);
     expect(claimExpiresIn(future)).toBe('expires in 19m');
+  });
+});
+
+describe('formatWalkTime', () => {
+  it('returns "< 1 min walk" for distances < 84m', () => {
+    expect(formatWalkTime(0)).toBe('< 1 min walk');
+    expect(formatWalkTime(42)).toBe('< 1 min walk');
+    expect(formatWalkTime(83)).toBe('< 1 min walk');
+  });
+
+  it('returns "X min walk" for distances >= 84m', () => {
+    expect(formatWalkTime(84)).toBe('1 min walk');
+    expect(formatWalkTime(168)).toBe('2 min walk');
+    expect(formatWalkTime(840)).toBe('10 min walk');
   });
 });

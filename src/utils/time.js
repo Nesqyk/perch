@@ -53,3 +53,15 @@ export function claimExpiresIn(expiresAt) {
   const diffM = Math.ceil(diffMs / 60_000);
   return `expires in ${diffM}m`;
 }
+
+/**
+ * Format a distance in meters into a human-readable walk time string.
+ * Uses 84m/min as average walking speed.
+ *
+ * @param {number} distanceMeters
+ * @returns {string} e.g. "< 1 min walk", "5 min walk"
+ */
+export function formatWalkTime(distanceMeters) {
+  const mins = Math.floor(distanceMeters / 84);
+  return mins === 0 ? '< 1 min walk' : `${mins} min walk`;
+}

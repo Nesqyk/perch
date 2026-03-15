@@ -24,6 +24,13 @@ const _state = {
   /** Geolocation. null until the user grants permission. */
   userLocation: null,           // { lat: number, lng: number } | null
 
+  /**
+   * Current macro view of the map.
+   * 'campus' restricts viewport and filters for on-campus locations.
+   * 'city' allows free movement to see external cafes/spots.
+   */
+  viewMode: 'campus',           // 'campus' | 'city'
+
   /** Active filter selections driven by the filter panel. */
   filters: {
     groupSize:    null,         // 'solo' | 'small' | 'medium' | 'large' | null
@@ -138,10 +145,16 @@ export function getState() {
 export function dispatch(action, payload) {
   switch (action) {
 
-    // ── Location ────────────────────────────────────────────────────────────
+    // ── Location & View Mode ────────────────────────────────────────────────
     case 'SET_USER_LOCATION': {
       _state.userLocation = payload; // { lat, lng }
       emit(EVENTS.LOCATION_SET, { location: payload });
+      break;
+    }
+
+    case 'SET_VIEW_MODE': {
+      _state.viewMode = payload; // 'campus' | 'city'
+      emit(EVENTS.VIEW_MODE_CHANGED, { viewMode: payload });
       break;
     }
 

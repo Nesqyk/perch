@@ -27,6 +27,7 @@ import { on, emit, EVENTS }     from '../core/events.js';
 import { getState }              from '../core/store.js';
 import { getMap }                from './mapInit.js';
 import { deriveSpotStatus }      from '../state/spotState.js';
+import { formatConfidence }      from '../utils/confidence.js';
 
 /** @type {Map<string, import('leaflet').Marker>}  spotId → Marker */
 const _markers = new Map();
@@ -51,19 +52,23 @@ export const PIN_COLORS = {
  * Called once from main.js after initMap().
  */
 export function initPins() {
-  on(EVENTS.SPOTS_LOADED,     _onSpotsLoaded);
-  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
-  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
+  on(EVENTS.SPOTS_LOADED,       _onSpotsLoaded);
+  on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
+  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
+  on(EVENTS.SPOT_SELECTED,      _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
+  on(EVENTS.VIEW_MODE_CHANGED,  _onViewModeChanged);
 }
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
 function _onSpotsLoaded() {
-  const { spots } = getState();
-  // Remove stale markers not in the new spots list.
-  const incomingIds = new Set(spots.map(s => s.id));
+  const { spots, viewMode } = getState();
+  const isCampus = viewMode === 'campus';
+  const visibleSpots = isCampus ? spots.filter(s => s.on_campus) : spots;
+
+  // Remove stale markers not in the visible list.
+  const incomingIds = new Set(visibleSpots.map(s => s.id));
   for (const [id, marker] of _markers) {
     if (!incomingIds.has(id)) {
       marker.remove();
@@ -71,7 +76,37 @@ function _onSpotsLoaded() {
     }
   }
   // Add or update.
-  spots.forEach(_upsertMarker);
+  visibleSpots.forEach(_upsertMarker);
+}
+
+function _onViewModeChanged(e) {
+  const { viewMode } = e.detail;
+  const map = getMap();
+  
+  if (viewMode === 'campus') {
+    // Coords wrapping CTU Main Campus
+    const campusBounds = L.latLngBounds([
+      [10.2916, 123.8789],
+      [10.2956, 123.8829]
+    ]);
+    
+    map.flyToBounds(campusBounds, { duration: 1.5 });
+    
+    // Apply bounds / zoom restrictions after the fly completes
+    map.once('moveend', () => {
+      if (getState().viewMode === 'campus') {
+        map.setMinZoom(16);
+        map.setMaxBounds(campusBounds.pad(0.3)); // Allow a tiny bit of panning edge
+      }
+    });
+  } else {
+    // 'city' mode: unlock bounds and zoom
+    map.setMinZoom(0);
+    map.setMaxBounds(null);
+  }
+  
+  // Re-run the pin setup to toggle the visible spots layer.
+  _onSpotsLoaded();
 }
 
 function _onClaimUpdated(e) {
@@ -129,6 +164,8 @@ function _upsertMarker(spot) {
   if (_markers.has(spot.id)) {
     const marker = _markers.get(spot.id);
     marker.setIcon(icon);
+    // Refresh tooltip content so status badge stays current.
+    marker.setTooltipContent(_buildTooltipHtml(spot));
   } else {
     const marker = L.marker([spot.lat, spot.lng], { icon, title: spot.name })
       .addTo(map);
@@ -137,8 +174,88 @@ function _upsertMarker(spot) {
       emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id });
     });
 
+    marker.bindTooltip(_buildTooltipHtml(spot), {
+      direction:  'top',
+      permanent:  false,
+      opacity:    1,
+      className:  'map-spot-tooltip-wrapper',
+      offset:     [0, -32],
+    });
+
     _markers.set(spot.id, marker);
   }
+}
+
+// ─── Tooltip HTML factory ─────────────────────────────────────────────────────
+
+/**
+ * Build the HTML string injected into a Leaflet tooltip for a spot marker.
+ * Leaflet wraps this in `.leaflet-tooltip.map-spot-tooltip-wrapper`; our CSS
+ * resets that wrapper and styles the inner `.map-spot-popup` card.
+ *
+ * @param {object} spot
+ * @returns {string}
+ */
+function _buildTooltipHtml(spot) {
+  const status    = deriveSpotStatus(spot.id);
+  const conf      = getState().confidence[spot.id];
+  const confLabel = formatConfidence(conf?.score).label;
+
+  const amenities = _amenityIcons(spot);
+
+  return /* html */`
+    <div class="map-spot-popup">
+      <div class="map-spot-popup__header">
+        <span class="map-spot-popup__name">${_escapeHtml(spot.name)}</span>
+        <span class="map-spot-popup__badge map-spot-popup__badge--${status}">${confLabel}</span>
+      </div>
+      <div class="map-spot-popup__photo-placeholder" aria-hidden="true"></div>
+      <div class="map-spot-popup__meta">
+        <span class="map-spot-popup__capacity">👤 ${_capacityNum(spot.rough_capacity)}</span>
+        <span class="map-spot-popup__amenities">${amenities}</span>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Approximate head-count for a rough_capacity tier.
+ *
+ * @param {string} rough
+ * @returns {number|string}
+ */
+function _capacityNum(rough) {
+  const sizes = { small: 8, medium: 20, large: 40 };
+  return sizes[rough] ?? '—';
+}
+
+/**
+ * Render amenity emoji for a spot.
+ *
+ * @param {object} spot
+ * @returns {string}
+ */
+function _amenityIcons(spot) {
+  const icons = [];
+  if (spot.noise_baseline === 'quiet')                      icons.push('🔇');
+  if (spot.has_outlets)                                     icons.push('⚡');
+  if (spot.wifi_strength && spot.wifi_strength !== 'none')  icons.push('📶');
+  if (spot.has_food)                                        icons.push('🍔');
+  return icons.join(' ');
+}
+
+/**
+ * Escape HTML special characters to prevent XSS.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function _escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ─── Icon factory ─────────────────────────────────────────────────────────────
@@ -179,7 +296,7 @@ function _buildIcon(spot, selected) {
 }
 
 /**
- * Inline SVG string for an on-campus (teardrop) pin.
+ * Inline SVG string for an on-campus (teardrop) pin with a clipboard icon.
  *
  * @param {string} color   - Hex fill color.
  * @param {number} opacity - Fill opacity (0–1).
@@ -191,11 +308,12 @@ function _teardropSvg(color, opacity, w, h) {
   return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 36">
     <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+    ${_clipboardPath()}
   </svg>`;
 }
 
 /**
- * Inline SVG string for an off-campus (circle) pin.
+ * Inline SVG string for an off-campus (circle) pin with a clipboard icon.
  *
  * @param {string} color   - Hex fill color.
  * @param {number} opacity - Fill opacity (0–1).
@@ -206,7 +324,46 @@ function _circleSvg(color, opacity, d) {
   return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="11"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
+    ${_clipboardPathCircle()}
   </svg>`;
+}
+
+/**
+ * White clipboard icon path centred in a 24×36 teardrop viewBox (upper circle portion).
+ * Rendered at approx 10×13px centred at (12, 11).
+ *
+ * @returns {string}
+ */
+function _clipboardPath() {
+  return /* html */`<g transform="translate(7, 4)" fill="#ffffff">
+    <!-- clipboard body -->
+    <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
+    <!-- clipboard clip at top -->
+    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" fill="${'#ffffff'}" opacity="0.9"/>
+    <!-- lines on clipboard -->
+    <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
+  </g>`;
+}
+
+/**
+ * White clipboard icon path centred in a 24×24 circle viewBox.
+ * Rendered at approx 10×12px centred at (12, 12).
+ *
+ * @returns {string}
+ */
+function _clipboardPathCircle() {
+  return /* html */`<g transform="translate(7, 5)" fill="#ffffff">
+    <!-- clipboard body -->
+    <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
+    <!-- clipboard clip at top -->
+    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" opacity="0.9"/>
+    <!-- lines on clipboard -->
+    <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
+    <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
+  </g>`;
 }
 
 // ─── Group pin layer ──────────────────────────────────────────────────────────
@@ -248,15 +405,16 @@ function _clearGroupPinLayer() {
  * Sync the group pin marker layer with the provided pins + joins.
  * Called by feature module after a realtime update.
  *
- * @param {object[]} pins       - Array of group_pin rows.
- * @param {object[]} joins      - Array of group_pin_join rows.
- * @param {string}   color      - Hex colour for the group (e.g. '#7c3aed').
+ * @param {object}   pins       - Record<pinId, group_pin row>.
+ * @param {object}   joins      - Record<pinId, group_pin_join rows>.
+ * @param {string}   color      - Hex colour for the group.
  */
 export function updateGroupPinLayer(pins, joins, color) {
   const map = getMap();
+  const pinsList = Object.values(pins);
 
   // Remove stale markers for pins no longer in the list.
-  const incomingIds = new Set(pins.map(p => p.id));
+  const incomingIds = new Set(pinsList.map(p => p.id));
   for (const [id, marker] of _groupMarkers) {
     if (!incomingIds.has(id)) {
       marker.remove();
@@ -265,8 +423,8 @@ export function updateGroupPinLayer(pins, joins, color) {
   }
 
   // Upsert markers for each active pin.
-  for (const pin of pins) {
-    if (pin.status === 'ended') {
+  for (const pin of pinsList) {
+    if (pin.status === 'ended' || pin.ended_at) {
       // Remove ended pins from the map.
       if (_groupMarkers.has(pin.id)) {
         _groupMarkers.get(pin.id).remove();
@@ -275,9 +433,9 @@ export function updateGroupPinLayer(pins, joins, color) {
       continue;
     }
 
-    const pinJoins    = joins.filter(j => j.pin_id === pin.id);
+    const pinJoins     = joins[pin.id] || [];
     const transitCount = pinJoins.filter(j => j.status === 'heading').length;
-    const icon        = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
+    const icon         = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
 
     if (_groupMarkers.has(pin.id)) {
       _groupMarkers.get(pin.id).setIcon(icon);
