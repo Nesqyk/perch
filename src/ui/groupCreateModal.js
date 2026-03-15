@@ -8,6 +8,7 @@
  */
 
 import { emit, EVENTS } from '../core/events.js';
+import { getState }     from '../core/store.js';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ function _buildForm() {
   form.id         = 'group-create-form';
   form.noValidate = true;
 
+  const { nickname } = getState();
+
   form.innerHTML = /* html */`
     <div class="form-field">
       <label class="form-label" for="group-name">Group name</label>
@@ -62,7 +65,8 @@ function _buildForm() {
     <div class="form-field">
       <label class="form-label" for="group-display-name">Your name</label>
       <input class="input" id="group-display-name" name="displayName"
-             type="text" placeholder="e.g. Tyta" maxlength="24" required />
+             type="text" placeholder="e.g. Tyta" maxlength="24" 
+             value="${nickname ?? ''}" required />
     </div>
     <div class="form-field">
       <label class="form-label" for="group-context">Context</label>

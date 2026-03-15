@@ -9,6 +9,7 @@
  */
 
 import { emit, EVENTS } from '../core/events.js';
+import { getState }     from '../core/store.js';
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -58,6 +59,8 @@ function _buildForm(prefillCode) {
   form.id         = 'group-join-form';
   form.noValidate = true;
 
+  const { nickname } = getState();
+
   form.innerHTML = /* html */`
     <div class="form-field">
       <label class="form-label" for="join-code">Group code</label>
@@ -69,7 +72,8 @@ function _buildForm(prefillCode) {
     <div class="form-field">
       <label class="form-label" for="join-display-name">Your name</label>
       <input class="input" id="join-display-name" name="displayName"
-             type="text" placeholder="e.g. Tyta" maxlength="24" required />
+             type="text" placeholder="e.g. Tyta" maxlength="24" 
+             value="${nickname ?? ''}" required />
     </div>
     <div class="modal-actions">
       <button type="button" class="btn btn-ghost" id="group-join-cancel">Cancel</button>
