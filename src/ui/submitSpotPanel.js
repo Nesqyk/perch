@@ -7,10 +7,10 @@
  * Flow:
  *   1. User clicks on the Leaflet map → mapInit.js emits UI_SUBMIT_SPOT_REQUESTED
  *      with { lat, lng }.
- *   2. This module intercepts the event and builds a confirm form in the panel.
+ *   2. This module intercepts the event and builds a form inside the submit modal.
  *   3. On submit, calls api/campuses.submitSpot() → inserts into spot_submissions
  *      with status 'pending'.
- *   4. A toast confirms submission. Panel resets to filter view.
+ *   4. A toast confirms submission. Modal closes.
  */
 
 import { on, emit, EVENTS }     from '../core/events.js';
@@ -31,18 +31,52 @@ export function initSubmitSpotPanel() {
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
+const OVERLAY_ID = 'submit-modal-overlay';
+const CONTENT_ID = 'submit-modal-content';
+
 /**
  * @param {CustomEvent<{ lat: number, lng: number }>} e
  */
 async function _onSubmitRequested(e) {
   const { lat, lng } = e.detail;
 
-  // Find the active panel content container (sidebar or bottom sheet).
-  const panelContent = document.getElementById('panel-content');
-  if (!panelContent) return;
+  const overlay = document.getElementById(OVERLAY_ID);
+  const content = document.getElementById(CONTENT_ID);
+  if (!overlay || !content) return;
 
-  panelContent.innerHTML = '';
-  panelContent.appendChild(_buildSubmitForm(lat, lng));
+  content.innerHTML = '';
+  content.appendChild(_buildSubmitForm(lat, lng));
+
+  overlay.hidden = false;
+
+  // Wait a tick then focus the name input
+  setTimeout(() => {
+    const input = content.querySelector('#submit-spot-name');
+    if (input) input.focus();
+  }, 50);
+
+  // Trap focus / close on escape or bg click
+  overlay.addEventListener('click', _handleOverlayClick);
+  document.addEventListener('keydown', _handleKeyDown);
+}
+
+function _closeModal() {
+  const overlay = document.getElementById(OVERLAY_ID);
+  if (!overlay) return;
+  overlay.hidden = true;
+  overlay.removeEventListener('click', _handleOverlayClick);
+  document.removeEventListener('keydown', _handleKeyDown);
+
+  // Inform the map that the panel/modal was closed
+  emit(EVENTS.UI_PANEL_CLOSED, {});
+}
+
+function _handleOverlayClick(e) {
+  if (e.target.id === OVERLAY_ID) _closeModal();
+}
+
+function _handleKeyDown(e) {
+  if (e.key === 'Escape') _closeModal();
 }
 
 // ─── Form ────────────────────────────────────────────────────────────────────
@@ -125,10 +159,7 @@ function _buildSubmitForm(lat, lng) {
   cancelBtn.type        = 'button';
   cancelBtn.className   = 'btn btn-ghost btn-full';
   cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', () => {
-    // Re-emit panel closed to let sidebar/bottom sheet restore filter view.
-    emit(EVENTS.UI_PANEL_CLOSED, {});
-  });
+  cancelBtn.addEventListener('click', _closeModal);
 
   btnRow.appendChild(submitBtn);
   btnRow.appendChild(cancelBtn);
@@ -179,5 +210,5 @@ async function _handleSubmit(lat, lng, nameInput, descInput, submitBtn) {
   }
 
   showToast('Thanks! Your spot suggestion is under review 🎉', 'success');
-  emit(EVENTS.UI_PANEL_CLOSED, {});
+  _closeModal();
 }

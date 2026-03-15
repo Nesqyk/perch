@@ -22,6 +22,7 @@ import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { iconSvg }   from './icons.js';
 import { leaveGroup, buildGroupJoinUrl } from '../features/groups.js';
+import { initCampusSelector } from './campusSelector.js';
 
 const _GROUP_SIZE_LABELS = {
   solo:   'Just Me',
@@ -81,6 +82,7 @@ function _buildFilterForm() {
   form.className  = 'filter-form';
 
   form.appendChild(_buildViewModeToggle());
+  form.appendChild(_buildCampusSelectorBox());
 
   form.appendChild(_buildSectionHeader('Group Size'));
   form.appendChild(_buildGroupSizeChips());
@@ -132,6 +134,13 @@ function _buildViewModeToggle() {
   });
 
   return row;
+}
+
+function _buildCampusSelectorBox() {
+  const container = document.createElement('div');
+  container.style.marginBottom = 'var(--space-6)'; // matching toggle
+  initCampusSelector(container);
+  return container;
 }
 
 function _buildSectionHeader(text) {
