@@ -86,7 +86,7 @@ export async function fetchActiveClaims(spotIds) {
 
   const { data, error } = await supabase
     .from('claims')
-    .select('id, spot_id, session_id, group_size_key, group_size_min, group_size_max, claimed_at, expires_at')
+    .select('id, spot_id, session_id, nickname, group_size_key, group_size_min, group_size_max, claimed_at, expires_at')
     .in('spot_id', spotIds)
     .is('cancelled_at', null)
     .gt('expires_at', now);

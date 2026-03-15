@@ -43,3 +43,32 @@ $$ language plpgsql;
 create trigger on_user_profile_updated
   before update on public.user_profiles
   for each row execute function public.handle_updated_at();
+
+-- ─── claims enhancement ──────────────────────────────────────────────────────
+
+-- Add nickname column to claims to support real-time broadcast of identities.
+alter table public.claims add column if not exists nickname text;
+
+-- Optional: trigger to sync nickname if it exists during claim creation.
+create or replace function public.sync_nickname_on_claim()
+returns trigger language plpgsql as $$
+begin
+  select nickname into new.nickname
+    from public.user_profiles
+   where session_id = new.session_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists sync_nickname_on_claim_trigger on public.claims;
+create trigger sync_nickname_on_claim_trigger
+  before insert on public.claims
+  for each row execute function public.sync_nickname_on_claim();
+
+-- Backfill existing active claims
+update public.claims
+   set nickname = up.nickname
+  from public.user_profiles up
+ where public.claims.session_id = up.session_id
+   and public.claims.cancelled_at is null
+   and public.claims.expires_at > now();
