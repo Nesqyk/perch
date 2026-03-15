@@ -1,11 +1,11 @@
 # Implementation Plan - User Nickname Setting
 
-## Phase 1: Database and API Layer
-- [ ] Task: Create a Supabase migration to add a `user_profiles` table mapping `session_id` to `nickname` with appropriate RLS policies
-- [ ] Task: Write tests for a new `api/profile.js` module handling fetching and updating the nickname
-- [ ] Task: Implement `src/api/profile.js` with `getProfile` and `upsertProfile` functions
-- [ ] Task: Update the `claims` table and API to optionally join or store the nickname
-- [ ] Task: Conductor - User Manual Verification 'Database and API Layer' (Protocol in workflow.md)
+## Phase 1: Database and API Layer [checkpoint: a513799]
+- [x] Task: Create a Supabase migration to add a `user_profiles` table mapping `session_id` to `nickname` with appropriate RLS policies bb1716c
+- [x] Task: Write tests for a new `api/profile.js` module handling fetching and updating the nickname 1386957
+- [x] Task: Implement `src/api/profile.js` with `getProfile` and `upsertProfile` functions 1386957
+- [x] Task: Update the `claims` table and API to optionally join or store the nickname 4bd5c0b
+- [x] Task: Conductor - User Manual Verification 'Database and API Layer' (Protocol in workflow.md) a513799
 
 ## Phase 2: State and UI Integration
 - [ ] Task: Add `nickname` to the central store state in `src/core/store.js`
