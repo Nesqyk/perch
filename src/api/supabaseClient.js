@@ -28,6 +28,22 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 /** @type {import('@supabase/supabase-js').SupabaseClient} */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: {
+    fetch: (url, options) => {
+      const sessionId = (() => {
+        try { return localStorage.getItem('perch_session_id'); }
+        catch { return null; }
+      })();
+
+      if (sessionId) {
+        options.headers = {
+          ...options.headers,
+          'x-perch-session': sessionId,
+        };
+      }
+      return fetch(url, options);
+    },
+  },
   realtime: {
     params: {
       eventsPerSecond: 10,
@@ -37,18 +53,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 
 /**
  * Update the custom session header.
- * Called during bootstrap after the session ID is ensured.
- *
- * @param {string} sessionId
+ * @deprecated now handled automatically by custom fetch in createClient.
+ * @param {string} _sessionId
  */
-export function setSessionHeader(sessionId) {
-  // Update the internal headers object for the Supabase client.
-  // This affects all future REST and Realtime requests.
-  supabase.realtime.setAuth(sessionId); // For Realtime
-  // For REST, we need to access the underlying fetch or use a middleware pattern if supported.
-  // In v2, you can provide a custom fetch or update headers on the fly.
-  // But actually, the cleanest way is to use the global config if it supports functions.
-  // Since it doesn't, we will use this manual override.
-  // @ts-ignore
-  supabase.rest.headers['x-perch-session'] = sessionId;
+export function setSessionHeader(_sessionId) {
+  // No-op - kept for compatibility with current session.js calls
 }
