@@ -13,6 +13,8 @@
  * a user account.
  */
 
+import { setSessionHeader } from '../api/supabaseClient.js';
+
 const SESSION_KEY = 'perch_session_id';
 
 /** @type {string | null} */
@@ -41,7 +43,8 @@ export function getSessionId() {
  * Ensures the session id is created and cached before any API call needs it.
  */
 export function initSession() {
-  getSessionId();
+  const sessionId = getSessionId();
+  setSessionHeader(sessionId);
 }
 
 /**
