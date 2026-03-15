@@ -36,10 +36,16 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       })();
 
       if (sessionId) {
-        options.headers = {
-          ...options.headers,
-          'x-perch-session': sessionId,
-        };
+        // Ensure options.headers is an object we can modify.
+        // If it's a Headers instance, use .set().
+        if (options.headers instanceof Headers) {
+          options.headers.set('x-perch-session', sessionId);
+        } else {
+          options.headers = {
+            ...options.headers,
+            'x-perch-session': sessionId,
+          };
+        }
       }
       return fetch(url, options);
     },
