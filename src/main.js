@@ -77,6 +77,7 @@ import { initGroupPins }        from './features/groupPins.js';
 import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
+import { initHeader }      from './ui/header.js';
 import { showToast }       from './ui/toast.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
@@ -87,6 +88,9 @@ async function boot() {
 
   // ── 3. Anonymous session ─────────────────────────────────────────────────────
   initSession();
+
+  // ── 3.5 UI Header ──────────────────────────────────────────────────────────
+  initHeader();
 
   // ── 4 & 5. URL params → restore filters + selected spot ──────────────────────
   const urlState   = readUrlParams();
