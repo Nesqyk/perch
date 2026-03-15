@@ -5,7 +5,7 @@
  * Displays spot name, confidence, and calculated walk time.
  */
 
-import { X, Navigation } from 'lucide';
+import { X, Navigation, MapPin, Clock } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
 import { formatConfidence } from '../utils/confidence.js';
 import { formatWalkTime } from '../utils/time.js';
@@ -86,21 +86,37 @@ function _buildSuggestionsList(suggestions) {
     const info = document.createElement('div');
     info.className = 'suggestion-item__info';
 
-    const name = document.createElement('p');
+    const name = document.createElement('h3');
     name.className = 'suggestion-item__name';
     name.textContent = spot.name;
 
-    const meta = document.createElement('p');
+    const meta = document.createElement('div');
     meta.className = 'suggestion-item__meta';
-    const conf = formatConfidence(spot._score);
-    meta.textContent = `${conf} Match${spot.walkTimeLabel ? ` • ${spot.walkTimeLabel}` : ''}`;
+    
+    const confScore = formatConfidence(spot._score);
+    const confClass = spot._score >= 0.8 ? 'suggestion-item__badge--high' : 
+                     spot._score >= 0.5 ? 'suggestion-item__badge--mid' : 
+                     'suggestion-item__badge--low';
+
+    const confBadge = document.createElement('span');
+    confBadge.className = `suggestion-item__badge ${confClass}`;
+    confBadge.innerHTML = `${iconSvg(MapPin, 12)} ${confScore} Match`;
+
+    meta.appendChild(confBadge);
+
+    if (spot.walkTimeLabel) {
+      const walkTime = document.createElement('span');
+      walkTime.className = 'suggestion-item__walk';
+      walkTime.innerHTML = `${iconSvg(Clock, 12)} ${spot.walkTimeLabel}`;
+      meta.appendChild(walkTime);
+    }
 
     info.appendChild(name);
     info.appendChild(meta);
 
     const navBtn = document.createElement('button');
-    navBtn.className = 'btn btn-primary btn-icon-only suggestion-item__nav';
-    navBtn.innerHTML = iconSvg(Navigation, 18);
+    navBtn.className = 'suggestion-item__nav';
+    navBtn.innerHTML = iconSvg(Navigation, 20);
     navBtn.setAttribute('aria-label', `Navigate to ${spot.name}`);
     navBtn.addEventListener('click', () => {
       emit(EVENTS.SPOT_SELECTED, { spotId: spot.id, navigate: true });
