@@ -16,7 +16,7 @@
 
 /* Leaflet renders into a div; make sure it fills.
    Exclude our overlay divs so they aren't force-stretched. */
-#map-container > div:not(.map-legend):not(#map-spot-popup) {
+#map-container>div:not(.map-legend):not(#map-spot-popup):not(.claim-overlay):not(#claim-overlay) {
   width: 100% !important;
   height: 100% !important;
 }
@@ -26,73 +26,81 @@
    ------------------------------------------------------------------ */
 
 .map-legend {
-  position:        absolute;
-  bottom:          var(--space-3);
-  left:            50%;
-  transform:       translateX(-50%);
-  z-index:         1000;
-  display:         inline-flex;
-  align-items:     center;
-  gap:             var(--space-3);
-  padding:         var(--space-2) var(--space-4);
-  background:      var(--color-white);
-  border:          var(--border);
-  border-radius:   var(--radius-full);
-  font-size:       var(--text-xs);
-  font-weight:     var(--font-medium);
-  color:           var(--color-text-muted);
-  white-space:     nowrap;
-  pointer-events:  none;
+  position: absolute;
+  bottom: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-white);
+  border: var(--border);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  pointer-events: none;
 }
 
 .map-legend-dot {
-  display:         inline-block;
-  width:           10px;
-  height:          10px;
-  border-radius:   var(--radius-full);
-  flex-shrink:     0;
-  margin-right:    4px;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  margin-right: 4px;
 }
 
-.map-legend-dot--free  { background: var(--pin-free);  }
-.map-legend-dot--maybe { background: var(--pin-maybe); }
-.map-legend-dot--full  { background: var(--pin-full);  }
+.map-legend-dot--free {
+  background: var(--pin-free);
+}
+
+.map-legend-dot--maybe {
+  background: var(--pin-maybe);
+}
+
+.map-legend-dot--full {
+  background: var(--pin-full);
+}
 
 /* ------------------------------------------------------------------
    Map controls — single grouped card (bottom-left)
    ------------------------------------------------------------------ */
 
 .map-controls {
-  display:          flex;
-  flex-direction:   column;
-  align-items:      center;
-  background:       var(--color-white);
-  border:           1px solid var(--color-border);
-  border-radius:    var(--radius-lg);
-  box-shadow:       var(--shadow-md);
-  overflow:         hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
   /* Leaflet positions the control; we just define its shape */
-  margin:           0 0 var(--space-4) var(--space-4);
+  margin: 0 0 var(--space-4) var(--space-4);
 }
 
 .map-control-btn {
-  display:          flex;
-  align-items:      center;
-  justify-content:  center;
-  width:            40px;
-  height:           40px;
-  background:       transparent;
-  border:           none;
-  color:            var(--color-gray-600);
-  cursor:           pointer;
-  transition:       background var(--transition-fast), color var(--transition-fast);
-  user-select:      none;
-  flex-shrink:      0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: var(--color-gray-600);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  user-select: none;
+  flex-shrink: 0;
 }
 
 .map-control-btn:hover {
   background: var(--color-gray-100);
-  color:      var(--color-gray-900);
+  color: var(--color-gray-900);
 }
 
 .map-control-btn:active {
@@ -100,7 +108,7 @@
 }
 
 .map-control-btn:focus-visible {
-  outline:        2px solid var(--color-brand);
+  outline: 2px solid var(--color-brand);
   outline-offset: -2px;
 }
 
@@ -109,11 +117,11 @@
 }
 
 .map-control-divider {
-  width:      24px;
-  height:     1px;
-  border:     none;
+  width: 24px;
+  height: 1px;
+  border: none;
   background: var(--color-border);
-  margin:     0;
+  margin: 0;
   flex-shrink: 0;
 }
 
@@ -124,26 +132,50 @@
 
 /* 🟢 Free — gentle pulse */
 @keyframes pin-pulse {
-  0%, 100% { transform: scale(1);   opacity: 1; }
-  50%       { transform: scale(1.18); opacity: 0.85; }
+
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.18);
+    opacity: 0.85;
+  }
 }
 
 /* 🔵 Claimed — ripple ring */
 @keyframes pin-ripple {
-  0%   { transform: scale(1);   opacity: 0.6; }
-  100% { transform: scale(2.2); opacity: 0;   }
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
 }
 
 /* 🔴 Full — slow fade */
 @keyframes pin-fade {
-  0%, 100% { opacity: 1;   }
-  50%       { opacity: 0.5; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Marker wrapper injected by pins.js for animated overlays */
 .pin-overlay {
   position: absolute;
-  transform: translate(-50%, -100%); /* anchor at bottom-center */
+  transform: translate(-50%, -100%);
+  /* anchor at bottom-center */
   pointer-events: none;
 }
 
@@ -220,7 +252,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ------------------------------------------------------------------

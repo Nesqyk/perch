@@ -2,16 +2,26 @@
  * src/ui/suggestionsList.js
  *
  * Renders the "Top 3" suggested spots after a user clicks "Find My Spot".
- * Displays spot name, confidence, and calculated walk time.
+ * Displays spot name, confidence, capacity, and amenities.
  */
 
-import { X, Navigation, MapPin, Clock } from 'lucide';
+import { X, Navigation, Users, Wifi, Zap, Volume2, Utensils } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
 import { formatConfidence } from '../utils/confidence.js';
 import { formatWalkTime } from '../utils/time.js';
 import { iconSvg } from './icons.js';
 
 // ─── Logic ───────────────────────────────────────────────────────────────────
+
+/**
+ * Capacity mapping for display text.
+ */
+const CAPACITY_LABELS = {
+  'solo': '~1 person',
+  'small': '~8 ppl',
+  'medium': '~20 ppl',
+  'large': '~40 ppl'
+};
 
 /**
  * Take ranked spots and prepare the top 3 for display.
@@ -83,47 +93,71 @@ function _buildSuggestionsList(suggestions) {
     const item = document.createElement('div');
     item.className = 'suggestion-item';
     
-    const info = document.createElement('div');
-    info.className = 'suggestion-item__info';
+    // Top Row: Name + Confidence Badge
+    const topRow = document.createElement('div');
+    topRow.className = 'suggestion-item__col suggestion-item__col--top';
 
     const name = document.createElement('h3');
     name.className = 'suggestion-item__name';
     name.textContent = spot.name;
 
-    const meta = document.createElement('div');
-    meta.className = 'suggestion-item__meta';
-    
-    const confScore = formatConfidence(spot._score);
-    const confClass = spot._score >= 0.8 ? 'suggestion-item__badge--high' : 
-                     spot._score >= 0.5 ? 'suggestion-item__badge--mid' : 
-                     'suggestion-item__badge--low';
-
+    const conf = formatConfidence(spot._score);
     const confBadge = document.createElement('span');
-    confBadge.className = `suggestion-item__badge ${confClass}`;
-    confBadge.innerHTML = `${iconSvg(MapPin, 12)} ${confScore} Match`;
+    confBadge.className = 'suggestion-item__badge';
+    
+    // Use the same confidence classes as defined in main.css for color consistency
+    if (spot._score >= 0.8) confBadge.classList.add('suggestion-item__badge--high');
+    else if (spot._score >= 0.5) confBadge.classList.add('suggestion-item__badge--mid');
+    else confBadge.classList.add('suggestion-item__badge--low');
+    
+    confBadge.textContent = `${conf.percent}% Match`;
 
-    meta.appendChild(confBadge);
+    topRow.appendChild(name);
+    topRow.appendChild(confBadge);
 
-    if (spot.walkTimeLabel) {
-      const walkTime = document.createElement('span');
-      walkTime.className = 'suggestion-item__walk';
-      walkTime.innerHTML = `${iconSvg(Clock, 12)} ${spot.walkTimeLabel}`;
-      meta.appendChild(walkTime);
-    }
+    // Bottom Row: Capacity + Amenities + Navigate Button
+    const bottomRow = document.createElement('div');
+    bottomRow.className = 'suggestion-item__row suggestion-item__row--bottom';
 
-    info.appendChild(name);
-    info.appendChild(meta);
+    // Left side of bottom row: Capacity
+    const capInfo = document.createElement('div');
+    capInfo.className = 'suggestion-item__cap';
+    const capLabel = CAPACITY_LABELS[spot.rough_capacity] || spot.rough_capacity;
+    capInfo.innerHTML = `${iconSvg(Users, 14)} <span>${capLabel}</span>`;
+
+    // Right side of bottom row: Amenities + Nav
+    const rightActions = document.createElement('div');
+    rightActions.className = 'suggestion-item__actions';
+
+    const amenities = document.createElement('div');
+    amenities.className = 'suggestion-item__amenities';
+    
+    if (spot.wifi_strength !== 'none') amenities.innerHTML += iconSvg(Wifi, 14);
+    if (spot.has_outlets) amenities.innerHTML += iconSvg(Zap, 14);
+    if (spot.noise_baseline === 'quiet') amenities.innerHTML += iconSvg(Volume2, 14);
+    if (spot.has_food) amenities.innerHTML += iconSvg(Utensils, 14);
 
     const navBtn = document.createElement('button');
     navBtn.className = 'suggestion-item__nav';
-    navBtn.innerHTML = iconSvg(Navigation, 20);
-    navBtn.setAttribute('aria-label', `Navigate to ${spot.name}`);
-    navBtn.addEventListener('click', () => {
+    navBtn.innerHTML = `${iconSvg(Navigation, 14)} <span>Navigate</span>`;
+    navBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
       emit(EVENTS.SPOT_SELECTED, { spotId: spot.id, navigate: true });
     });
 
-    item.appendChild(info);
-    item.appendChild(navBtn);
+    rightActions.appendChild(amenities);
+    rightActions.appendChild(navBtn);
+
+    bottomRow.appendChild(capInfo);
+    bottomRow.appendChild(rightActions);
+
+    item.appendChild(topRow);
+    item.appendChild(bottomRow);
+
+    item.addEventListener('click', () => {
+      emit(EVENTS.SPOT_SELECTED, { spotId: spot.id });
+    });
+
     list.appendChild(item);
   });
 

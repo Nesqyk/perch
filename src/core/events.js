@@ -79,6 +79,7 @@ export function once(eventName, handler) {
 export const EVENTS = Object.freeze({
   // ── Store: location ──────────────────────────────────────────────────────
   LOCATION_SET:           'state:locationSet',
+  VIEW_MODE_CHANGED:      'state:viewModeChanged',
 
   // ── Store: filters ───────────────────────────────────────────────────────
   FILTERS_CHANGED:        'state:filtersChanged',

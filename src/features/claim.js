@@ -32,7 +32,7 @@ export function initClaim() {
 
 async function _onClaimRequested(e) {
   const { spotId } = e.detail;
-  const { filters, myActiveClaim } = getState();
+  const { filters, myActiveClaim, spots } = getState();
 
   // Prevent double-claims.
   if (myActiveClaim) {
@@ -40,15 +40,26 @@ async function _onClaimRequested(e) {
     return;
   }
 
-  // If a group size is already set in filters, claim immediately.
-  // Otherwise, ask for group size via a lightweight modal.
+  const spot         = spots.find(s => s.id === spotId);
+  const spotName     = spot?.name ?? 'this spot';
   const groupSizeKey = filters.groupSize;
 
-  if (groupSizeKey) {
-    await _executeClaim(spotId, groupSizeKey);
-  } else {
-    _promptGroupSize(spotId);
-  }
+  // Always ask for confirmation before committing.
+  _openModal({
+    title:   "You're going here?",
+    body:    `Confirm that you're heading to <strong>${spotName}</strong>. Others will see your group.`,
+    confirm: {
+      label:     "Yes, I'm going!",
+      onConfirm: async () => {
+        if (groupSizeKey) {
+          await _executeClaim(spotId, groupSizeKey);
+        } else {
+          _promptGroupSize(spotId);
+        }
+      },
+    },
+    cancel: { label: 'Cancel' },
+  });
 }
 
 async function _onCancelClaim(e) {

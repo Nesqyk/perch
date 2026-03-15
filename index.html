@@ -55,6 +55,7 @@
       </div>
     </div>
 
+
     <!-- ─── Desktop sidebar / Mobile bottom sheet ─────────────────────────
          Same element, same content — CSS repositions it.
          JS populates #panel-content based on app state.
@@ -81,6 +82,16 @@
   <div id="modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="modal-box" class="modal-box">
       <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- ─── Report ("It's Full") modal ─────────────────────────────────────────
+       Dedicated modal so it can be opened without disturbing the sidebar or
+       the generic confirmation modal.
+  ──────────────────────────────────────────────────────────────────────── -->
+  <div id="report-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="report-modal-box" class="modal-box modal-box--report">
+      <div id="report-modal-content"></div>
     </div>
   </div>
 

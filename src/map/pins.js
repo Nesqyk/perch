@@ -52,19 +52,23 @@ export const PIN_COLORS = {
  * Called once from main.js after initMap().
  */
 export function initPins() {
-  on(EVENTS.SPOTS_LOADED,     _onSpotsLoaded);
-  on(EVENTS.CLAIM_UPDATED,    _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED, _onCorrectionFiled);
-  on(EVENTS.SPOT_SELECTED,    _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED,  _onSpotDeselected);
+  on(EVENTS.SPOTS_LOADED,       _onSpotsLoaded);
+  on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
+  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
+  on(EVENTS.SPOT_SELECTED,      _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
+  on(EVENTS.VIEW_MODE_CHANGED,  _onViewModeChanged);
 }
 
 // ─── Event handlers ───────────────────────────────────────────────────────────
 
 function _onSpotsLoaded() {
-  const { spots } = getState();
-  // Remove stale markers not in the new spots list.
-  const incomingIds = new Set(spots.map(s => s.id));
+  const { spots, viewMode } = getState();
+  const isCampus = viewMode === 'campus';
+  const visibleSpots = isCampus ? spots.filter(s => s.on_campus) : spots;
+
+  // Remove stale markers not in the visible list.
+  const incomingIds = new Set(visibleSpots.map(s => s.id));
   for (const [id, marker] of _markers) {
     if (!incomingIds.has(id)) {
       marker.remove();
@@ -72,7 +76,37 @@ function _onSpotsLoaded() {
     }
   }
   // Add or update.
-  spots.forEach(_upsertMarker);
+  visibleSpots.forEach(_upsertMarker);
+}
+
+function _onViewModeChanged(e) {
+  const { viewMode } = e.detail;
+  const map = getMap();
+  
+  if (viewMode === 'campus') {
+    // Coords wrapping CTU Main Campus
+    const campusBounds = L.latLngBounds([
+      [10.2916, 123.8789],
+      [10.2956, 123.8829]
+    ]);
+    
+    map.flyToBounds(campusBounds, { duration: 1.5 });
+    
+    // Apply bounds / zoom restrictions after the fly completes
+    map.once('moveend', () => {
+      if (getState().viewMode === 'campus') {
+        map.setMinZoom(16);
+        map.setMaxBounds(campusBounds.pad(0.3)); // Allow a tiny bit of panning edge
+      }
+    });
+  } else {
+    // 'city' mode: unlock bounds and zoom
+    map.setMinZoom(0);
+    map.setMaxBounds(null);
+  }
+  
+  // Re-run the pin setup to toggle the visible spots layer.
+  _onSpotsLoaded();
 }
 
 function _onClaimUpdated(e) {
@@ -145,7 +179,7 @@ function _upsertMarker(spot) {
       permanent:  false,
       opacity:    1,
       className:  'map-spot-tooltip-wrapper',
-      offset:     [0, -4],
+      offset:     [0, -32],
     });
 
     _markers.set(spot.id, marker);
@@ -371,15 +405,16 @@ function _clearGroupPinLayer() {
  * Sync the group pin marker layer with the provided pins + joins.
  * Called by feature module after a realtime update.
  *
- * @param {object[]} pins       - Array of group_pin rows.
- * @param {object[]} joins      - Array of group_pin_join rows.
- * @param {string}   color      - Hex colour for the group (e.g. '#7c3aed').
+ * @param {object}   pins       - Record<pinId, group_pin row>.
+ * @param {object}   joins      - Record<pinId, group_pin_join rows>.
+ * @param {string}   color      - Hex colour for the group.
  */
 export function updateGroupPinLayer(pins, joins, color) {
   const map = getMap();
+  const pinsList = Object.values(pins);
 
   // Remove stale markers for pins no longer in the list.
-  const incomingIds = new Set(pins.map(p => p.id));
+  const incomingIds = new Set(pinsList.map(p => p.id));
   for (const [id, marker] of _groupMarkers) {
     if (!incomingIds.has(id)) {
       marker.remove();
@@ -388,8 +423,8 @@ export function updateGroupPinLayer(pins, joins, color) {
   }
 
   // Upsert markers for each active pin.
-  for (const pin of pins) {
-    if (pin.status === 'ended') {
+  for (const pin of pinsList) {
+    if (pin.status === 'ended' || pin.ended_at) {
       // Remove ended pins from the map.
       if (_groupMarkers.has(pin.id)) {
         _groupMarkers.get(pin.id).remove();
@@ -398,9 +433,9 @@ export function updateGroupPinLayer(pins, joins, color) {
       continue;
     }
 
-    const pinJoins    = joins.filter(j => j.pin_id === pin.id);
+    const pinJoins     = joins[pin.id] || [];
     const transitCount = pinJoins.filter(j => j.status === 'heading').length;
-    const icon        = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
+    const icon         = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
 
     if (_groupMarkers.has(pin.id)) {
       _groupMarkers.get(pin.id).setIcon(icon);
