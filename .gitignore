@@ -19,5 +19,8 @@ Thumbs.db
 # Vite cache
 .vite/
 
+# Testing coverage
+coverage/
+
 # Local OpenCode skills — not committed, personal to each dev
 .opencode/
