@@ -14,7 +14,7 @@
 - [x] Task: Fetch the profile on app initialization (`src/main.js`) and update the store 85ff5e7
 - [x] Task: Conductor - User Manual Verification 'State and UI Integration' (Protocol in workflow.md) 6743b26
 
-## Phase 3: Feature Consumption
-- [ ] Task: Pre-fill the "Display Name" field in group creation/joining modals using the stored nickname
-- [ ] Task: Update `spotCard.js` to display the claimer's nickname instead of "Someone" if available
-- [ ] Task: Conductor - User Manual Verification 'Feature Consumption' (Protocol in workflow.md)
+## Phase 3: Feature Consumption [checkpoint: 6f476b3]
+- [x] Task: Pre-fill the "Display Name" field in group creation/joining modals using the stored nickname 557f71a
+- [x] Task: Update `spotCard.js` to display the claimer's nickname instead of "Someone" if available 5f3671d
+- [x] Task: Conductor - User Manual Verification 'Feature Consumption' (Protocol in workflow.md) 6f476b3
