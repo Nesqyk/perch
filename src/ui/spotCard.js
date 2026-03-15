@@ -413,9 +413,11 @@ function _buildClaimSection(spot, activeClaims, ownClaim) {
       const row     = document.createElement('div');
       row.className = `spot-card__claim-group-row${isMine ? ' spot-card__claim-group-row--mine' : ''}`;
 
+      const name = isMine ? 'You' : (claim.nickname ?? 'Someone');
+
       row.innerHTML = /* html */`
         <span class="spot-card__claim-group-icon">${iconSvg(Users, 14)}</span>
-        <span class="spot-card__claim-group-size">${_groupLabel(claim.group_size_key)}${isMine ? ' (you)' : ''}</span>
+        <span class="spot-card__claim-group-size"><strong>${name}</strong> • ${_groupLabel(claim.group_size_key)}</span>
         <span class="spot-card__claim-group-time">${timeAgo(claim.claimed_at)}</span>
       `;
       table.appendChild(row);
