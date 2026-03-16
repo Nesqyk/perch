@@ -82,3 +82,27 @@ We use [Conventional Commits](https://www.conventionalcommits.org/) to maintain 
 - `test(api): add unit tests for profile service`
 - `chore(conductor): archive completed track 'Find My Spot'`
 - `refactor(core): consolidate event emission logic`
+
+## AI-Human Collaboration
+
+Perch is built using AI-assisted development. We leverage AI agents to accelerate implementation while maintaining human oversight for architecture and quality.
+
+### Roles & Responsibilities
+- **Human (Architect/Reviewer)**: 
+    - Defines the project vision and goals (`product.md`).
+    - Approves technical specifications and implementation plans.
+    - Performs final code reviews and manual verification.
+    - Provides high-level guidance when AI agents are stuck.
+- **AI Agent (Implementer)**:
+    - Analyzes existing code and documentation.
+    - Generates specifications (`spec.md`) and plans (`plan.md`) for user approval.
+    - Executes the Conductor TDD workflow (Red/Green/Refactor).
+    - Documents changes using Git notes and updated plan files.
+
+### The Feedback Loop
+Collaborators should treat interactions with AI agents as an iterative dialogue:
+1. **Request**: Clear, specific instruction (e.g., "/conductor:newTrack ...").
+2. **Analysis/Planning**: AI proposes a plan; Human reviews and provides feedback (e.g., "Adjust Phase 2 to include...").
+3. **Implementation**: AI implements a task; Human reviews the code or automated test results.
+4. **Correction**: If AI makes a mistake, the human provides a "course correction" prompt (e.g., "The API should use snake_case for this field...").
+5. **Validation**: Human performs manual verification steps provided by the AI.
