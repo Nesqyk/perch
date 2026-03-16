@@ -51,3 +51,34 @@ Immediately after the last task of a phase is complete, trigger the **Phase Comp
 2. Execute automated tests with proactive debugging.
 3. Propose and execute a manual verification plan.
 4. Create a checkpoint commit and attach an auditable report via Git notes.
+
+## Commit Guidelines
+
+We use [Conventional Commits](https://www.conventionalcommits.org/) to maintain a clear and readable history.
+
+### Format
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer]
+```
+
+### Types
+- `feat`: A new feature
+- `fix`: A bug fix
+- `docs`: Documentation only changes
+- `style`: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+- `refactor`: A code change that neither fixes a bug nor adds a feature
+- `test`: Adding missing tests or correcting existing tests
+- `chore`: Changes to the build process or auxiliary tools and libraries such as documentation generation
+
+### Examples
+- `feat(ui): add "Find My Spot" button to sidebar`
+- `fix(api): resolve RLS error in upsertProfile`
+- `docs(plan): mark task 'Create user model' as complete`
+- `style(mobile): improve button touch targets`
+- `test(api): add unit tests for profile service`
+- `chore(conductor): archive completed track 'Find My Spot'`
+- `refactor(core): consolidate event emission logic`
