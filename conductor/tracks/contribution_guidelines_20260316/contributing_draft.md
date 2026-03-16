@@ -106,3 +106,14 @@ Collaborators should treat interactions with AI agents as an iterative dialogue:
 3. **Implementation**: AI implements a task; Human reviews the code or automated test results.
 4. **Correction**: If AI makes a mistake, the human provides a "course correction" prompt (e.g., "The API should use snake_case for this field...").
 5. **Validation**: Human performs manual verification steps provided by the AI.
+
+## Prompt Engineering Guide
+
+Effective communication with AI agents is critical for project success. Follow these principles when prompting for code changes.
+
+### General Best Practices
+1. **Be Specific & Concise**: Avoid vague requests. Instead of "Fix the map," say "Update `src/map/pins.js` to change the pulse animation color to emerald green (#22c55e)."
+2. **Provide Context**: Use the `@` symbol or explicit file paths to point the AI to relevant files. Refer to `ARCHITECTURE.md` for high-level system understanding.
+3. **Define Constraints**: Explicitly state what to avoid (e.g., "Do not use external libraries," "Follow the Purple Ban").
+4. **Iterative Refinement**: If the AI's first attempt is incorrect, provide specific feedback on the error rather than repeating the original request.
+5. **Use the Conductor Prefix**: For new work, start with `/conductor:setup`, `/conductor:newTrack`, or `/conductor:implement`.
