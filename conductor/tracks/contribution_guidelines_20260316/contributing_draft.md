@@ -117,3 +117,16 @@ Effective communication with AI agents is critical for project success. Follow t
 3. **Define Constraints**: Explicitly state what to avoid (e.g., "Do not use external libraries," "Follow the Purple Ban").
 4. **Iterative Refinement**: If the AI's first attempt is incorrect, provide specific feedback on the error rather than repeating the original request.
 5. **Use the Conductor Prefix**: For new work, start with `/conductor:setup`, `/conductor:newTrack`, or `/conductor:implement`.
+
+### Perch-Specific Patterns
+
+Use these templates to get the best results for common Perch tasks:
+
+#### 1. Modifying Map Logic
+> "Update the Leaflet implementation in `src/map/pins.js`. I want to add a new marker type for 'Study Cafes'. Refer to `src/map/mapInit.js` for coordinate constraints and use the `iconSvg` helper from `src/ui/icons.js` for the new icon."
+
+#### 2. Adding State & Events
+> "I need to track 'User Favorites' in the central store. Update `src/core/store.js` to add a `favorites` array to the state and a `TOGGLE_FAVORITE` action. Also, define a `FAVORITES_CHANGED` event in `src/core/events.js`."
+
+#### 3. Database & RLS
+> "Create a migration in `supabase/migrations/` to add a `user_favorites` table. Ensure Row Level Security (RLS) is enabled so users can only see their own favorites, identified by the `x-perch-session` header. Refer to `supabase/migrations/20260315000001_user_profiles.sql` for the session header pattern."
