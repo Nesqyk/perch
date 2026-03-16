@@ -8,11 +8,11 @@ This track focuses on codifying the standards for collaboration and AI assistanc
 - [x] Task: Create examples for Conventional Commits 21ff9df
 - [x] Task: Conductor - User Manual Verification 'Technical Workflow Documentation' (Protocol in workflow.md) c182789
 
-## Phase 2: AI-Human Collaboration & Prompting
+## Phase 2: AI-Human Collaboration & Prompting [checkpoint: 959b452]
 - [x] Task: Define roles and feedback loops for AI-assisted coding 83984b0
 - [x] Task: Draft general prompt engineering best practices 42bd92e
 - [x] Task: Create Perch-specific prompt templates (Map, Store, RLS) 8df2839
-- [ ] Task: Conductor - User Manual Verification 'AI-Human Collaboration & Prompting' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'AI-Human Collaboration & Prompting' (Protocol in workflow.md) 959b452
 
 ## Phase 3: Quality Assurance & Review Standards
 - [ ] Task: Document manual verification protocols for frontend/backend
