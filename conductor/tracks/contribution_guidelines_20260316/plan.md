@@ -10,7 +10,7 @@ This track focuses on codifying the standards for collaboration and AI assistanc
 
 ## Phase 2: AI-Human Collaboration & Prompting
 - [x] Task: Define roles and feedback loops for AI-assisted coding 83984b0
-- [ ] Task: Draft general prompt engineering best practices
+- [x] Task: Draft general prompt engineering best practices 42bd92e
 - [ ] Task: Create Perch-specific prompt templates (Map, Store, RLS)
 - [ ] Task: Conductor - User Manual Verification 'AI-Human Collaboration & Prompting' (Protocol in workflow.md)
 
