@@ -5,7 +5,7 @@ This track focuses on codifying the standards for collaboration and AI assistanc
 ## Phase 1: Technical Workflow Documentation
 - [x] Task: Draft the Git branching and PR guidelines section beff82b
 - [x] Task: Document the Conductor TDD lifecycle (Red/Green/Refactor) a995e5a
-- [ ] Task: Create examples for Conventional Commits
+- [x] Task: Create examples for Conventional Commits 21ff9df
 - [ ] Task: Conductor - User Manual Verification 'Technical Workflow Documentation' (Protocol in workflow.md)
 
 ## Phase 2: AI-Human Collaboration & Prompting
