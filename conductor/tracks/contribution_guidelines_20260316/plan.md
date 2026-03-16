@@ -3,7 +3,7 @@
 This track focuses on codifying the standards for collaboration and AI assistance within the Perch project.
 
 ## Phase 1: Technical Workflow Documentation
-- [ ] Task: Draft the Git branching and PR guidelines section
+- [x] Task: Draft the Git branching and PR guidelines section beff82b
 - [ ] Task: Document the Conductor TDD lifecycle (Red/Green/Refactor)
 - [ ] Task: Create examples for Conventional Commits
 - [ ] Task: Conductor - User Manual Verification 'Technical Workflow Documentation' (Protocol in workflow.md)
