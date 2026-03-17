@@ -166,3 +166,13 @@ Before approving a PR, reviewers (human or AI) must verify:
 6. **Tests**: Are unit tests included? Do they pass?
 7. **Documentation**: Are complex logic blocks commented? Is the track's `plan.md` updated?
 
+## Additional Resources
+
+To better understand the codebase and our standards, refer to these documents:
+
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)**: High-level system design and module overview.
+- **[AGENTS.md](./AGENTS.md)**: Detailed coding standards and developer guide for AI agents.
+- **[Product Definition](./conductor/product.md)**: Project vision and core features.
+- **[Tech Stack](./conductor/tech-stack.md)**: List of technologies and frameworks used.
+- **[Workflow](./conductor/workflow.md)**: Definitive project development lifecycle.
+
