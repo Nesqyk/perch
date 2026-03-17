@@ -130,3 +130,27 @@ Use these templates to get the best results for common Perch tasks:
 
 #### 3. Database & RLS
 > "Create a migration in `supabase/migrations/` to add a `user_favorites` table. Ensure Row Level Security (RLS) is enabled so users can only see their own favorites, identified by the `x-perch-session` header. Refer to `supabase/migrations/20260315000001_user_profiles.sql` for the session header pattern."
+
+## Quality Assurance & Manual Verification
+
+Every implementation must be verified both automatically (tests) and manually to ensure it meets user expectations.
+
+### Automated Testing
+- All logic-heavy modules must have unit tests in `tests/unit/`.
+- Aim for >80% coverage for new code.
+- Run tests using `npm test`.
+
+### Manual Verification Protocols
+Before closing a track, follow these standard protocols:
+
+#### Frontend Changes (UI/UX)
+1. **Start Dev Server**: `npm run dev`.
+2. **Device Testing**: Verify on both Desktop (Chrome/Firefox) and Mobile (Safari/Chrome).
+3. **Visual Audit**: Confirm colors, spacing, and icons match `product-guidelines.md`.
+4. **Interactive Flow**: Complete the full user journey (e.g., from filter selection to spot navigation).
+
+#### Backend Changes (API/Database)
+1. **Migration Integrity**: Confirm the migration runs without errors in the Supabase SQL Editor.
+2. **RLS Validation**: Verify that unauthorized sessions cannot access or modify restricted data.
+3. **API Contracts**: Use the browser console to call new API functions and verify response shapes.
+4. **Data Sync**: Confirm that changes in the database are reflected in the UI in real-time.
