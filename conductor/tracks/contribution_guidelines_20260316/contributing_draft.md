@@ -153,4 +153,16 @@ Before closing a track, follow these standard protocols:
 1. **Migration Integrity**: Confirm the migration runs without errors in the Supabase SQL Editor.
 2. **RLS Validation**: Verify that unauthorized sessions cannot access or modify restricted data.
 3. **API Contracts**: Use the browser console to call new API functions and verify response shapes.
-4. **Data Sync**: Confirm that changes in the database are reflected in the UI in real-time.
+- **Data Sync**: Confirm that changes in the database are reflected in the UI in real-time.
+
+### Code Review Checklist
+Before approving a PR, reviewers (human or AI) must verify:
+
+1. **Architecture**: Does the change respect the unidirectional data flow (Event Bus -> Store -> UI)?
+2. **Guidelines**: Does the UI follow `product-guidelines.md` (e.g., Purple Ban)?
+3. **Security**: Are RLS policies updated correctly? No secrets in `VITE_` variables?
+4. **Efficiency**: Are network calls minimized? Is the Leaflet map rendering performing well?
+5. **Maintainability**: Is the code modular? Are variable names clear and consistent?
+6. **Tests**: Are unit tests included? Do they pass?
+7. **Documentation**: Are complex logic blocks commented? Is the track's `plan.md` updated?
+
