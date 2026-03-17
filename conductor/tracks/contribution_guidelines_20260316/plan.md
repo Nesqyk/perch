@@ -14,11 +14,11 @@ This track focuses on codifying the standards for collaboration and AI assistanc
 - [x] Task: Create Perch-specific prompt templates (Map, Store, RLS) 8df2839
 - [x] Task: Conductor - User Manual Verification 'AI-Human Collaboration & Prompting' (Protocol in workflow.md) 959b452
 
-## Phase 3: Quality Assurance & Review Standards
+## Phase 3: Quality Assurance & Review Standards [checkpoint: a886098]
 - [x] Task: Document manual verification protocols for frontend/backend ecb651c
 - [x] Task: Create a code review checklist for collaborators 6636991
 - [x] Task: Finalize the `CONTRIBUTING.md` file structure and cross-links 58b398e
-- [ ] Task: Conductor - User Manual Verification 'Quality Assurance & Review Standards' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Quality Assurance & Review Standards' (Protocol in workflow.md) a886098
 
 ## Phase 4: Finalization
 - [ ] Task: Write the completed `CONTRIBUTING.md` to the project root
