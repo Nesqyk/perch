@@ -22,5 +22,5 @@ This track focuses on codifying the standards for collaboration and AI assistanc
 
 ## Phase 4: Finalization
 - [x] Task: Write the completed `CONTRIBUTING.md` to the project root 40162c8
-- [ ] Task: Update project index files to reference the new guidelines
+- [x] Task: Update project index files to reference the new guidelines 5aed1af
 - [ ] Task: Conductor - User Manual Verification 'Finalization' (Protocol in workflow.md)
