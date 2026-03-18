@@ -4,6 +4,6 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [x] **Track: create markdow nfor contribution guidelines. and prompt engineering this is for collaborators on what to do when doing ai assisted code.**
-  *Link: [./tracks/contribution_guidelines_20260316/](./tracks/contribution_guidelines_20260316/)*
+- [ ] **Track: How can we make sure that we have 5+ pages? maybe we shud have a dashboard, save maps, settings, groups or something?. Let's plan it out.**
+  *Link: [./tracks/multi_page_routing_20260317/](./tracks/multi_page_routing_20260317/)*
 
