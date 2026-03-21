@@ -310,6 +310,11 @@ a {
   width: 100%;
 }
 
+.btn-sm {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+}
+
 /* ─── Form primitives ────────────────────────────────────────────────────── */
 .input,
 .select {
@@ -1229,6 +1234,55 @@ a {
     background: var(--building-color);
     color: var(--color-white);
     font-size: var(--text-xs);
+  }
+
+  /* ── Campus selector ─────────────────────────────────────────────────────── */
+  .campus-selector-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .campus-selector__search {
+    font-size: var(--text-sm);
+  }
+
+  .campus-selector__add-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .campus-selector__add-actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  /* ── Building panel hero ─────────────────────────────────────────────────── */
+  .campus-building-panel__hero-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+  }
+
+  .campus-building-panel__copy-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: var(--border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+  }
+
+  .campus-building-panel__copy-link:hover {
+    background: var(--color-gray-100);
+    color: var(--color-text);
   }
 
   .campus-building-panel {
