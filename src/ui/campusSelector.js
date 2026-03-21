@@ -1,23 +1,27 @@
 /**
  * src/ui/campusSelector.js
  *
- * Renders the campus picker as a wrapping chip row — the same visual pattern
- * as the Campus/City view-mode toggle immediately above it.
+ * Renders the campus picker as a single trigger button that opens a
+ * searchable popover overlay. Scales to hundreds of campuses without
+ * visual clutter — the current campus is always shown in one line,
+ * the full list is only surfaced on demand.
  *
- * Features:
- *   • One chip per campus; selected chip uses the shared `.chip-active` state.
- *   • A subtle GPS prompt is shown when no user location is known; clicking it
- *     calls geolocation and dispatches SET_USER_LOCATION. The nearest campus
- *     chip gets a "Near you" marker appended to its label.
- *   • All chips are disabled (pointer-events off, opacity reduced) in city mode.
- *   • A compact "＋ Add campus" link appears after the chips. Clicking it
- *     reveals an inline name input and confirm/cancel buttons.
- *   • A search input appears when there are more than SEARCH_THRESHOLD campuses.
+ * Overlay behaviour:
+ *   • Desktop  — absolutely-positioned dropdown below the trigger.
+ *   • Mobile   — same, but constrained so it doesn't overflow the sheet.
+ *   • Closes on: item select, Escape, or click outside the container.
+ *   • In city mode the trigger is muted and the overlay cannot open.
+ *
+ * Preserved from the original implementation:
+ *   • Haversine nearest-campus detection (_haversine, _isNearest).
+ *   • GPS prompt / denied message.
+ *   • Inline "Add campus" flow (now a list-row at the bottom of the overlay).
+ *   • CAMPUSES_LOADED / CAMPUS_SELECTED / SPOTS_LOADED event re-render hooks.
  *
  * @module campusSelector
  */
 
-import { Navigation, Plus } from 'lucide';
+import { Navigation, Plus, Check, ChevronDown } from 'lucide';
 
 import { on, emit, EVENTS }  from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
@@ -25,17 +29,14 @@ import { iconSvg }            from './icons.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Show search input when there are more campuses than this. */
-const SEARCH_THRESHOLD = 5;
-
 /** Earth radius used for haversine distance (metres). */
 const EARTH_RADIUS_M = 6371e3;
 
 // ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
- * Initialises the campus selector chip row.
- * Replaces the content of `container` with the chip-based picker.
+ * Initialises the campus selector inside `container`.
+ * Replaces the container's content with the trigger button and overlay.
  *
  * @param {HTMLElement} container
  * @returns {void}
@@ -44,206 +45,266 @@ export function initCampusSelector(container) {
   if (!container) return;
   container.className = 'campus-selector-container';
 
+  let _isOpen         = false;
   let _searchQuery    = '';
   let _locationDenied = false;
+  let _showAddForm    = false;
 
-  // ── Location prompt ───────────────────────────────────────────────────────
-  const locationEl = document.createElement('div');
-  container.appendChild(locationEl);
+  // ── Trigger button ────────────────────────────────────────────────────────
+  const trigger = document.createElement('button');
+  trigger.type      = 'button';
+  trigger.className = 'campus-trigger';
+  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-expanded', 'false');
+  container.appendChild(trigger);
 
-  // ── Search input (hidden until campus count exceeds threshold) ────────────
-  const searchInput = document.createElement('input');
-  searchInput.type        = 'search';
-  searchInput.className   = 'campus-search';
-  searchInput.placeholder = 'Search campuses…';
-  searchInput.hidden      = true;
-  searchInput.setAttribute('aria-label', 'Search campuses');
-  container.appendChild(searchInput);
-
-  // ── Chip row ──────────────────────────────────────────────────────────────
-  const chipRow = document.createElement('div');
-  chipRow.className = 'chip-row campus-chip-row';
-  container.appendChild(chipRow);
-
-  // ── "Add campus" link ─────────────────────────────────────────────────────
-  const addLink = document.createElement('button');
-  addLink.type      = 'button';
-  addLink.className = 'campus-add-link';
-  addLink.innerHTML = `${iconSvg(Plus, 12)} Add campus`;
-  container.appendChild(addLink);
-
-  // ── Inline add form (hidden by default) ──────────────────────────────────
-  const addForm = _buildAddForm(chipRow, addLink, searchInput);
-  addForm.hidden = true;
-  container.appendChild(addForm);
+  // ── Overlay ───────────────────────────────────────────────────────────────
+  const overlay = document.createElement('div');
+  overlay.className = 'campus-overlay';
+  overlay.hidden    = true;
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-label', 'Select campus');
+  container.appendChild(overlay);
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
-  const render = () => {
-    _renderLocationPrompt(locationEl, _locationDenied, (denied) => {
-      _locationDenied = denied;
-      render();
-    });
-    const { campuses } = getState();
-    searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
-    _renderChips(chipRow, _searchQuery);
+  const renderTrigger = () => {
+    const { campuses, selectedCampusId, viewMode, userLocation } = getState();
+    const selected = campuses.find(c => c.id === selectedCampusId);
+    const isCity   = viewMode === 'city';
+
+    trigger.className = `campus-trigger${isCity ? ' campus-trigger--disabled' : ''}`;
+    trigger.setAttribute('aria-expanded', String(_isOpen));
+    trigger.disabled = isCity;
+
+    const isNearest = selected && !!userLocation && _isNearest(selected, userLocation);
+
+    trigger.innerHTML = /* html */`
+      <span class="campus-trigger__label">
+        ${selected
+          ? `<span class="campus-trigger__name">${_escHtml(selected.name)}</span>${isNearest ? '<span class="campus-trigger__near-dot" title="Nearest campus"></span>' : ''}`
+          : `<span class="campus-trigger__placeholder">Select campus</span>`
+        }
+      </span>
+      <span class="campus-trigger__chevron">${iconSvg(ChevronDown, 14)}</span>
+    `;
   };
 
-  // ── Event listeners ───────────────────────────────────────────────────────
+  const renderOverlay = () => {
+    overlay.innerHTML = '';
 
-  on(EVENTS.CAMPUSES_LOADED,   render);
-  on(EVENTS.CAMPUS_SELECTED,   render);
-  on(EVENTS.SPOTS_LOADED,      render);
-  on(EVENTS.FILTERS_CHANGED,   render);
-  on(EVENTS.LOCATION_SET,      render);
-  on(EVENTS.VIEW_MODE_CHANGED, render);
+    const { userLocation } = getState();
 
-  searchInput.addEventListener('input', () => {
-    _searchQuery = searchInput.value;
-    render();
-  });
+    // ── GPS prompt ──────────────────────────────────────────────────────────
+    if (!userLocation) {
+      const gpsRow = document.createElement('div');
+      gpsRow.className = 'campus-overlay__gps';
 
-  addLink.addEventListener('click', () => {
-    chipRow.hidden    = true;
-    addLink.hidden    = true;
-    addForm.hidden    = false;
-    const nameInput   = addForm.querySelector('.campus-selector__add-input');
-    if (nameInput) { nameInput.value = _searchQuery.trim(); nameInput.focus(); }
-  });
-
-  // ── Initial render ────────────────────────────────────────────────────────
-  render();
-}
-
-// ─── Location prompt ──────────────────────────────────────────────────────────
-
-/**
- * Render the GPS prompt / denied message into `el`.
- *
- * @param {HTMLElement} el
- * @param {boolean}     denied
- * @param {Function}    onDenied
- * @returns {void}
- */
-function _renderLocationPrompt(el, denied, onDenied) {
-  el.innerHTML = '';
-
-  const { userLocation } = getState();
-  if (userLocation) return;
-
-  if (denied) {
-    const msg       = document.createElement('p');
-    msg.className   = 'campus-location-denied';
-    msg.textContent = 'Location blocked — select your campus below.';
-    el.appendChild(msg);
-    return;
-  }
-
-  const btn       = document.createElement('button');
-  btn.type        = 'button';
-  btn.className   = 'campus-location-prompt';
-  btn.innerHTML   = `${iconSvg(Navigation, 12)} Use my location`;
-
-  btn.addEventListener('click', () => {
-    if (!('geolocation' in navigator)) { onDenied(true); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      ()    => onDenied(true),
-    );
-  });
-
-  el.appendChild(btn);
-}
-
-// ─── Chip row renderer ────────────────────────────────────────────────────────
-
-/**
- * Rebuild the chip row from current store state.
- *
- * @param {HTMLElement} chipRow
- * @param {string}      query   - live search query
- * @returns {void}
- */
-function _renderChips(chipRow, query) {
-  chipRow.innerHTML = '';
-
-  const { campuses, selectedCampusId, viewMode, userLocation } = getState();
-
-  if (!campuses.length) {
-    const msg       = document.createElement('span');
-    msg.className   = 'campus-chips-loading';
-    msg.textContent = 'Loading campuses…';
-    chipRow.appendChild(msg);
-    return;
-  }
-
-  const needle  = query.trim().toLowerCase();
-  const isCity  = viewMode === 'city';
-
-  const filtered = needle
-    ? campuses.filter(c =>
-        c.name.toLowerCase().includes(needle) ||
-        (c.city && c.city.toLowerCase().includes(needle)))
-    : campuses.slice();
-
-  if (userLocation) {
-    filtered.sort((a, b) => _haversine(userLocation, a) - _haversine(userLocation, b));
-  }
-
-  for (const campus of filtered) {
-    const isSelected = campus.id === selectedCampusId;
-    const isNearest  = !!userLocation && _isNearest(campus, userLocation);
-
-    const chip       = document.createElement('button');
-    chip.type        = 'button';
-    chip.className   = `chip ${isSelected ? 'chip-active' : ''}`;
-    chip.setAttribute('aria-pressed', String(isSelected));
-    chip.dataset.campusId = campus.id;
-
-    if (isCity) chip.classList.add('campus-chip--disabled');
-
-    chip.textContent = campus.name;
-
-    if (isNearest) {
-      const dot       = document.createElement('span');
-      dot.className   = 'campus-chip__near-dot';
-      dot.title       = 'Nearest campus';
-      chip.appendChild(dot);
+      if (_locationDenied) {
+        const msg       = document.createElement('span');
+        msg.className   = 'campus-overlay__gps-denied';
+        msg.textContent = 'Location blocked — select manually.';
+        gpsRow.appendChild(msg);
+      } else {
+        const gpsBtn       = document.createElement('button');
+        gpsBtn.type        = 'button';
+        gpsBtn.className   = 'campus-overlay__gps-btn';
+        gpsBtn.innerHTML   = `${iconSvg(Navigation, 12)} Use my location`;
+        gpsBtn.addEventListener('click', () => {
+          if (!('geolocation' in navigator)) { _locationDenied = true; renderOverlay(); return; }
+          navigator.geolocation.getCurrentPosition(
+            (pos) => dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            ()    => { _locationDenied = true; renderOverlay(); },
+          );
+        });
+        gpsRow.appendChild(gpsBtn);
+      }
+      overlay.appendChild(gpsRow);
     }
 
-    chip.addEventListener('click', () => {
-      if (isCity) return;
-      dispatch('CAMPUS_SELECTED', { campusId: campus.id });
-      dispatch('SET_FILTERS',     { nearBuilding: null });
-    });
+    // ── Search input ────────────────────────────────────────────────────────
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'campus-overlay__search-wrap';
 
-    chipRow.appendChild(chip);
-  }
+    const searchInput       = document.createElement('input');
+    searchInput.type        = 'search';
+    searchInput.className   = 'campus-overlay__search';
+    searchInput.placeholder = 'Search universities…';
+    searchInput.value       = _searchQuery;
+    searchInput.setAttribute('aria-label', 'Search campuses');
+    searchInput.addEventListener('input', () => {
+      _searchQuery = searchInput.value;
+      _showAddForm = false;
+      renderList();
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+    });
+    searchWrap.appendChild(searchInput);
+    overlay.appendChild(searchWrap);
+
+    // ── List ────────────────────────────────────────────────────────────────
+    const list = document.createElement('div');
+    list.className = 'campus-overlay__list';
+    list.setAttribute('role', 'listbox');
+    overlay.appendChild(list);
+
+    // ── Add form (initially hidden) ─────────────────────────────────────────
+    const addFormWrap = document.createElement('div');
+    addFormWrap.className = 'campus-overlay__add-form';
+    addFormWrap.hidden    = !_showAddForm;
+    overlay.appendChild(addFormWrap);
+
+    if (_showAddForm) {
+      _renderAddForm(addFormWrap, searchInput, list, close);
+    }
+
+    const renderList = () => {
+      list.innerHTML = '';
+
+      const { campuses, selectedCampusId, userLocation: loc } = getState();
+      const needle = _searchQuery.trim().toLowerCase();
+
+      const _unordered = needle
+        ? campuses.filter(c =>
+            c.name.toLowerCase().includes(needle) ||
+            (c.city && c.city.toLowerCase().includes(needle)))
+        : campuses.slice();
+
+      const filtered = loc
+        ? _unordered.slice().sort((a, b) => _haversine(loc, a) - _haversine(loc, b))
+        : _unordered;
+
+      if (!filtered.length) {
+        const empty = document.createElement('div');
+        empty.className   = 'campus-overlay__empty';
+        empty.textContent = needle ? `No results for "${needle}"` : 'No campuses yet.';
+        list.appendChild(empty);
+      }
+
+      for (const campus of filtered) {
+        const isSelected = campus.id === selectedCampusId;
+        const isNearest  = !!loc && _isNearest(campus, loc);
+
+        const row       = document.createElement('button');
+        row.type        = 'button';
+        row.className   = `campus-overlay__row${isSelected ? ' campus-overlay__row--selected' : ''}`;
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', String(isSelected));
+
+        row.innerHTML = /* html */`
+          <span class="campus-overlay__row-body">
+            <span class="campus-overlay__row-name">${_escHtml(campus.name)}</span>
+            ${campus.city ? `<span class="campus-overlay__row-city">${_escHtml(campus.city)}</span>` : ''}
+          </span>
+          <span class="campus-overlay__row-end">
+            ${isNearest ? '<span class="campus-overlay__near-dot" title="Nearest campus"></span>' : ''}
+            ${isSelected ? `<span class="campus-overlay__check">${iconSvg(Check, 14)}</span>` : ''}
+          </span>
+        `;
+
+        row.addEventListener('click', () => {
+          dispatch('CAMPUS_SELECTED', { campusId: campus.id });
+          dispatch('SET_FILTERS', { nearBuilding: null });
+          close();
+        });
+
+        list.appendChild(row);
+      }
+
+      // ── "Add campus" row ─────────────────────────────────────────────────
+      const addRow       = document.createElement('button');
+      addRow.type        = 'button';
+      addRow.className   = 'campus-overlay__add-row';
+      addRow.innerHTML   = `${iconSvg(Plus, 13)} Add campus`;
+      addRow.addEventListener('click', () => {
+        _showAddForm = true;
+        addFormWrap.hidden = false;
+        addFormWrap.innerHTML = '';
+        _renderAddForm(addFormWrap, searchInput, list, close);
+        list.hidden = true;
+        addRow.hidden = true;
+        const inp = addFormWrap.querySelector('.campus-overlay__add-input');
+        if (inp) { inp.value = _searchQuery.trim(); inp.focus(); }
+      });
+      list.appendChild(addRow);
+    };
+
+    renderList();
+
+    // Focus the search input after paint
+    requestAnimationFrame(() => searchInput.focus());
+  };
+
+  const open = () => {
+    _isOpen = true;
+    _showAddForm = false;
+    overlay.hidden = false;
+    trigger.setAttribute('aria-expanded', 'true');
+    renderOverlay();
+  };
+
+  const close = () => {
+    _isOpen      = false;
+    _searchQuery = '';
+    _showAddForm = false;
+    overlay.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
+    renderTrigger();
+  };
+
+  // ── Trigger click ─────────────────────────────────────────────────────────
+  trigger.addEventListener('click', () => {
+    const { viewMode } = getState();
+    if (viewMode === 'city') return;
+    if (_isOpen) close(); else open();
+  });
+
+  // ── Click outside ─────────────────────────────────────────────────────────
+  document.addEventListener('click', (e) => {
+    if (_isOpen && !container.contains(/** @type {Node} */(e.target))) {
+      close();
+    }
+  });
+
+  // ── Keyboard close ────────────────────────────────────────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (_isOpen && e.key === 'Escape') close();
+  });
+
+  // ── Store event listeners ─────────────────────────────────────────────────
+  on(EVENTS.CAMPUSES_LOADED,   () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.CAMPUS_SELECTED,   () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.SPOTS_LOADED,      () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.FILTERS_CHANGED,   () => { renderTrigger(); });
+  on(EVENTS.LOCATION_SET,      () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.VIEW_MODE_CHANGED, () => { close(); renderTrigger(); });
+
+  // ── Initial render ────────────────────────────────────────────────────────
+  renderTrigger();
 }
 
-// ─── Inline add form ──────────────────────────────────────────────────────────
+// ─── Add campus form ──────────────────────────────────────────────────────────
 
 /**
- * Build the inline "add campus" form.
+ * Render the inline add-campus form into `wrap`.
  *
- * @param {HTMLElement}      chipRow
- * @param {HTMLElement}      addLink
+ * @param {HTMLElement}      wrap
  * @param {HTMLInputElement} searchInput
- * @returns {HTMLElement}
+ * @param {HTMLElement}      list
+ * @param {Function}         close
+ * @returns {void}
  */
-function _buildAddForm(chipRow, addLink, searchInput) {
-  const wrap       = document.createElement('div');
-  wrap.className   = 'campus-selector__add-form';
-
+function _renderAddForm(wrap, searchInput, list, close) {
   const nameInput       = document.createElement('input');
   nameInput.type        = 'text';
-  nameInput.className   = 'campus-selector__add-input';
-  nameInput.placeholder = 'Campus name';
+  nameInput.className   = 'campus-overlay__add-input input';
+  nameInput.placeholder = 'University name';
   nameInput.maxLength   = 120;
   nameInput.setAttribute('aria-label', 'New campus name');
 
   const btnRow       = document.createElement('div');
-  btnRow.className   = 'campus-selector__add-actions';
+  btnRow.className   = 'campus-overlay__add-actions';
 
   const addBtn       = document.createElement('button');
   addBtn.type        = 'button';
@@ -261,19 +322,18 @@ function _buildAddForm(chipRow, addLink, searchInput) {
   wrap.appendChild(btnRow);
 
   const hide = () => {
-    wrap.hidden        = true;
-    chipRow.hidden     = false;
-    addLink.hidden     = false;
-    const { campuses } = getState();
-    searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
-    nameInput.value    = '';
+    wrap.hidden   = true;
+    list.hidden   = false;
+    /** @type {HTMLElement|null} */ (list.querySelector('.campus-overlay__add-row')) && (
+      /** @type {HTMLElement} */ (list.querySelector('.campus-overlay__add-row')).hidden = false
+    );
   };
 
   const submit = () => {
     const campusName = nameInput.value.trim();
     if (!campusName) { nameInput.focus(); return; }
     emit(EVENTS.UI_CAMPUS_ADD_REQUESTED, { campusName });
-    hide();
+    close();
   };
 
   addBtn.addEventListener('click', submit);
@@ -283,7 +343,7 @@ function _buildAddForm(chipRow, addLink, searchInput) {
     if (e.key === 'Escape') hide();
   });
 
-  return wrap;
+  requestAnimationFrame(() => nameInput.focus());
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
@@ -324,4 +384,18 @@ function _isNearest(campus, userLocation) {
     _haversine(userLocation, c) < _haversine(userLocation, best) ? c : best
   );
   return nearest.id === campus.id;
+}
+
+/**
+ * Escape a string for safe insertion into innerHTML.
+ *
+ * @param {string} value
+ * @returns {string}
+ */
+function _escHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }

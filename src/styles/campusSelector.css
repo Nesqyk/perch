@@ -1,39 +1,168 @@
 /**
  * src/styles/campusSelector.css
  *
- * Campus picker — chip-row variant.
+ * Campus picker — searchable popover overlay variant.
  *
- * Campus chips reuse the shared `.chip` / `.chip-active` primitives from
- * filters.css. This file only adds the small number of campus-specific
- * extras: the GPS prompt, the "near you" dot, the add link, and the
- * inline add form.
+ * The selector renders as a single trigger button; clicking it opens an
+ * absolutely-positioned overlay containing a GPS prompt (when needed),
+ * a search input, and a scrollable list of campuses.
  *
  * Class inventory:
- *   .campus-selector-container      outer wrapper
- *   .campus-location-prompt         GPS nudge button
- *   .campus-location-denied         static blocked-location note
- *   .campus-search                  live-filter search input
- *   .campus-chip-row                the wrapping chip row (extends .chip-row)
- *   .campus-chip--disabled          city-mode muted chips
- *   .campus-chip__near-dot          green dot for nearest campus
- *   .campus-chips-loading           loading / empty text
- *   .campus-add-link                "+ Add campus" ghost link button
- *   .campus-selector__add-form      inline add form
- *   .campus-selector__add-input     text input inside add form
- *   .campus-selector__add-actions   button row inside add form
+ *   .campus-selector-container    outer wrapper (position: relative)
+ *   .campus-trigger               single-line trigger button
+ *   .campus-trigger--disabled     city-mode muted state
+ *   .campus-trigger__label        left-side label area
+ *   .campus-trigger__name         selected campus name text
+ *   .campus-trigger__placeholder  "Select campus" placeholder text
+ *   .campus-trigger__near-dot     green dot when selected == nearest
+ *   .campus-trigger__chevron      right-side chevron icon (rotates when open)
+ *   .campus-overlay               absolute dropdown panel
+ *   .campus-overlay__gps          GPS prompt row
+ *   .campus-overlay__gps-btn      "Use my location" button
+ *   .campus-overlay__gps-denied   blocked-location static note
+ *   .campus-overlay__search-wrap  search input wrapper
+ *   .campus-overlay__search       search text input
+ *   .campus-overlay__list         scrollable campus list (role="listbox")
+ *   .campus-overlay__row          individual campus button
+ *   .campus-overlay__row--selected  selected campus row highlight
+ *   .campus-overlay__row-body     name + city stacked column
+ *   .campus-overlay__row-name     campus name (bold)
+ *   .campus-overlay__row-city     campus city (muted, smaller)
+ *   .campus-overlay__row-end      right-side icon cluster
+ *   .campus-overlay__near-dot     green dot for nearest campus in list
+ *   .campus-overlay__check        checkmark icon for selected campus
+ *   .campus-overlay__empty        no-results message
+ *   .campus-overlay__add-row      "+ Add campus" list row button
+ *   .campus-overlay__add-form     inline add-campus form
+ *   .campus-overlay__add-input    text input inside add form
+ *   .campus-overlay__add-actions  button row inside add form
  */
 
 /* ─── Container ──────────────────────────────────────────────────────────────── */
 
 .campus-selector-container {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+  position: relative;
 }
 
-/* ─── GPS prompt ─────────────────────────────────────────────────────────────── */
+/* ─── Trigger button ─────────────────────────────────────────────────────────── */
 
-.campus-location-prompt {
+.campus-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.campus-trigger:hover:not(:disabled) {
+  border-color: var(--color-brand);
+}
+
+.campus-trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.campus-trigger[aria-expanded="true"] {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.campus-trigger--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Trigger label (left side) ───────────────────────────────────────────── */
+
+.campus-trigger__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.campus-trigger__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-medium);
+  color: var(--color-text);
+}
+
+.campus-trigger__placeholder {
+  color: var(--color-text-dim);
+  font-weight: var(--font-normal);
+}
+
+.campus-trigger__near-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--pin-free);
+  border-radius: var(--radius-full);
+}
+
+/* ── Chevron (right side) ────────────────────────────────────────────────── */
+
+.campus-trigger__chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+  color: var(--color-text-dim);
+  transition: transform var(--transition-fast);
+}
+
+.campus-trigger[aria-expanded="true"] .campus-trigger__chevron {
+  transform: rotate(180deg);
+}
+
+/* ─── Overlay panel ──────────────────────────────────────────────────────────── */
+
+.campus-overlay {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  right: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* ─── GPS prompt row ─────────────────────────────────────────────────────────── */
+
+.campus-overlay__gps {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border);
+  background: var(--color-surface-alt);
+}
+
+.campus-overlay__gps-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -48,121 +177,211 @@
   transition: color var(--transition-fast);
 }
 
-.campus-location-prompt:hover {
+.campus-overlay__gps-btn:hover {
   color: var(--color-green-700);
 }
 
-.campus-location-prompt svg {
+.campus-overlay__gps-btn svg {
   flex-shrink: 0;
 }
 
-.campus-location-denied {
+.campus-overlay__gps-denied {
   font-size: var(--text-xs);
   color: var(--color-text-dim);
 }
 
 /* ─── Search input ───────────────────────────────────────────────────────────── */
 
-.campus-search {
+.campus-overlay__search-wrap {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--border);
+}
+
+.campus-overlay__search {
   width: 100%;
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  background: var(--color-surface-alt);
+  border: var(--border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--color-text);
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.campus-search:focus {
+.campus-overlay__search:focus {
   border-color: var(--color-brand);
   box-shadow: 0 0 0 3px var(--color-brand-light);
 }
 
-.campus-search::placeholder {
+.campus-overlay__search::placeholder {
   color: var(--color-text-dim);
 }
 
-/* ─── Chip row extras ────────────────────────────────────────────────────────── */
+/* ─── Campus list ────────────────────────────────────────────────────────────── */
 
-/* Allow chips to wrap when there are many campuses */
-.campus-chip-row {
-  flex-wrap: wrap;
+.campus-overlay__list {
+  overflow-y: auto;
+  max-height: 200px;
+  display: flex;
+  flex-direction: column;
 }
 
-.campus-chip--disabled {
-  opacity: 0.4;
-  pointer-events: none;
-  cursor: not-allowed;
+/* ── Campus row ──────────────────────────────────────────────────────────── */
+
+.campus-overlay__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
 }
 
-/* Small green dot appended to the nearest-campus chip */
-.campus-chip__near-dot {
+.campus-overlay__row:last-of-type {
+  border-bottom: none;
+}
+
+.campus-overlay__row:hover {
+  background: var(--color-surface-alt);
+}
+
+.campus-overlay__row--selected {
+  background: var(--color-brand-light);
+}
+
+.campus-overlay__row--selected:hover {
+  background: var(--color-brand-light);
+}
+
+/* ── Row body (name + city) ──────────────────────────────────────────────── */
+
+.campus-overlay__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.campus-overlay__row-name {
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campus-overlay__row-city {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Row end (dots + checkmark) ──────────────────────────────────────────── */
+
+.campus-overlay__row-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+}
+
+.campus-overlay__near-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
-  margin-left: var(--space-1);
   background: var(--pin-free);
   border-radius: var(--radius-full);
-  vertical-align: middle;
   flex-shrink: 0;
 }
 
-.campus-chips-loading {
-  font-size: var(--text-xs);
-  color: var(--color-text-dim);
+.campus-overlay__check {
+  display: flex;
+  align-items: center;
+  color: var(--color-green-700);
 }
 
-/* ─── "Add campus" link ──────────────────────────────────────────────────────── */
+/* ── Empty state ─────────────────────────────────────────────────────────── */
 
-.campus-add-link {
-  display: inline-flex;
+.campus-overlay__empty {
+  padding: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+  text-align: center;
+}
+
+/* ── "+ Add campus" row ──────────────────────────────────────────────────── */
+
+.campus-overlay__add-row {
+  display: flex;
   align-items: center;
   gap: var(--space-1);
-  padding: 0;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
   background: none;
   border: none;
+  border-top: var(--border);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: var(--font-medium);
-  color: var(--color-text-dim);
+  color: var(--color-text-muted);
   cursor: pointer;
-  transition: color var(--transition-fast);
+  text-align: left;
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 
-.campus-add-link:hover {
-  color: var(--color-text-muted);
+.campus-overlay__add-row:hover {
+  color: var(--color-text);
+  background: var(--color-surface-alt);
 }
 
 /* ─── Inline add form ────────────────────────────────────────────────────────── */
 
-.campus-selector__add-form {
+.campus-overlay__add-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  padding: var(--space-3);
+  border-top: var(--border);
+  background: var(--color-surface-alt);
 }
 
-.campus-selector__add-input {
+.campus-overlay__add-input {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: var(--border);
   border-radius: var(--radius-md);
   font-family: var(--font-sans);
   font-size: var(--text-sm);
   color: var(--color-text);
   outline: none;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
-.campus-selector__add-input:focus {
+.campus-overlay__add-input:focus {
   border-color: var(--color-brand);
   box-shadow: 0 0 0 3px var(--color-brand-light);
 }
 
-.campus-selector__add-actions {
+.campus-overlay__add-actions {
   display: flex;
   gap: var(--space-2);
 }
