@@ -1,38 +1,27 @@
 /**
  * src/ui/campusSelector.js
  *
- * Renders the campus picker as a horizontally-scrollable row of cards.
- * Replaces the old <select> dropdown with a richer widget that shows:
- *   • Spot count, live claim count, and live unique claimant count per campus
- *   • A mini occupancy bar (live claims / total spots)
- *   • Import-status badges for campuses that are still Importing or Needs Review
- *   • A "Near you" pill on the closest campus when user location is available
+ * Renders the campus picker as a wrapping chip row — the same visual pattern
+ * as the Campus/City view-mode toggle immediately above it.
  *
- * GPS detection:
- *   1. If userLocation is already in the store, the nearest campus is sorted
- *      first and gets a "Near you" badge.
- *   2. If no location is known, a subtle prompt button is shown above the row.
- *      Clicking it calls navigator.geolocation.getCurrentPosition and dispatches
- *      SET_USER_LOCATION on success.
- *   3. If the user denies location, the prompt is replaced with a static note.
- *
- * City-mode: all cards are rendered in a disabled/muted state when
- * viewMode === 'city', matching the old <select disabled> behaviour.
- *
- * The "＋ Add your campus" action lives as the last card in the row. When the
- * search input is active and contains a query, the card label updates to
- * "＋ Add «query» as a new campus". Clicking it opens an inline add form that
- * emits UI_CAMPUS_ADD_REQUESTED (handled by features/campus.js).
+ * Features:
+ *   • One chip per campus; selected chip uses the shared `.chip-active` state.
+ *   • A subtle GPS prompt is shown when no user location is known; clicking it
+ *     calls geolocation and dispatches SET_USER_LOCATION. The nearest campus
+ *     chip gets a "Near you" marker appended to its label.
+ *   • All chips are disabled (pointer-events off, opacity reduced) in city mode.
+ *   • A compact "＋ Add campus" link appears after the chips. Clicking it
+ *     reveals an inline name input and confirm/cancel buttons.
+ *   • A search input appears when there are more than SEARCH_THRESHOLD campuses.
  *
  * @module campusSelector
  */
 
-import { Users, Bookmark, Plus, Navigation } from 'lucide';
+import { Navigation, Plus } from 'lucide';
 
-import { on, emit, EVENTS }   from '../core/events.js';
-import { getState, dispatch }  from '../core/store.js';
-import { campusStats }         from '../state/spotState.js';
-import { iconSvg }             from './icons.js';
+import { on, emit, EVENTS }  from '../core/events.js';
+import { getState, dispatch } from '../core/store.js';
+import { iconSvg }            from './icons.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,8 +34,8 @@ const EARTH_RADIUS_M = 6371e3;
 // ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
- * Initialises the campus selector card row.
- * Replaces the content of `container` with the card-based picker.
+ * Initialises the campus selector chip row.
+ * Replaces the content of `container` with the chip-based picker.
  *
  * @param {HTMLElement} container
  * @returns {void}
@@ -55,8 +44,7 @@ export function initCampusSelector(container) {
   if (!container) return;
   container.className = 'campus-selector-container';
 
-  // Module-level state for the inline add-form query.
-  let _searchQuery = '';
+  let _searchQuery    = '';
   let _locationDenied = false;
 
   // ── Location prompt ───────────────────────────────────────────────────────
@@ -72,13 +60,20 @@ export function initCampusSelector(container) {
   searchInput.setAttribute('aria-label', 'Search campuses');
   container.appendChild(searchInput);
 
-  // ── Card row ──────────────────────────────────────────────────────────────
-  const cardRow = document.createElement('div');
-  cardRow.className = 'campus-card-row';
-  container.appendChild(cardRow);
+  // ── Chip row ──────────────────────────────────────────────────────────────
+  const chipRow = document.createElement('div');
+  chipRow.className = 'chip-row campus-chip-row';
+  container.appendChild(chipRow);
+
+  // ── "Add campus" link ─────────────────────────────────────────────────────
+  const addLink = document.createElement('button');
+  addLink.type      = 'button';
+  addLink.className = 'campus-add-link';
+  addLink.innerHTML = `${iconSvg(Plus, 12)} Add campus`;
+  container.appendChild(addLink);
 
   // ── Inline add form (hidden by default) ──────────────────────────────────
-  const addForm = _buildAddForm(cardRow, searchInput);
+  const addForm = _buildAddForm(chipRow, addLink, searchInput);
   addForm.hidden = true;
   container.appendChild(addForm);
 
@@ -91,16 +86,16 @@ export function initCampusSelector(container) {
     });
     const { campuses } = getState();
     searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
-    _renderCards(cardRow, _searchQuery, addForm, searchInput);
+    _renderChips(chipRow, _searchQuery);
   };
 
   // ── Event listeners ───────────────────────────────────────────────────────
 
-  on(EVENTS.CAMPUSES_LOADED,  render);
-  on(EVENTS.CAMPUS_SELECTED,  render);
-  on(EVENTS.SPOTS_LOADED,     render);
-  on(EVENTS.FILTERS_CHANGED,  render);
-  on(EVENTS.LOCATION_SET,     render);
+  on(EVENTS.CAMPUSES_LOADED,   render);
+  on(EVENTS.CAMPUS_SELECTED,   render);
+  on(EVENTS.SPOTS_LOADED,      render);
+  on(EVENTS.FILTERS_CHANGED,   render);
+  on(EVENTS.LOCATION_SET,      render);
   on(EVENTS.VIEW_MODE_CHANGED, render);
 
   searchInput.addEventListener('input', () => {
@@ -108,7 +103,15 @@ export function initCampusSelector(container) {
     render();
   });
 
-  // ── Initial render (campuses may already be in store) ─────────────────────
+  addLink.addEventListener('click', () => {
+    chipRow.hidden    = true;
+    addLink.hidden    = true;
+    addForm.hidden    = false;
+    const nameInput   = addForm.querySelector('.campus-selector__add-input');
+    if (nameInput) { nameInput.value = _searchQuery.trim(); nameInput.focus(); }
+  });
+
+  // ── Initial render ────────────────────────────────────────────────────────
   render();
 }
 
@@ -116,226 +119,121 @@ export function initCampusSelector(container) {
 
 /**
  * Render the GPS prompt / denied message into `el`.
- * Clears and rebuilds on every call so it stays in sync with state.
  *
  * @param {HTMLElement} el
- * @param {boolean}     denied      - true after the user has blocked geolocation
- * @param {Function}    onDenied    - callback({ denied: true }) when permission is blocked
+ * @param {boolean}     denied
+ * @param {Function}    onDenied
+ * @returns {void}
  */
 function _renderLocationPrompt(el, denied, onDenied) {
   el.innerHTML = '';
 
   const { userLocation } = getState();
-
-  // Location already known — no prompt needed.
   if (userLocation) return;
 
   if (denied) {
-    const msg = document.createElement('p');
+    const msg       = document.createElement('p');
     msg.className   = 'campus-location-denied';
-    msg.textContent = 'Location blocked — scroll to find your campus.';
+    msg.textContent = 'Location blocked — select your campus below.';
     el.appendChild(msg);
     return;
   }
 
-  const btn = document.createElement('button');
-  btn.type      = 'button';
-  btn.className = 'campus-location-prompt';
-  btn.innerHTML = `${iconSvg(Navigation, 14)} Find my campus automatically`;
+  const btn       = document.createElement('button');
+  btn.type        = 'button';
+  btn.className   = 'campus-location-prompt';
+  btn.innerHTML   = `${iconSvg(Navigation, 12)} Use my location`;
 
   btn.addEventListener('click', () => {
-    if (!('geolocation' in navigator)) {
-      onDenied(true);
-      return;
-    }
+    if (!('geolocation' in navigator)) { onDenied(true); return; }
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude });
-        // render() is triggered by the LOCATION_SET event listener.
-      },
-      () => onDenied(true),
+      (pos) => dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      ()    => onDenied(true),
     );
   });
 
   el.appendChild(btn);
 }
 
-// ─── Card row renderer ────────────────────────────────────────────────────────
+// ─── Chip row renderer ────────────────────────────────────────────────────────
 
 /**
- * Rebuild the card row from current store state.
+ * Rebuild the chip row from current store state.
  *
- * @param {HTMLElement}      cardRow
- * @param {string}           query       - live search query
- * @param {HTMLElement}      addForm     - the inline add form element
- * @param {HTMLInputElement} searchInput
+ * @param {HTMLElement} chipRow
+ * @param {string}      query   - live search query
+ * @returns {void}
  */
-function _renderCards(cardRow, query, addForm, searchInput) {
-  cardRow.innerHTML = '';
+function _renderChips(chipRow, query) {
+  chipRow.innerHTML = '';
 
-  const { campuses, selectedCampusId, spots, claims, viewMode, userLocation } = getState();
+  const { campuses, selectedCampusId, viewMode, userLocation } = getState();
 
   if (!campuses.length) {
-    const msg = document.createElement('div');
-    msg.className   = 'campus-card-row--loading';
+    const msg       = document.createElement('span');
+    msg.className   = 'campus-chips-loading';
     msg.textContent = 'Loading campuses…';
-    cardRow.appendChild(msg);
+    chipRow.appendChild(msg);
     return;
   }
 
-  const stats   = campusStats(campuses, spots, claims);
   const needle  = query.trim().toLowerCase();
   const isCity  = viewMode === 'city';
 
-  // Filter by search query.
   const filtered = needle
-    ? campuses.filter(c => c.name.toLowerCase().includes(needle) ||
-                           (c.city && c.city.toLowerCase().includes(needle)))
+    ? campuses.filter(c =>
+        c.name.toLowerCase().includes(needle) ||
+        (c.city && c.city.toLowerCase().includes(needle)))
     : campuses.slice();
 
-  // Sort: nearest campus first when location is known.
   if (userLocation) {
-    filtered.sort((a, b) =>
-      _haversine(userLocation, a) - _haversine(userLocation, b)
-    );
+    filtered.sort((a, b) => _haversine(userLocation, a) - _haversine(userLocation, b));
   }
 
   for (const campus of filtered) {
-    const card = _buildCampusCard(campus, stats.get(campus.id), selectedCampusId, isCity, userLocation);
-    cardRow.appendChild(card);
+    const isSelected = campus.id === selectedCampusId;
+    const isNearest  = !!userLocation && _isNearest(campus, userLocation);
+
+    const chip       = document.createElement('button');
+    chip.type        = 'button';
+    chip.className   = `chip ${isSelected ? 'chip-active' : ''}`;
+    chip.setAttribute('aria-pressed', String(isSelected));
+    chip.dataset.campusId = campus.id;
+
+    if (isCity) chip.classList.add('campus-chip--disabled');
+
+    chip.textContent = campus.name;
+
+    if (isNearest) {
+      const dot       = document.createElement('span');
+      dot.className   = 'campus-chip__near-dot';
+      dot.title       = 'Nearest campus';
+      chip.appendChild(dot);
+    }
+
+    chip.addEventListener('click', () => {
+      if (isCity) return;
+      dispatch('CAMPUS_SELECTED', { campusId: campus.id });
+      dispatch('SET_FILTERS',     { nearBuilding: null });
+    });
+
+    chipRow.appendChild(chip);
   }
-
-  // "Add campus" card — always last.
-  const addCard = _buildAddCard(query, addForm, searchInput, cardRow);
-  if (isCity) addCard.classList.add('campus-card--disabled');
-  cardRow.appendChild(addCard);
 }
 
-// ─── Campus card ──────────────────────────────────────────────────────────────
-
-/**
- * Build a single campus card element.
- *
- * @param {object}  campus
- * @param {{ spotCount: number, liveClaimCount: number, liveClaimantCount: number }} stat
- * @param {string|null} selectedCampusId
- * @param {boolean}     isCity
- * @param {{lat:number,lng:number}|null} userLocation
- * @returns {HTMLButtonElement}
- */
-function _buildCampusCard(campus, stat, selectedCampusId, isCity, userLocation) {
-  const isSelected = campus.id === selectedCampusId;
-  const isNearest  = !!userLocation && _isNearest(campus, userLocation);
-
-  const card = document.createElement('button');
-  card.type      = 'button';
-  card.className = 'campus-card';
-  card.setAttribute('aria-pressed', String(isSelected));
-  card.dataset.campusId = campus.id;
-
-  if (isSelected) card.classList.add('campus-card--selected');
-  if (isCity)     card.classList.add('campus-card--disabled');
-
-  const s = stat ?? { spotCount: 0, liveClaimCount: 0, liveClaimantCount: 0 };
-
-  // Occupancy fraction (clamped 0–1), only meaningful when there are spots.
-  const occupancyFraction = s.spotCount > 0
-    ? Math.min(1, s.liveClaimCount / s.spotCount)
-    : 0;
-  const occupancyPct = Math.round(occupancyFraction * 100);
-
-  // Occupancy bar colour modifier: green < 50 %, yellow 50–80 %, red > 80 %
-  const occupancyMod = occupancyPct >= 80 ? 'campus-card__occupancy-bar--full'
-    : occupancyPct >= 50 ? 'campus-card__occupancy-bar--high'
-    : '';
-
-  card.innerHTML = /* html */`
-    <div class="campus-card__header">
-      ${isNearest
-        ? `<span class="campus-card__near-badge">${iconSvg(Navigation, 10)} Near you</span>`
-        : ''}
-      ${_statusBadgeHtml(campus)}
-    </div>
-    <span class="campus-card__name">${_escHtml(campus.name)}</span>
-    ${campus.city
-      ? `<span class="campus-card__city">${_escHtml(campus.city)}</span>`
-      : ''}
-    <div class="campus-card__divider"></div>
-    <div class="campus-card__stats">
-      <span class="campus-card__stat">
-        <span class="campus-card__stat-icon">${iconSvg(Bookmark, 11)}</span>
-        ${s.spotCount} ${s.spotCount === 1 ? 'spot' : 'spots'}
-      </span>
-      <span class="campus-card__stat">
-        <span class="campus-card__stat-icon">${iconSvg(Users, 11)}</span>
-        ${s.liveClaimantCount} active now
-      </span>
-      ${s.spotCount > 0 ? /* html */`
-        <div class="campus-card__occupancy" title="${occupancyPct}% occupied">
-          <div class="campus-card__occupancy-bar ${occupancyMod}" style="width:${occupancyPct}%"></div>
-        </div>
-      ` : ''}
-    </div>
-  `;
-
-  card.addEventListener('click', () => {
-    if (isCity) return;
-    dispatch('CAMPUS_SELECTED',  { campusId: campus.id });
-    dispatch('SET_FILTERS',      { nearBuilding: null });
-  });
-
-  return card;
-}
-
-// ─── "Add campus" card ────────────────────────────────────────────────────────
-
-/**
- * Build the "＋ Add your campus" card that opens the inline add form.
- *
- * @param {string}           query
- * @param {HTMLElement}      addForm
- * @param {HTMLInputElement} searchInput
- * @param {HTMLElement}      cardRow
- * @returns {HTMLButtonElement}
- */
-function _buildAddCard(query, addForm, searchInput, cardRow) {
-  const needle = query.trim();
-  const label  = needle
-    ? `Add "${needle}" as a new campus`
-    : 'Add your campus';
-
-  const card = document.createElement('button');
-  card.type      = 'button';
-  card.className = 'campus-card campus-card--add';
-  card.innerHTML = /* html */`
-    <div class="campus-card__add-icon">${iconSvg(Plus, 16)}</div>
-    <span class="campus-card__add-label">${_escHtml(label)}</span>
-  `;
-
-  card.addEventListener('click', () => {
-    const nameInput = addForm.querySelector('.campus-selector__add-input');
-    if (nameInput) nameInput.value = needle;
-    cardRow.hidden = true;
-    searchInput.hidden = true;
-    addForm.hidden = false;
-    nameInput?.focus();
-  });
-
-  return card;
-}
-
-// ─── Inline add form ─────────────────────────────────────────────────────────
+// ─── Inline add form ──────────────────────────────────────────────────────────
 
 /**
  * Build the inline "add campus" form.
  *
- * @param {HTMLElement}      cardRow
+ * @param {HTMLElement}      chipRow
+ * @param {HTMLElement}      addLink
  * @param {HTMLInputElement} searchInput
  * @returns {HTMLElement}
  */
-function _buildAddForm(cardRow, searchInput) {
-  const wrap = document.createElement('div');
-  wrap.className = 'campus-selector__add-form';
+function _buildAddForm(chipRow, addLink, searchInput) {
+  const wrap       = document.createElement('div');
+  wrap.className   = 'campus-selector__add-form';
 
   const nameInput       = document.createElement('input');
   nameInput.type        = 'text';
@@ -344,8 +242,8 @@ function _buildAddForm(cardRow, searchInput) {
   nameInput.maxLength   = 120;
   nameInput.setAttribute('aria-label', 'New campus name');
 
-  const btnRow = document.createElement('div');
-  btnRow.className = 'campus-selector__add-actions';
+  const btnRow       = document.createElement('div');
+  btnRow.className   = 'campus-selector__add-actions';
 
   const addBtn       = document.createElement('button');
   addBtn.type        = 'button';
@@ -364,7 +262,8 @@ function _buildAddForm(cardRow, searchInput) {
 
   const hide = () => {
     wrap.hidden        = true;
-    cardRow.hidden     = false;
+    chipRow.hidden     = false;
+    addLink.hidden     = false;
     const { campuses } = getState();
     searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
     nameInput.value    = '';
@@ -413,9 +312,8 @@ function _haversine(userLocation, campus) {
 
 /**
  * Returns true if `campus` is the nearest campus to `userLocation`.
- * Used to add the "Near you" badge to only the closest card.
  *
- * @param {object}              campus
+ * @param {object}                  campus
  * @param {{lat:number,lng:number}} userLocation
  * @returns {boolean}
  */
@@ -426,35 +324,4 @@ function _isNearest(campus, userLocation) {
     _haversine(userLocation, c) < _haversine(userLocation, best) ? c : best
   );
   return nearest.id === campus.id;
-}
-
-/**
- * Build the import-status badge HTML for a campus card.
- * Returns an empty string for campuses with `bootstrap_status === 'ready'`.
- *
- * @param {object} campus
- * @returns {string}
- */
-function _statusBadgeHtml(campus) {
-  if (campus.bootstrap_status === 'pending') {
-    return `<span class="campus-card__status-badge campus-card__status-badge--pending">Importing…</span>`;
-  }
-  if (campus.bootstrap_status === 'needs_review') {
-    return `<span class="campus-card__status-badge campus-card__status-badge--needs-review">Needs review</span>`;
-  }
-  return '';
-}
-
-/**
- * Minimal HTML-escape for user-supplied strings rendered inside innerHTML.
- *
- * @param {string} str
- * @returns {string}
- */
-function _escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
