@@ -10,6 +10,10 @@
  * Auth-gated: unauthenticated users are redirected to the login flow.
  * Wired up by main.js at boot via initCampus().
  * All cross-module communication goes through the event bus.
+ *
+ * viewMode-agnostic: campus add works in both 'campus' and 'city' modes.
+ * There is intentionally no viewMode guard here — any authenticated user
+ * can create a campus regardless of the current map view.
  */
 
 import { on, emit, EVENTS }    from '../core/events.js';
