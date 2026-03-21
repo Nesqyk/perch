@@ -56,35 +56,34 @@ async function _onSpotSelected(e) {
 /**
  * Filter and rank spots for the current filter selection.
  *
- * Ranking criteria (in order):
+ * Ranking criteria:
  *  1. Meets all required filter criteria (hard filter)
- *  2. If viewMode is 'campus', prioritize on-campus spots
- *  3. Sorted by effective score (confidence + distance penalty) descending
+ *  2. Sorted by effective score descending
+ *     - On-campus spots receive a +0.15 soft bonus in campus mode
+ *     - Spots with a recency signal (confidence updated < 15 min ago) get +0.10
+ *     - Walk-time distance penalty applied when GPS is available
+ *  3. Spots with _score < 0.15 are annotated _isBusy: true (not excluded)
  *
  * @param {object[]} spots
- * @param {object}   confidence  - Record<spotId, { score }>
+ * @param {object}   confidence  - Record<spotId, { score, updatedAt? }>
  * @param {object}   filters     - { groupSize, needs, nearBuilding, userLocation, viewMode }
- * @returns {object[]} filtered + ranked spots
+ * @returns {object[]} filtered + ranked spots (annotated with _score, _distance, _isBusy)
  */
 export function _rankSpots(spots, confidence, filters) {
   const { userLocation, viewMode = 'campus' } = filters;
 
   return spots
     .filter(spot => _matchesFilters(spot, filters))
-    .map(spot => ({
-      ...spot,
-      _distance: userLocation ? _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng }) : null,
-      _score: _effectiveScore(spot, confidence, userLocation),
-    }))
-    .sort((a, b) => {
-      // 1. Contextual priority (Campus mode)
-      if (viewMode === 'campus') {
-        if (a.on_campus !== b.on_campus) return a.on_campus ? -1 : 1;
-      }
-
-      // 2. Score (includes confidence and distance penalty)
-      return b._score - a._score;
-    });
+    .map(spot => {
+      const score = _effectiveScore(spot, confidence, userLocation, viewMode);
+      return {
+        ...spot,
+        _distance: userLocation ? _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng }) : null,
+        _score: score,
+        _isBusy: score < 0.15,
+      };
+    })
+    .sort((a, b) => b._score - a._score);
 }
 
 /**
@@ -136,7 +135,7 @@ function _matchesFilters(spot, filters) {
   return true;
 }
 
-function _effectiveScore(spot, confidence, userLocation) {
+function _effectiveScore(spot, confidence, userLocation, viewMode = 'campus') {
   const conf = confidence[spot.id];
   let baseScore = 0.5;
 
@@ -145,15 +144,28 @@ function _effectiveScore(spot, confidence, userLocation) {
     if (isValid) baseScore = conf.score ?? 0.5;
   }
 
+  // Soft on-campus bonus in campus mode.
+  if (viewMode === 'campus' && spot.on_campus) {
+    baseScore += 0.15;
+  }
+
+  // Recency bonus: confidence entry updated within the last 15 minutes.
+  if (conf?.updatedAt) {
+    const ageMs = Date.now() - new Date(conf.updatedAt).getTime();
+    if (ageMs < 15 * 60 * 1000) {
+      baseScore += 0.10;
+    }
+  }
+
   let walkPenalty = 0;
 
   if (userLocation && spot.lat !== undefined && spot.lng !== undefined) {
-    // 1. Calculate distance-based penalty (assuming 84m/min walking speed)
+    // Calculate distance-based penalty (assuming 84m/min walking speed)
     const distanceMeters = _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng });
     const walkMins      = distanceMeters / 84;
     walkPenalty         = 0.05 * walkMins;
   } else if (!spot.on_campus) {
-    // 2. Fallback to static walk_time_min for off-campus spots if GPS unavailable
+    // Fallback to static walk_time_min for off-campus spots if GPS unavailable
     walkPenalty = 0.05 * (spot.walk_time_min ?? 0);
   }
 

@@ -1,36 +1,42 @@
 /**
  * src/ui/suggestionsList.js
  *
- * Renders the "Top 3" suggested spots after a user clicks "Find My Spot".
- * Displays spot name, confidence, capacity, and amenities.
+ * Renders ranked spot suggestions after a user clicks "Find My Spot".
+ * Shows up to 5 results as rich cards with rank number, building eyebrow,
+ * spot name, score-coloured left border, walk time, capacity, amenity icons,
+ * and a "Go →" CTA. Busy/full spots get a red border and "Likely full" badge.
+ *
+ * Imported styles: src/styles/suggestionsList.css
  */
 
-import { X, Navigation, Users, Wifi, Zap, Volume2, Utensils } from 'lucide';
+import { X, Zap, Volume2, Utensils, Wifi } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
-import { formatConfidence } from '../utils/confidence.js';
 import { formatWalkTime } from '../utils/time.js';
 import { iconSvg } from './icons.js';
+
+import '../styles/suggestionsList.css';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** @type {Record<string, string>} */
+const CAPACITY_LABELS = {
+  solo:   '~1 person',
+  small:  '~8 ppl',
+  medium: '~20 ppl',
+  large:  '~40 ppl',
+};
 
 // ─── Logic ───────────────────────────────────────────────────────────────────
 
 /**
- * Capacity mapping for display text.
- */
-const CAPACITY_LABELS = {
-  'solo': '~1 person',
-  'small': '~8 ppl',
-  'medium': '~20 ppl',
-  'large': '~40 ppl'
-};
-
-/**
- * Take ranked spots and prepare the top 3 for display.
+ * Take ranked spots and prepare the top 5 for display.
+ * Annotates each spot with a `walkTimeLabel` if GPS distance is available.
  *
  * @param {object[]} rankedSpots
- * @returns {object[]} top 3 spots with walkTimeLabel
+ * @returns {object[]} top 5 spots with walkTimeLabel
  */
 export function formatSuggestions(rankedSpots) {
-  return rankedSpots.slice(0, 3).map(spot => {
+  return rankedSpots.slice(0, 5).map(spot => {
     const formatted = { ...spot };
     if (spot._distance !== undefined && spot._distance !== null) {
       formatted.walkTimeLabel = formatWalkTime(spot._distance);
@@ -42,10 +48,11 @@ export function formatSuggestions(rankedSpots) {
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 /**
- * Render the top suggestions into a container.
+ * Render the top suggestions into a container element.
  *
  * @param {HTMLElement} container
  * @param {object[]}    rankedSpots
+ * @returns {void}
  */
 export function renderSuggestionsList(container, rankedSpots) {
   const suggestions = formatSuggestions(rankedSpots);
@@ -54,23 +61,31 @@ export function renderSuggestionsList(container, rankedSpots) {
   container.appendChild(_buildSuggestionsList(suggestions));
 }
 
+// ─── Private ─────────────────────────────────────────────────────────────────
+
+/**
+ * Build the full suggestions list DOM tree.
+ *
+ * @param {object[]} suggestions
+ * @returns {HTMLElement}
+ */
 function _buildSuggestionsList(suggestions) {
   const wrapper = document.createElement('div');
   wrapper.className = 'suggestions-list';
 
-  // Header
   const header = document.createElement('div');
   header.className = 'suggestions-list__header';
-  
+
   const title = document.createElement('h2');
   title.className = 'suggestions-list__title';
   title.textContent = 'Top Suggestions';
-  
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'suggestions-list__close';
+  closeBtn.setAttribute('aria-label', 'Close suggestions');
   closeBtn.innerHTML = iconSvg(X, 20);
   closeBtn.addEventListener('click', () => {
-    emit(EVENTS.SPOT_DESELECTED); // Use existing event to reset UI to filters
+    emit(EVENTS.SPOT_DESELECTED);
   });
 
   header.appendChild(title);
@@ -85,82 +100,123 @@ function _buildSuggestionsList(suggestions) {
     return wrapper;
   }
 
-  // List
   const list = document.createElement('div');
   list.className = 'suggestions-list__items';
 
-  suggestions.forEach(spot => {
-    const item = document.createElement('div');
-    item.className = 'suggestion-item';
-    
-    // Top Row: Name + Confidence Badge
-    const topRow = document.createElement('div');
-    topRow.className = 'suggestion-item__col suggestion-item__col--top';
-
-    const name = document.createElement('h3');
-    name.className = 'suggestion-item__name';
-    name.textContent = spot.name;
-
-    const conf = formatConfidence(spot._score);
-    const confBadge = document.createElement('span');
-    confBadge.className = 'suggestion-item__badge';
-    
-    // Use the same confidence classes as defined in main.css for color consistency
-    if (spot._score >= 0.8) confBadge.classList.add('suggestion-item__badge--high');
-    else if (spot._score >= 0.5) confBadge.classList.add('suggestion-item__badge--mid');
-    else confBadge.classList.add('suggestion-item__badge--low');
-    
-    confBadge.textContent = `${conf.percent}% Match`;
-
-    topRow.appendChild(name);
-    topRow.appendChild(confBadge);
-
-    // Bottom Row: Capacity + Amenities + Navigate Button
-    const bottomRow = document.createElement('div');
-    bottomRow.className = 'suggestion-item__row suggestion-item__row--bottom';
-
-    // Left side of bottom row: Capacity
-    const capInfo = document.createElement('div');
-    capInfo.className = 'suggestion-item__cap';
-    const capLabel = CAPACITY_LABELS[spot.rough_capacity] || spot.rough_capacity;
-    capInfo.innerHTML = `${iconSvg(Users, 14)} <span>${capLabel}</span>`;
-
-    // Right side of bottom row: Amenities + Nav
-    const rightActions = document.createElement('div');
-    rightActions.className = 'suggestion-item__actions';
-
-    const amenities = document.createElement('div');
-    amenities.className = 'suggestion-item__amenities';
-    
-    if (spot.wifi_strength !== 'none') amenities.innerHTML += iconSvg(Wifi, 14);
-    if (spot.has_outlets) amenities.innerHTML += iconSvg(Zap, 14);
-    if (spot.noise_baseline === 'quiet') amenities.innerHTML += iconSvg(Volume2, 14);
-    if (spot.has_food) amenities.innerHTML += iconSvg(Utensils, 14);
-
-    const navBtn = document.createElement('button');
-    navBtn.className = 'suggestion-item__nav';
-    navBtn.innerHTML = `${iconSvg(Navigation, 14)} <span>Navigate</span>`;
-    navBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      emit(EVENTS.SPOT_SELECTED, { spotId: spot.id, navigate: true });
-    });
-
-    rightActions.appendChild(amenities);
-    rightActions.appendChild(navBtn);
-
-    bottomRow.appendChild(capInfo);
-    bottomRow.appendChild(rightActions);
-
-    item.appendChild(topRow);
-    item.appendChild(bottomRow);
-
-    item.addEventListener('click', () => {
-      emit(EVENTS.SPOT_SELECTED, { spotId: spot.id });
-    });
-
-    list.appendChild(item);
+  suggestions.forEach((spot, index) => {
+    list.appendChild(_buildCard(spot, index + 1));
   });
 
   wrapper.appendChild(list);
   return wrapper;
+}
+
+/**
+ * Build a single ranked suggestion card.
+ *
+ * @param {object} spot     - spot object annotated with _score, _isBusy, walkTimeLabel
+ * @param {number} rank     - 1-based rank position
+ * @returns {HTMLElement}
+ */
+function _buildCard(spot, rank) {
+  const isBusy = spot._isBusy === true;
+
+  // Score-based border colour modifier
+  let borderMod = 'free';
+  if (isBusy || spot._score < 0.15) borderMod = 'full';
+  else if (spot._score < 0.5)       borderMod = 'maybe';
+
+  const card = document.createElement('div');
+  card.className = `suggestion-item suggestion-item--${borderMod}`;
+
+  // Eyebrow: rank + building name
+  const eyebrow = document.createElement('div');
+  eyebrow.className = 'suggestion-item__eyebrow';
+
+  const rankEl = document.createElement('span');
+  rankEl.className = 'suggestion-item__rank';
+  rankEl.textContent = `#${rank}`;
+
+  const buildingEl = document.createElement('span');
+  buildingEl.className = 'suggestion-item__building';
+  buildingEl.textContent = spot.building ?? (spot.on_campus ? 'Campus' : 'Off campus');
+
+  eyebrow.appendChild(rankEl);
+  if (spot.building || spot.on_campus !== undefined) eyebrow.appendChild(buildingEl);
+  card.appendChild(eyebrow);
+
+  // Name row
+  const nameRow = document.createElement('div');
+  nameRow.className = 'suggestion-item__name-row';
+
+  const name = document.createElement('h3');
+  name.className = 'suggestion-item__name';
+  name.textContent = spot.name;
+
+  if (isBusy) {
+    const busyBadge = document.createElement('span');
+    busyBadge.className = 'suggestion-item__busy-badge';
+    busyBadge.textContent = 'Likely full';
+    nameRow.appendChild(name);
+    nameRow.appendChild(busyBadge);
+  } else {
+    nameRow.appendChild(name);
+  }
+
+  card.appendChild(nameRow);
+
+  // Footer row: walk time + capacity + amenities + Go button
+  const footer = document.createElement('div');
+  footer.className = 'suggestion-item__footer';
+
+  const meta = document.createElement('div');
+  meta.className = 'suggestion-item__meta';
+
+  if (spot.walkTimeLabel) {
+    const walkChip = document.createElement('span');
+    walkChip.className = 'suggestion-item__walk';
+    walkChip.textContent = spot.walkTimeLabel;
+    meta.appendChild(walkChip);
+  }
+
+  const capLabel = CAPACITY_LABELS[spot.rough_capacity] ?? spot.rough_capacity ?? '';
+  if (capLabel) {
+    const sep = document.createElement('span');
+    sep.className = 'suggestion-item__sep';
+    sep.setAttribute('aria-hidden', 'true');
+    sep.textContent = '·';
+
+    const cap = document.createElement('span');
+    cap.className = 'suggestion-item__cap';
+    cap.textContent = capLabel;
+
+    meta.appendChild(sep);
+    meta.appendChild(cap);
+  }
+
+  const amenities = document.createElement('span');
+  amenities.className = 'suggestion-item__amenities';
+  if (spot.noise_baseline === 'quiet') amenities.innerHTML += iconSvg(Volume2, 14);
+  if (spot.has_outlets)               amenities.innerHTML += iconSvg(Zap, 14);
+  if (spot.wifi_strength !== 'none')  amenities.innerHTML += iconSvg(Wifi, 14);
+  if (spot.has_food)                  amenities.innerHTML += iconSvg(Utensils, 14);
+  if (amenities.innerHTML) meta.appendChild(amenities);
+
+  const goBtn = document.createElement('button');
+  goBtn.className = 'suggestion-item__go';
+  goBtn.textContent = 'Go →';
+  goBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    emit(EVENTS.SPOT_SELECTED, { spotId: spot.id, navigate: true });
+  });
+
+  footer.appendChild(meta);
+  footer.appendChild(goBtn);
+  card.appendChild(footer);
+
+  card.addEventListener('click', () => {
+    emit(EVENTS.SPOT_SELECTED, { spotId: spot.id });
+  });
+
+  return card;
 }
