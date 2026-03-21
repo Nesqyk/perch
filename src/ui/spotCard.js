@@ -41,7 +41,7 @@ import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { iconSvg } from './icons.js';
 import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
-import { leaveGroup } from '../features/groups.js';
+import { leaveGroup, buildGroupJoinUrl } from '../features/groups.js';
 
 // ─── Group colour swatches ────────────────────────────────────────────────────
 
@@ -171,6 +171,13 @@ function _buildHeader(spot) {
     sub.className   = 'spot-card__subtitle';
     sub.textContent = parts.join(', ');
     text.appendChild(sub);
+  }
+
+  if (spot.discoverer_display_name) {
+    const meta       = document.createElement('p');
+    meta.className   = 'spot-card__subtitle';
+    meta.textContent = `Discovered by ${spot.discoverer_display_name}`;
+    text.appendChild(meta);
   }
 
   header.appendChild(text);
@@ -570,7 +577,7 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
 
       // Thumbs-up (heading join)
       const alreadyJoined = (groupPinJoins[pin.id] ?? []).some(
-        j => j.status === 'heading' && j.session_id === _mySessionId(),
+        j => j.status === 'heading' && j.user_id === getState().currentUser?.id,
       );
       const thumbBtn     = document.createElement('button');
       thumbBtn.type      = 'button';
@@ -614,7 +621,7 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
   copyBtn.setAttribute('aria-label', 'Copy invite code');
   copyBtn.innerHTML = iconSvg(Copy, 16);
   copyBtn.addEventListener('click', async () => {
-    const url = `${window.location.origin}${window.location.pathname}?group=${group.code}`;
+    const url = buildGroupJoinUrl(group.code);
     try {
       await navigator.clipboard.writeText(url);
       showToast('Invite link copied! Share it with your group.', 'success');
@@ -716,7 +723,15 @@ function _buildCreateForm(section, heading) {
   createBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
-    emit(EVENTS.UI_GROUP_CREATE, { name, displayName: name, color: _selectedColor, context: 'campus' });
+    const { viewMode, campuses, selectedCampusId } = getState();
+    const selectedCampus = campuses.find((campus) => campus.id === selectedCampusId) ?? null;
+    emit(EVENTS.UI_GROUP_CREATE, {
+      name,
+      displayName: name,
+      color: _selectedColor,
+      context: viewMode,
+      campusName: selectedCampus?.name ?? '',
+    });
   });
 
   const cancelBtn       = document.createElement('button');
@@ -890,14 +905,4 @@ function _toInitials(name) {
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('');
-}
-
-/**
- * Read the session id from localStorage (avoids circular import via store.js).
- *
- * @returns {string | null}
- */
-function _mySessionId() {
-  try { return localStorage.getItem('perch_session_id'); }
-  catch { return null; }
 }
