@@ -43,6 +43,9 @@ const _state = {
   /** The id of the currently selected campus. null = no campus constraint. */
   selectedCampusId: null,       // string (uuid) | null
 
+  /** Building catalogue for the selected campus in campus mode. */
+  buildings: [],                // Building[]
+
   /** Active filter selections driven by the filter panel. */
   filters: {
     groupSize:    null,         // 'solo' | 'small' | 'medium' | 'large' | null
@@ -102,6 +105,7 @@ const _state = {
     claimPending:       false,
     correctionPending:  false,
     groupPending:       false,
+    campusPending:      false,
     error:              null,   // string | null
   },
 
@@ -117,7 +121,7 @@ const _state = {
    * This session's member record for the current group.
    * null until group is joined.
    */
-  groupMember: null,            // { id, groupId, sessionId, displayName, scoutPoints } | null
+  groupMember: null,            // { id, groupId, userId, displayName, scoutPoints } | null
 
   /**
    * Live and saved pins for the current group, keyed by pin id.
@@ -141,6 +145,23 @@ const _state = {
    * Keyed by member id for fast lookup.
    */
   groupMembers: [],             // GroupMember[]
+
+  /**
+   * The currently active client-side route.
+   * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
+   * '/' is the Dashboard (map). '/profile' and '/group' are page views.
+   */
+  currentRoute: '/',            // '/' | '/profile' | '/group'
+
+  /**
+   * The authenticated Supabase user object, or null when signed out.
+   * Set via dispatch('AUTH_STATE_CHANGED') from src/api/auth.js.
+   * This is the single source of truth for auth state — nothing else in the
+   * app reads from supabase.auth.getUser() directly.
+   *
+   * @type {import('@supabase/supabase-js').User | null}
+   */
+  currentUser: null,            // User | null
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -218,7 +239,10 @@ export function dispatch(action, payload) {
     // ── Spot selection ───────────────────────────────────────────────────────
     case 'SELECT_SPOT': {
       _state.selectedSpotId = payload.spotId;
-      emit(EVENTS.SPOT_SELECTED, { spotId: payload.spotId });
+      emit(EVENTS.SPOT_SELECTED, {
+        spotId: payload.spotId,
+        navigate: payload.navigate ?? false,
+      });
       break;
     }
 
@@ -320,6 +344,12 @@ export function dispatch(action, payload) {
       break;
     }
 
+    case 'BUILDINGS_LOADED': {
+      _state.buildings = payload.buildings ?? [];
+      emit(EVENTS.BUILDINGS_LOADED, { buildings: _state.buildings });
+      break;
+    }
+
     // ── Groups ───────────────────────────────────────────────────────────────
     case 'GROUP_JOINED': {
       const { group, member } = payload;
@@ -362,7 +392,7 @@ export function dispatch(action, payload) {
       const { pin } = payload;
       _state.groupPins = { ..._state.groupPins, [pin.id]: pin };
       // Track our own live pin.
-      if (pin.session_id === _mySessionId() && pin.pin_type === 'live' && !pin.ended_at) {
+      if (pin.user_id === _state.currentUser?.id && pin.pin_type === 'live' && !pin.ended_at) {
         _state.myGroupPinId = pin.id;
       } else if (_state.myGroupPinId === pin.id && pin.ended_at) {
         _state.myGroupPinId = null;
@@ -397,6 +427,20 @@ export function dispatch(action, payload) {
       break;
     }
 
+    // ── Router ──────────────────────────────────────────────────────────────
+    case 'ROUTE_CHANGED': {
+      _state.currentRoute = payload.route;
+      emit(EVENTS.ROUTE_CHANGED, { route: payload.route });
+      break;
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    case 'AUTH_STATE_CHANGED': {
+      _state.currentUser = payload.user ?? null;
+      emit(EVENTS.AUTH_STATE_CHANGED, { user: _state.currentUser });
+      break;
+    }
+
     default:
       console.warn(`[store] Unknown action: "${action}"`);
   }
@@ -414,19 +458,7 @@ export function initStore() {
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
-/**
- * Read the session id from localStorage without importing session.js
- * (which would create a circular dependency through store → session → store).
- *
- * @returns {string | null}
- */
-function _mySessionId() {
-  try {
-    return localStorage.getItem('perch_session_id');
-  } catch {
-    return null;
-  }
-}
+
 
 /**
  * Build the shareable URL for a claimed spot.

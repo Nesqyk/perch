@@ -72,6 +72,7 @@ import { initClaim }            from './features/claim.js';
 import { initReportFull }       from './features/reportFull.js';
 import { initGroups }           from './features/groups.js';
 import { initGroupPins }        from './features/groupPins.js';
+import { initCampus }           from './features/campus.js';
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
 import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
-import { initBuildingPanel } from './ui/buildingPanel.js';
+import { initBuildingPanel, openBuildingPanel } from './ui/buildingPanel.js';
 import { initNavMenu }     from './ui/navMenu.js';
 import { initAuthModal }   from './ui/authModal.js';
 
@@ -145,9 +146,16 @@ async function boot() {
   try {
     const campuses = await fetchCampuses();
     dispatch('CAMPUSES_LOADED', { campuses });
-    const initialCampusId = getState().selectedCampusId;
-    if (initialCampusId) {
-      const buildings = await fetchBuildings(initialCampusId);
+
+    // ?campus= deep-link overrides the auto-selected campus.
+    const campusId = urlState.campusId ?? getState().selectedCampusId;
+    if (urlState.campusId && campusId) {
+      dispatch('CAMPUS_SELECTED', { campusId });
+    }
+
+    const activeCampusId = getState().selectedCampusId;
+    if (activeCampusId) {
+      const buildings = await fetchBuildings(activeCampusId);
       dispatch('BUILDINGS_LOADED', { buildings });
     }
   } catch (err) {
@@ -196,9 +204,20 @@ async function boot() {
   initSubmitSpotPanel();
   initBuildingPanel();
 
+  // ── 12.5. Open building panel from deep-link (?campus=&building=) ─────────────
+  // Must run after initBuildingPanel() (registers the listener) and after
+  // spots + claims are loaded so the room counts are correct.
+  if (urlState.buildingId) {
+    const buildingExists = getState().buildings.find(b => b.id === urlState.buildingId);
+    if (buildingExists) {
+      openBuildingPanel(urlState.buildingId);
+    }
+  }
+
   // ── 16–17. Group feature modules ─────────────────────────────────────────────
   initGroups();
   initGroupPins();
+  initCampus();
 
   // ── 18. Filter panel UI ───────────────────────────────────────────────────────
   const panelContent = document.getElementById('panel-content');

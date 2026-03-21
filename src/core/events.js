@@ -105,6 +105,7 @@ export const EVENTS = Object.freeze({
   // ── Map ──────────────────────────────────────────────────────────────────
   MAP_READY:              'map:ready',
   MAP_PIN_CLICKED:        'map:pinClicked',
+  MAP_BUILDING_CLICKED:   'map:buildingClicked',
 
   // ── Store: groups ────────────────────────────────────────────────────────
   GROUP_JOINED:           'state:groupJoined',
@@ -116,6 +117,7 @@ export const EVENTS = Object.freeze({
   // ── Store: campus ────────────────────────────────────────────────────────
   CAMPUSES_LOADED:        'state:campusesLoaded',
   CAMPUS_SELECTED:        'state:campusSelected',
+  BUILDINGS_LOADED:       'state:buildingsLoaded',
 
   // ── Store: groups ────────────────────────────────────────────────────────
   GROUP_MEMBERS_UPDATED:  'state:groupMembersUpdated',
@@ -131,4 +133,12 @@ export const EVENTS = Object.freeze({
   UI_GROUP_JOIN:               'ui:groupJoin',
   UI_SUBMIT_SPOT_REQUESTED:    'ui:submitSpotRequested',
   UI_CAMPUS_CHANGE_REQUESTED:  'ui:campusChangeRequested',
+  UI_CAMPUS_ADD_REQUESTED:     'ui:campusAddRequested',
+
+  // ── Auth ──────────────────────────────────────────────────────────────
+  AUTH_STATE_CHANGED:          'state:authChanged',
+  UI_LOGIN_REQUESTED:          'ui:loginRequested',
+
+  // ── Router ───────────────────────────────────────────────────────────────
+  ROUTE_CHANGED:               'state:routeChanged',
 });
