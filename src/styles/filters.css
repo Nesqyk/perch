@@ -25,9 +25,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
   margin-bottom: var(--space-1);
-  border-bottom: 1px solid var(--color-border);
 }
 
 .panel-brand__logo {
@@ -87,6 +86,28 @@
   border-color: var(--color-brand);
   color: var(--color-gray-900);
   font-weight: var(--font-bold);
+}
+
+/* ------------------------------------------------------------------
+   Context row — view-mode toggle + campus selector side by side
+   ------------------------------------------------------------------ */
+
+.filter-context-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* The view-mode toggle (Campus / City chips) stays compact */
+.filter-context-row__toggle {
+  flex-shrink: 0;
+}
+
+/* The campus selector fills the remaining width */
+.filter-context-row__campus {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------------
@@ -224,7 +245,6 @@
    ------------------------------------------------------------------ */
 
 .spot-card__group-section {
-  border-top: var(--border);
   padding-top: var(--space-3);
 }
 
@@ -238,4 +258,33 @@
   display: flex;
   gap: var(--space-2);
   margin-top: var(--space-1);
+}
+
+/* ------------------------------------------------------------------
+   Group accordion variant
+   A lighter visual weight than the Filters accordion — no outer border,
+   just a top separator, so it reads as a secondary section.
+   ------------------------------------------------------------------ */
+
+.group-accordion {
+  border: none;
+  border-top: var(--border);
+  border-radius: 0;
+  overflow: visible;
+}
+
+.group-accordion > summary.filter-accordion__summary {
+  padding-left: 0;
+  padding-right: 0;
+  background: transparent;
+}
+
+.group-accordion > summary.filter-accordion__summary:hover {
+  background: transparent;
+}
+
+.group-accordion .filter-accordion__body {
+  padding-left: 0;
+  padding-right: 0;
+  border-top: none;
 }

@@ -87,11 +87,10 @@ function _buildFilterForm() {
   form.className = 'filter-form';
 
   form.appendChild(_buildPanelBrand());
-  form.appendChild(_buildViewModeToggle());
-  form.appendChild(_buildCampusSelectorBox());
-  form.appendChild(_buildFilterAccordion());
+  form.appendChild(_buildContextRow());
   form.appendChild(_buildFindButton());
-  form.appendChild(_buildGroupSection());
+  form.appendChild(_buildFilterAccordion());
+  form.appendChild(_buildGroupAccordion());
 
   setTimeout(_syncFromState, 0);
   return form;
@@ -109,6 +108,32 @@ function _buildPanelBrand() {
     </div>
   `;
   return brand;
+}
+
+// ─── Context row (view-mode + campus selector) ────────────────────────────────
+
+/**
+ * Combined row: Campus/City toggle on the left, campus selector chips on the right.
+ * The campus selector column is hidden in City mode (handled by _syncFromState
+ * via the existing campusSelector visibility logic).
+ *
+ * @returns {HTMLElement}
+ */
+function _buildContextRow() {
+  const row     = document.createElement('div');
+  row.className = 'filter-context-row';
+
+  const toggleWrap     = document.createElement('div');
+  toggleWrap.className = 'filter-context-row__toggle';
+  toggleWrap.appendChild(_buildViewModeToggle());
+
+  const campusWrap     = document.createElement('div');
+  campusWrap.className = 'filter-context-row__campus';
+  campusWrap.appendChild(_buildCampusSelectorBox());
+
+  row.appendChild(toggleWrap);
+  row.appendChild(campusWrap);
+  return row;
 }
 
 // ─── View mode toggle ─────────────────────────────────────────────────────────
@@ -147,7 +172,7 @@ function _buildCampusSelectorBox() {
 function _buildFilterAccordion() {
   const details     = document.createElement('details');
   details.className = 'filter-accordion';
-  details.open      = true; // expanded by default
+  details.open      = false; // collapsed by default — badge shows active count
 
   // ── Summary row ────────────────────────────────────────────────────────────
   const summary     = document.createElement('summary');
@@ -293,6 +318,57 @@ function _buildFindButton() {
     emit(EVENTS.UI_FILTER_SUBMITTED, { filters: getState().filters });
   });
   return btn;
+}
+
+// ─── Group accordion ──────────────────────────────────────────────────────────
+
+/**
+ * Wraps the group create/join section (or the members view when already in a
+ * group) inside a collapsible accordion so it doesn't crowd the primary flow.
+ * When the user is already in a group the accordion opens automatically.
+ *
+ * @returns {HTMLElement}
+ */
+function _buildGroupAccordion() {
+  const { group } = getState();
+
+  // If already in a group, render the members section directly — no accordion.
+  if (group) {
+    return _buildGroupSection();
+  }
+
+  const details     = document.createElement('details');
+  details.className = 'filter-accordion group-accordion';
+  details.open      = false;
+
+  // ── Summary row ──────────────────────────────────────────────────────────
+  const summary     = document.createElement('summary');
+  summary.className = 'filter-accordion__summary';
+
+  const summaryLeft     = document.createElement('span');
+  summaryLeft.className = 'filter-accordion__summary-left';
+
+  const summaryLabel     = document.createElement('span');
+  summaryLabel.className = 'filter-accordion__title';
+  summaryLabel.textContent = 'Study with a group';
+
+  summaryLeft.appendChild(summaryLabel);
+
+  const chevron     = document.createElement('span');
+  chevron.className = 'filter-accordion__chevron';
+  chevron.innerHTML = iconSvg(ChevronDown, 16);
+
+  summary.appendChild(summaryLeft);
+  summary.appendChild(chevron);
+  details.appendChild(summary);
+
+  // ── Body ─────────────────────────────────────────────────────────────────
+  const body     = document.createElement('div');
+  body.className = 'filter-accordion__body';
+  body.appendChild(_buildGroupSection());
+  details.appendChild(body);
+
+  return details;
 }
 
 // ─── Group section ────────────────────────────────────────────────────────────
