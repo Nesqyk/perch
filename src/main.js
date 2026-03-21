@@ -7,7 +7,7 @@
  *
  *  1. Import CSS (Vite processes these as side-effect imports)
  *  2. initStore()       — prime the state container
- *  3. initSession()     — ensure anonymous session token in localStorage
+ *  3. initAuth()        — mount Supabase auth listener (syncs JWT to store)
  *  4. readUrlParams()   — parse ?spot=, ?size=, ?needs=, ?building=, ?join=
  *  5. Restore filters from URL into store
  *  6. loadGoogleMaps()  → initMap()  — load Maps SDK then mount the map
@@ -40,18 +40,17 @@ import './styles/sidebar.css';
 import './styles/bottomSheet.css';
 import './styles/spotCard.css';
 import './styles/filters.css';
+import './styles/navMenu.css';
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
 import { initStore, dispatch, getState } from './core/store.js';
 import { on, EVENTS }             from './core/events.js';
-import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode } from './core/router.js';
+import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode, initRouter, getCurrentRoute } from './core/router.js';
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
+// ─── API ──────────────────────────────────────────────────────────────────────
 
-import { initSession }  from './utils/session.js';
-
-// ─── Map ──────────────────────────────────────────────────────────────────────
+import { initAuth }          from './api/auth.js';
 
 import { loadGoogleMaps }          from './map/mapLoader.js';
 import { initMap, clearClickMarker } from './map/mapInit.js';
@@ -63,7 +62,7 @@ import { initMapControls }             from './map/mapControls.js';
 import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
 import { getProfile }        from './api/profile.js';
-import { fetchCampuses }     from './api/campuses.js';
+import { fetchCampuses, fetchBuildings } from './api/campuses.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
 // ─── Features ────────────────────────────────────────────────────────────────
@@ -79,9 +78,11 @@ import { initGroupPins }        from './features/groupPins.js';
 import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
-import { initHeader }      from './ui/header.js';
 import { showToast }       from './ui/toast.js';
 import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
+import { initBuildingPanel } from './ui/buildingPanel.js';
+import { initNavMenu }     from './ui/navMenu.js';
+import { initAuthModal }   from './ui/authModal.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -89,14 +90,26 @@ async function boot() {
   // ── 1 & 2. Prime state ──────────────────────────────────────────────────────
   initStore();
 
-  // ── 3. Anonymous session ─────────────────────────────────────────────────────
-  initSession();
+  // ── 3. Mount Auth ────────────────────────────────────────────────────────────
+  // initialises onAuthStateChange that syncs currentUser to store.
+  initAuth();
 
-  // ── 3.5 UI Header ──────────────────────────────────────────────────────────
-  initHeader();
+  // ── 3.5 UI Header + Router + Nav shell + AuthModal ─────────────────────────
+  initAuthModal();
 
-  // ── 3.6 Fetch user profile ──────────────────────────────────────────────────
-  getProfile().then(profile => {
+  // initRouter MUST come before initNavMenu so the hashchange listener is
+  // active when initNavMenu fires its first syncActiveState call.
+  initRouter((route) => {
+    dispatch('ROUTE_CHANGED', { route });
+  });
+  initNavMenu();
+
+  // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────
+  // getProfile() must run AFTER onAuthStateChange fires (which is async), so
+  // we wire it here rather than calling it synchronously after initAuth().
+  on(EVENTS.AUTH_STATE_CHANGED, async (e) => {
+    if (!e.detail.user) return;
+    const profile = await getProfile();
     if (profile?.nickname) {
       dispatch('SET_NICKNAME', profile.nickname);
     }
@@ -132,6 +145,11 @@ async function boot() {
   try {
     const campuses = await fetchCampuses();
     dispatch('CAMPUSES_LOADED', { campuses });
+    const initialCampusId = getState().selectedCampusId;
+    if (initialCampusId) {
+      const buildings = await fetchBuildings(initialCampusId);
+      dispatch('BUILDINGS_LOADED', { buildings });
+    }
   } catch (err) {
     // Non-fatal — app still works with default CTU bounds baked into mapInit.
     console.warn('[main] fetchCampuses failed:', err);
@@ -176,6 +194,7 @@ async function boot() {
   initClaim();
   initReportFull();
   initSubmitSpotPanel();
+  initBuildingPanel();
 
   // ── 16–17. Group feature modules ─────────────────────────────────────────────
   initGroups();
@@ -225,6 +244,11 @@ async function boot() {
     }
   });
 
+  on(EVENTS.CAMPUS_SELECTED, async (e) => {
+    const buildings = await fetchBuildings(e.detail.campusId);
+    dispatch('BUILDINGS_LOADED', { buildings });
+  });
+
   // ── 23. ?join= URL param → pre-fill filter panel join form ──────────────────
   if (groupCode) {
     // Clear the join code from the URL bar so a refresh doesn't re-trigger.
@@ -239,7 +263,7 @@ async function boot() {
   on(EVENTS.UI_PANEL_CLOSED, clearClickMarker);
   on(EVENTS.SPOT_SELECTED, clearClickMarker);
 
-  console.warn('[Perch] App ready.');
+  console.warn('[Perch] App ready. Route:', getCurrentRoute());
 }
 
 // ─── Geolocation helper ──────────────────────────────────────────────────────
