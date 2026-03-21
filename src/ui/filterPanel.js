@@ -1,10 +1,13 @@
 /**
  * src/ui/filterPanel.js
  *
- * Renders and manages the filter form: view mode toggle, campus selector,
- * a collapsible "Filters" accordion (group size chips, amenity chips,
- * near-building dropdown), the "Find My Spot" CTA, and the compact
- * inline Create / Join a Group section.
+ * Renders and manages the filter form: a two-tab layout ("Find" | "Group")
+ * that reduces vertical clutter by keeping spot-finding controls separate
+ * from group management.
+ *
+ * Find tab:  view mode toggle → campus selector → "Find My Spot" CTA →
+ *            collapsible filter accordion (group size, amenities, near building).
+ * Group tab: create / join a group form, or members section if already in one.
  *
  * This module owns the rendering of the filter UI inside #panel-content.
  * It emits EVENTS.UI_FILTER_SUBMITTED when the user taps "Find My Spot".
@@ -47,6 +50,9 @@ let _selectedColor = _GROUP_SWATCHES[0];
 /** @type {'create' | 'join'} Which sub-form is active. */
 let _groupSubForm = 'create';
 
+/** @type {'find' | 'group'} Active tab — persists across re-renders. */
+let _activeTab = 'find';
+
 const _AMENITY_CHIPS = [
   { key: 'quiet',  icon: '🔇', label: 'Quiet'   },
   { key: 'outlet', icon: '⚡', label: 'Outlets'  },
@@ -87,10 +93,8 @@ function _buildFilterForm() {
   form.className = 'filter-form';
 
   form.appendChild(_buildPanelBrand());
-  form.appendChild(_buildContextRow());
-  form.appendChild(_buildFindButton());
-  form.appendChild(_buildFilterAccordion());
-  form.appendChild(_buildGroupAccordion());
+  form.appendChild(_buildTabRow(form));
+  form.appendChild(_buildTabBody());
 
   setTimeout(_syncFromState, 0);
   return form;
@@ -110,30 +114,69 @@ function _buildPanelBrand() {
   return brand;
 }
 
-// ─── Context row (view-mode + campus selector) ────────────────────────────────
+// ─── Tab row ─────────────────────────────────────────────────────────────────
 
 /**
- * Combined row: Campus/City toggle on the left, campus selector chips on the right.
- * The campus selector column is hidden in City mode (handled by _syncFromState
- * via the existing campusSelector visibility logic).
- *
+ * @param {HTMLElement} form  The parent form element, used to update the tab body.
  * @returns {HTMLElement}
  */
-function _buildContextRow() {
+function _buildTabRow(form) {
   const row     = document.createElement('div');
-  row.className = 'filter-context-row';
+  row.className = 'filter-tabs';
 
-  const toggleWrap     = document.createElement('div');
-  toggleWrap.className = 'filter-context-row__toggle';
-  toggleWrap.appendChild(_buildViewModeToggle());
+  [{ key: 'find', label: 'Find' }, { key: 'group', label: 'Group' }].forEach(({ key, label }) => {
+    const btn       = document.createElement('button');
+    btn.type        = 'button';
+    btn.className   = `filter-tab${_activeTab === key ? ' filter-tab--active' : ''}`;
+    btn.dataset.tab = key;
+    btn.textContent = label;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(_activeTab === key));
 
-  const campusWrap     = document.createElement('div');
-  campusWrap.className = 'filter-context-row__campus';
-  campusWrap.appendChild(_buildCampusSelectorBox());
+    btn.addEventListener('click', () => {
+      if (_activeTab === key) return;
+      _activeTab = /** @type {'find'|'group'} */ (key);
 
-  row.appendChild(toggleWrap);
-  row.appendChild(campusWrap);
+      // Update tab button states
+      row.querySelectorAll('.filter-tab').forEach((t) => {
+        const active = t.dataset.tab === key;
+        t.classList.toggle('filter-tab--active', active);
+        t.setAttribute('aria-selected', String(active));
+      });
+
+      // Swap tab body
+      const existing = form.querySelector('.filter-tab-body');
+      const next     = _buildTabBody();
+      if (existing) {
+        existing.replaceWith(next);
+      } else {
+        form.appendChild(next);
+      }
+      _syncFromState();
+    });
+
+    row.appendChild(btn);
+  });
+
   return row;
+}
+
+// ─── Tab body ─────────────────────────────────────────────────────────────────
+
+function _buildTabBody() {
+  const body     = document.createElement('div');
+  body.className = 'filter-tab-body';
+
+  if (_activeTab === 'find') {
+    body.appendChild(_buildViewModeToggle());
+    body.appendChild(_buildCampusSelectorBox());
+    body.appendChild(_buildFindButton());
+    body.appendChild(_buildFilterAccordion());
+  } else {
+    body.appendChild(_buildGroupSection());
+  }
+
+  return body;
 }
 
 // ─── View mode toggle ─────────────────────────────────────────────────────────
@@ -172,7 +215,7 @@ function _buildCampusSelectorBox() {
 function _buildFilterAccordion() {
   const details     = document.createElement('details');
   details.className = 'filter-accordion';
-  details.open      = false; // collapsed by default — badge shows active count
+  details.open      = false; // collapsed by default
 
   // ── Summary row ────────────────────────────────────────────────────────────
   const summary     = document.createElement('summary');
@@ -318,57 +361,6 @@ function _buildFindButton() {
     emit(EVENTS.UI_FILTER_SUBMITTED, { filters: getState().filters });
   });
   return btn;
-}
-
-// ─── Group accordion ──────────────────────────────────────────────────────────
-
-/**
- * Wraps the group create/join section (or the members view when already in a
- * group) inside a collapsible accordion so it doesn't crowd the primary flow.
- * When the user is already in a group the accordion opens automatically.
- *
- * @returns {HTMLElement}
- */
-function _buildGroupAccordion() {
-  const { group } = getState();
-
-  // If already in a group, render the members section directly — no accordion.
-  if (group) {
-    return _buildGroupSection();
-  }
-
-  const details     = document.createElement('details');
-  details.className = 'filter-accordion group-accordion';
-  details.open      = false;
-
-  // ── Summary row ──────────────────────────────────────────────────────────
-  const summary     = document.createElement('summary');
-  summary.className = 'filter-accordion__summary';
-
-  const summaryLeft     = document.createElement('span');
-  summaryLeft.className = 'filter-accordion__summary-left';
-
-  const summaryLabel     = document.createElement('span');
-  summaryLabel.className = 'filter-accordion__title';
-  summaryLabel.textContent = 'Study with a group';
-
-  summaryLeft.appendChild(summaryLabel);
-
-  const chevron     = document.createElement('span');
-  chevron.className = 'filter-accordion__chevron';
-  chevron.innerHTML = iconSvg(ChevronDown, 16);
-
-  summary.appendChild(summaryLeft);
-  summary.appendChild(chevron);
-  details.appendChild(summary);
-
-  // ── Body ─────────────────────────────────────────────────────────────────
-  const body     = document.createElement('div');
-  body.className = 'filter-accordion__body';
-  body.appendChild(_buildGroupSection());
-  details.appendChild(body);
-
-  return details;
 }
 
 // ─── Group section ────────────────────────────────────────────────────────────

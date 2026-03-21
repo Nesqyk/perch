@@ -26,7 +26,8 @@
   align-items: center;
   gap: var(--space-3);
   padding-bottom: var(--space-2);
-  margin-bottom: var(--space-1);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .panel-brand__logo {
@@ -86,28 +87,6 @@
   border-color: var(--color-brand);
   color: var(--color-gray-900);
   font-weight: var(--font-bold);
-}
-
-/* ------------------------------------------------------------------
-   Context row — view-mode toggle + campus selector side by side
-   ------------------------------------------------------------------ */
-
-.filter-context-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* The view-mode toggle (Campus / City chips) stays compact */
-.filter-context-row__toggle {
-  flex-shrink: 0;
-}
-
-/* The campus selector fills the remaining width */
-.filter-context-row__campus {
-  flex: 1;
-  min-width: 0;
 }
 
 /* ------------------------------------------------------------------
@@ -245,6 +224,7 @@
    ------------------------------------------------------------------ */
 
 .spot-card__group-section {
+  border-top: var(--border);
   padding-top: var(--space-3);
 }
 
@@ -261,30 +241,49 @@
 }
 
 /* ------------------------------------------------------------------
-   Group accordion variant
-   A lighter visual weight than the Filters accordion — no outer border,
-   just a top separator, so it reads as a secondary section.
+   Tab row — Find | Group
    ------------------------------------------------------------------ */
 
-.group-accordion {
+.filter-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filter-tab {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: none;
   border: none;
-  border-top: var(--border);
-  border-radius: 0;
-  overflow: visible;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  margin-bottom: -1px; /* overlap the container border-bottom */
 }
 
-.group-accordion > summary.filter-accordion__summary {
-  padding-left: 0;
-  padding-right: 0;
-  background: transparent;
+.filter-tab:hover {
+  color: var(--color-text);
 }
 
-.group-accordion > summary.filter-accordion__summary:hover {
-  background: transparent;
+.filter-tab--active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-brand);
+  font-weight: var(--font-bold);
 }
 
-.group-accordion .filter-accordion__body {
-  padding-left: 0;
-  padding-right: 0;
-  border-top: none;
+/* ------------------------------------------------------------------
+   Tab body
+   ------------------------------------------------------------------ */
+
+.filter-tab-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
