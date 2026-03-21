@@ -3,21 +3,13 @@
  *
  * Read/write operations for `groups` and `group_members` tables.
  *
- * Groups are private squads identified by a 4-character join code.
- * Membership is anonymous — tied to the session_id from localStorage.
- *
- * All functions return plain objects; no Supabase types leak out.
+ * Membership is now driven by Supabase Auth (auth.uid()).
+ * The client no longer passes an explicit session or user ID; the DB
+ * injects auth.uid() using `default auth.uid()` on insert.
  */
 
-import { supabase }     from './supabaseClient.js';
-import { getSessionId } from '../utils/session.js';
+import { supabase } from './supabaseClient.js';
 
-// ─── Group palette ────────────────────────────────────────────────────────────
-
-/**
- * Curated palette for auto-assigned group colours.
- * Chosen to be visually distinct on the CartoDB Positron tile layer.
- */
 export const GROUP_COLORS = [
   '#7c3aed', // violet
   '#db2777', // pink
@@ -29,24 +21,19 @@ export const GROUP_COLORS = [
   '#4f46e5', // indigo
 ];
 
-// ─── Create ───────────────────────────────────────────────────────────────────
-
 /**
  * Create a new group and immediately join it as the creator.
  *
- * Generates a random 4-char uppercase join code; retries once on collision.
- * Auto-assigns a colour from GROUP_COLORS based on the group's name hash.
- *
- * @param {{ name: string, displayName: string, context?: 'campus' | 'city' }} params
+ * @param {{ name: string, displayName: string, context?: string, campusId?: string | null }} params
  * @returns {Promise<{ group: object | null, member: object | null, error: string | null }>}
  */
-export async function createGroup({ name, displayName, context = 'campus' }) {
+export async function createGroup({ name, displayName, context = 'campus', campusId = null }) {
   const code  = _randomCode();
   const color = GROUP_COLORS[_nameHash(name) % GROUP_COLORS.length];
 
   const { data: group, error: gErr } = await supabase
     .from('groups')
-    .insert({ name, code, color, context })
+    .insert({ name, code, color, context, campus_id: campusId })
     .select()
     .single();
 
@@ -61,10 +48,8 @@ export async function createGroup({ name, displayName, context = 'campus' }) {
   return { group, member, error: null };
 }
 
-// ─── Join ─────────────────────────────────────────────────────────────────────
-
 /**
- * Join an existing group by its 4-character code.
+ * Join an existing group by its code.
  *
  * @param {{ code: string, displayName: string }} params
  * @returns {Promise<{ group: object | null, member: object | null, error: string | null }>}
@@ -72,7 +57,7 @@ export async function createGroup({ name, displayName, context = 'campus' }) {
 export async function joinGroup({ code, displayName }) {
   const { data: group, error: gErr } = await supabase
     .from('groups')
-    .select('id, name, code, color, context')
+    .select('id, name, code, color, context, campus_id')
     .eq('code', code.toUpperCase())
     .single();
 
@@ -87,8 +72,6 @@ export async function joinGroup({ code, displayName }) {
   return { group, member, error: null };
 }
 
-// ─── Fetch members ────────────────────────────────────────────────────────────
-
 /**
  * Fetch all members for a group.
  *
@@ -98,7 +81,7 @@ export async function joinGroup({ code, displayName }) {
 export async function fetchGroupMembers(groupId) {
   const { data, error } = await supabase
     .from('group_members')
-    .select('id, group_id, session_id, display_name, scout_points, joined_at')
+    .select('id, group_id, user_id, display_name, scout_points, joined_at')
     .eq('group_id', groupId)
     .order('joined_at');
 
@@ -110,24 +93,23 @@ export async function fetchGroupMembers(groupId) {
   return data ?? [];
 }
 
-// ─── Private helpers ──────────────────────────────────────────────────────────
-
 /**
- * Insert a member row; handles the case where the session is already a member
- * by returning the existing row (upsert on unique constraint).
+ * Upsert a member row for the current user.
+ *
+ * Uses onConflict targeting the (group_id, user_id) unique constraint so that
+ * re-joining an existing group updates display_name rather than erroring or
+ * inserting a duplicate.
  *
  * @param {string} groupId
  * @param {string} displayName
  * @returns {Promise<{ member: object | null, error: string | null }>}
  */
 async function _insertMember(groupId, displayName) {
-  const sessionId = getSessionId();
-
-  const { data: member, error } = await supabase
+  const { data, error } = await supabase
     .from('group_members')
     .upsert(
-      { group_id: groupId, session_id: sessionId, display_name: displayName },
-      { onConflict: 'group_id,session_id', ignoreDuplicates: false }
+      { group_id: groupId, display_name: displayName },
+      { onConflict: 'group_id,user_id', ignoreDuplicates: false },
     )
     .select()
     .single();
@@ -137,16 +119,11 @@ async function _insertMember(groupId, displayName) {
     return { member: null, error: error.message };
   }
 
-  return { member, error: null };
+  return { member: data, error: null };
 }
 
-/**
- * Generate a random 4-character uppercase alphanumeric join code.
- *
- * @returns {string}
- */
 function _randomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // omit I, O, 0, 1
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code = '';
   for (let i = 0; i < 4; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
@@ -154,12 +131,6 @@ function _randomCode() {
   return code;
 }
 
-/**
- * Simple hash of a string to an integer — used for colour selection.
- *
- * @param {string} str
- * @returns {number}
- */
 function _nameHash(str) {
   let h = 0;
   for (let i = 0; i < str.length; i++) {
