@@ -2,29 +2,28 @@
  * src/api/profile.js
  *
  * Read/write operations for the `user_profiles` table.
- * Users are identified by their browser's anonymous session ID.
+ *
+ * Users are now identified by their authenticated Supabase user id (auth.uid()).
+ * The RLS policy restricts reads and writes to the owning user only, so the
+ * client sends no identity — the JWT handles it automatically.
  */
 
-import { supabase }   from './supabaseClient.js';
-import { getSessionId } from '../utils/session.js';
+import { supabase } from './supabaseClient.js';
 
 /**
- * Fetch the user's nickname from the database.
+ * Fetch the authenticated user's profile row.
+ * Returns null when unauthenticated or no profile row exists yet.
  *
- * @returns {Promise<object | null>} { session_id, nickname } or null
+ * @returns {Promise<{ user_id: string, nickname: string } | null>}
  */
 export async function getProfile() {
-  const sessionId = getSessionId();
-  if (!sessionId) return null;
-
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('session_id, nickname')
-    .eq('session_id', sessionId)
+    .select('user_id, nickname')
     .single();
 
   if (error) {
-    // PGRST116 is the "no rows found" error code for .single()
+    // PGRST116 = no rows found (new user before trigger fires, or unauthenticated).
     if (error.code !== 'PGRST116') {
       console.error('[profile] getProfile error:', error.message);
     }
@@ -35,21 +34,28 @@ export async function getProfile() {
 }
 
 /**
- * Create or update the user's nickname in the database.
+ * Update the authenticated user's nickname.
+ *
+ * The profile row is auto-created by the on_auth_user_created DB trigger
+ * (seeded from Google display name). This function just updates the nickname.
+ *
+ * Returns an error string when called without an active session — the caller
+ * must not rely solely on RLS silence to detect this case.
  *
  * @param {string} nickname
  * @returns {Promise<{ error: string | null }>}
  */
 export async function upsertProfile(nickname) {
-  const sessionId = getSessionId();
-  if (!sessionId) return { error: 'No session id' };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return { error: 'Not authenticated.' };
+  }
 
+  // RLS scopes this UPDATE to auth.uid() automatically.
   const { error } = await supabase
     .from('user_profiles')
-    .upsert({
-      session_id: sessionId,
-      nickname:   nickname,
-    });
+    .update({ nickname })
+    .eq('user_id', user.id);
 
   if (error) {
     console.error('[profile] upsertProfile error:', error.message);
