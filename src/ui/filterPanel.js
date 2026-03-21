@@ -6,7 +6,7 @@
  * from group management.
  *
  * Find tab:  view mode toggle → campus selector → "Find My Spot" CTA →
- *            collapsible filter accordion (group size, amenities, near building).
+ *            filter section (group size, amenities, near building — always visible).
  * Group tab: create / join a group form, or members section if already in one.
  *
  * This module owns the rendering of the filter UI inside #panel-content.
@@ -19,7 +19,7 @@ import { on, emit, EVENTS }      from '../core/events.js';
 import { getState, dispatch }    from '../core/store.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
 import { LogOut, Copy, Link,
-         ChevronDown, Search }   from 'lucide';
+         Search }                from 'lucide';
 import { openModal }             from './modal.js';
 import { showToast }             from './toast.js';
 import { iconSvg }               from './icons.js';
@@ -210,43 +210,11 @@ function _buildCampusSelectorBox() {
   return container;
 }
 
-// ─── Filters accordion ───────────────────────────────────────────────────────
+// ─── Filters section ─────────────────────────────────────────────────────────
 
 function _buildFilterAccordion() {
-  const details     = document.createElement('details');
-  details.className = 'filter-accordion';
-  details.open      = false; // collapsed by default
-
-  // ── Summary row ────────────────────────────────────────────────────────────
-  const summary     = document.createElement('summary');
-  summary.className = 'filter-accordion__summary';
-
-  const summaryLeft     = document.createElement('span');
-  summaryLeft.className = 'filter-accordion__summary-left';
-
-  const summaryLabel     = document.createElement('span');
-  summaryLabel.className = 'filter-accordion__title';
-  summaryLabel.textContent = 'Filters';
-
-  const badge     = document.createElement('span');
-  badge.className = 'filter-accordion__badge';
-  badge.id        = 'filter-accordion-badge';
-  badge.hidden    = true;
-
-  summaryLeft.appendChild(summaryLabel);
-  summaryLeft.appendChild(badge);
-
-  const chevron     = document.createElement('span');
-  chevron.className = 'filter-accordion__chevron';
-  chevron.innerHTML = iconSvg(ChevronDown, 16);
-
-  summary.appendChild(summaryLeft);
-  summary.appendChild(chevron);
-  details.appendChild(summary);
-
-  // ── Body ───────────────────────────────────────────────────────────────────
   const body     = document.createElement('div');
-  body.className = 'filter-accordion__body';
+  body.className = 'filter-section';
 
   // Group size
   const sizeLabel     = document.createElement('p');
@@ -272,8 +240,7 @@ function _buildFilterAccordion() {
   nearRow.appendChild(_buildBuildingDropdown());
   body.appendChild(nearRow);
 
-  details.appendChild(body);
-  return details;
+  return body;
 }
 
 // ─── Group size chips ─────────────────────────────────────────────────────────
@@ -572,14 +539,6 @@ function _syncFromState() {
     } else {
       sel.value = filters.nearBuilding ?? '';
     }
-  }
-
-  // Accordion badge — count of active filters
-  const badge = document.getElementById('filter-accordion-badge');
-  if (badge) {
-    const count = (filters.groupSize ? 1 : 0) + filters.needs.length + (filters.nearBuilding ? 1 : 0);
-    badge.textContent = `${count} active`;
-    badge.hidden = count === 0;
   }
 }
 
