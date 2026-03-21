@@ -244,27 +244,35 @@ function _buildCampusCard(campus, stat, selectedCampusId, isCity, userLocation) 
     : 0;
   const occupancyPct = Math.round(occupancyFraction * 100);
 
+  // Occupancy bar colour modifier: green < 50 %, yellow 50–80 %, red > 80 %
+  const occupancyMod = occupancyPct >= 80 ? 'campus-card__occupancy-bar--full'
+    : occupancyPct >= 50 ? 'campus-card__occupancy-bar--high'
+    : '';
+
   card.innerHTML = /* html */`
-    ${isNearest
-      ? `<span class="campus-card__near-badge">${iconSvg(Navigation, 10)} Near you</span>`
-      : ''}
-    ${_statusBadgeHtml(campus)}
+    <div class="campus-card__header">
+      ${isNearest
+        ? `<span class="campus-card__near-badge">${iconSvg(Navigation, 10)} Near you</span>`
+        : ''}
+      ${_statusBadgeHtml(campus)}
+    </div>
     <span class="campus-card__name">${_escHtml(campus.name)}</span>
     ${campus.city
       ? `<span class="campus-card__city">${_escHtml(campus.city)}</span>`
       : ''}
+    <div class="campus-card__divider"></div>
     <div class="campus-card__stats">
       <span class="campus-card__stat">
-        ${iconSvg(Bookmark, 12)}
+        <span class="campus-card__stat-icon">${iconSvg(Bookmark, 11)}</span>
         ${s.spotCount} ${s.spotCount === 1 ? 'spot' : 'spots'}
       </span>
       <span class="campus-card__stat">
-        ${iconSvg(Users, 12)}
+        <span class="campus-card__stat-icon">${iconSvg(Users, 11)}</span>
         ${s.liveClaimantCount} active now
       </span>
       ${s.spotCount > 0 ? /* html */`
         <div class="campus-card__occupancy" title="${occupancyPct}% occupied">
-          <div class="campus-card__occupancy-bar" style="width:${occupancyPct}%"></div>
+          <div class="campus-card__occupancy-bar ${occupancyMod}" style="width:${occupancyPct}%"></div>
         </div>
       ` : ''}
     </div>
@@ -300,7 +308,7 @@ function _buildAddCard(query, addForm, searchInput, cardRow) {
   card.type      = 'button';
   card.className = 'campus-card campus-card--add';
   card.innerHTML = /* html */`
-    ${iconSvg(Plus, 16)}
+    <div class="campus-card__add-icon">${iconSvg(Plus, 16)}</div>
     <span class="campus-card__add-label">${_escHtml(label)}</span>
   `;
 
