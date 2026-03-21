@@ -8,30 +8,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { supabase } from '../../src/api/supabaseClient.js';
 
-// ─── Mock Supabase and session ────────────────────────────────────────────────
+// ─── Mock Supabase ────────────────────────────────────────────────────────────
 
 vi.mock('../../src/api/supabaseClient.js', () => {
   const mockSingle = vi.fn();
   const mockEq     = vi.fn().mockReturnThis();
+  const mockUpdate = vi.fn().mockReturnThis();
   const mockSelect = vi.fn().mockReturnThis();
-  const mockUpsert = vi.fn().mockReturnThis();
   const mockFrom   = vi.fn(() => ({
     select: mockSelect,
-    upsert: mockUpsert,
+    update: mockUpdate,
     eq:     mockEq,
     single: mockSingle,
   }));
 
+  const mockGetUser = vi.fn();
+
   return {
     supabase: {
       from: mockFrom,
+      auth: {
+        getUser: mockGetUser,
+      },
     },
   };
 });
-
-vi.mock('../../src/utils/session.js', () => ({
-  getSessionId: vi.fn(() => 'test-session-id'),
-}));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -44,14 +45,13 @@ describe('profile API', () => {
 
   describe('getProfile', () => {
     it('returns the profile data on success', async () => {
-      const mockData = { session_id: 'test-session-id', nickname: 'TestUser' };
+      const mockData = { user_id: 'test-user-id', nickname: 'TestUser' };
       const fromResult = supabase.from('user_profiles');
       fromResult.single.mockResolvedValue({ data: mockData, error: null });
 
       const result = await getProfile();
 
       expect(supabase.from).toHaveBeenCalledWith('user_profiles');
-      expect(fromResult.eq).toHaveBeenCalledWith('session_id', 'test-session-id');
       expect(result).toEqual(mockData);
     });
 
@@ -78,28 +78,37 @@ describe('profile API', () => {
   });
 
   describe('upsertProfile', () => {
-    it('calls upsert with the correct data', async () => {
+    it('returns an error when unauthenticated', async () => {
+      supabase.auth.getUser.mockResolvedValue({ data: { user: null } });
+
+      const result = await upsertProfile('NewNickname');
+
+      expect(result.error).toBe('Not authenticated.');
+      expect(supabase.from).not.toHaveBeenCalled();
+    });
+
+    it('calls update with the correct data', async () => {
+      supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'uid-1' } } });
       const fromResult = supabase.from('user_profiles');
-      fromResult.upsert.mockResolvedValue({ error: null });
+      fromResult.eq.mockResolvedValue({ error: null });
 
       const result = await upsertProfile('NewNickname');
 
       expect(supabase.from).toHaveBeenCalledWith('user_profiles');
-      expect(fromResult.upsert).toHaveBeenCalledWith({
-        session_id: 'test-session-id',
-        nickname:   'NewNickname',
-      });
+      expect(fromResult.update).toHaveBeenCalledWith({ nickname: 'NewNickname' });
+      expect(fromResult.eq).toHaveBeenCalledWith('user_id', 'uid-1');
       expect(result.error).toBeNull();
     });
 
     it('returns error message on failure', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'uid-1' } } });
       const fromResult = supabase.from('user_profiles');
-      fromResult.upsert.mockResolvedValue({ error: { message: 'Upsert failed' } });
+      fromResult.eq.mockResolvedValue({ error: { message: 'Update failed' } });
 
       const result = await upsertProfile('FailName');
 
-      expect(result.error).toBe('Upsert failed');
+      expect(result.error).toBe('Update failed');
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
