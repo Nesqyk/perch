@@ -1413,6 +1413,14 @@ a {
     text-align: center;
   }
 
+  /* Shown instead of the Confirm button when the user submitted the room. */
+  .campus-room-card__own-badge {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    font-style: italic;
+    white-space: nowrap;
+  }
+
   @media (max-width: 767px) {
     .campus-building-panel__controls {
       grid-template-columns: 1fr;

@@ -6,6 +6,11 @@
  * Clicking a building marker opens a room directory with search, status
  * filters, pending peer-review cards, and an inline add-room flow.
  * Clicking an empty campus area opens the add-building flow.
+ *
+ * Self-confirm guard: users cannot confirm a building or room submission
+ * that they created in the current session. The sets below track IDs
+ * created this session so the "Confirm" UI is hidden for the submitter.
+ * (A future DB column `submitted_by_user_id` would make this persistent.)
  */
 
 import { on, emit, EVENTS } from '../core/events.js';
@@ -28,6 +33,22 @@ import { Link } from 'lucide';
 
 const OVERLAY_ID = 'submit-modal-overlay';
 const CONTENT_ID = 'submit-modal-content';
+
+/**
+ * Building IDs created by this browser session.
+ * Used to hide the "Confirm Building" button for the submitter.
+ *
+ * @type {Set<string>}
+ */
+const _myCreatedBuildingIds = new Set();
+
+/**
+ * Spot-submission IDs created by this browser session.
+ * Used to hide per-row "Confirm" buttons for the submitter.
+ *
+ * @type {Set<string>}
+ */
+const _myCreatedSubmissionIds = new Set();
 
 /**
  * Wire the building-first campus listeners.
@@ -177,6 +198,7 @@ function _buildAddBuildingForm(lat, lng) {
     }
 
     await confirmBuilding(data.id);
+    _myCreatedBuildingIds.add(data.id);
     await _refreshBuildings(selectedCampusId);
     showToast(`"${name}" added. One more confirmation will verify it.`, 'success');
     _closeModal();
@@ -239,7 +261,7 @@ function _buildBuildingPanel(building, pendingSubmissions) {
 
   wrap.querySelector('.spot-card__close')?.addEventListener('click', _closeModal);
 
-  if (building.verification_status === 'pending') {
+  if (building.verification_status === 'pending' && !_myCreatedBuildingIds.has(building.id)) {
     const verifyRow = document.createElement('div');
     verifyRow.className = 'campus-building-panel__verify';
     verifyRow.innerHTML = /* html */`
@@ -324,7 +346,10 @@ function _buildBuildingPanel(building, pendingSubmissions) {
             <strong>${_escapeHtml(submission.spot_name)}</strong>
             <div class="campus-room-card__meta">${_escapeHtml(submission.floor || 'Floor not set')} • ${submission.confirmation_count ?? 0}/2 confirmations</div>
           </div>
-          <button type="button" class="btn btn-outline" data-confirm-submission="${submission.id}">Confirm</button>
+          ${_myCreatedSubmissionIds.has(submission.id)
+            ? '<span class="campus-room-card__own-badge">Awaiting peer confirmation</span>'
+            : `<button type="button" class="btn btn-outline" data-confirm-submission="${submission.id}">Confirm</button>`
+          }
         </div>
       `).join('')}
     `;
@@ -404,6 +429,7 @@ function _buildAddRoomComposer(building) {
     }
 
     await confirmSpotSubmission(data.id);
+    _myCreatedSubmissionIds.add(data.id);
     await _refreshCampusCatalogue(building.campus_id);
     showToast(`"${roomName}" added. One more confirmation will make it live.`, 'success');
     _closeModal();
