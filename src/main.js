@@ -40,6 +40,7 @@ import './styles/sidebar.css';
 import './styles/bottomSheet.css';
 import './styles/spotCard.css';
 import './styles/filters.css';
+import './styles/campusSelector.css';
 import './styles/navMenu.css';
 
 // ─── Core ─────────────────────────────────────────────────────────────────────

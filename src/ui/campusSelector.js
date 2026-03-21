@@ -1,32 +1,52 @@
 /**
  * src/ui/campusSelector.js
  *
- * Renders the primary campus selector dropdown.
- * Listens to MAP_READY and CAMPUSES_LOADED to populate and wire the UI.
+ * Renders the campus picker as a horizontally-scrollable row of cards.
+ * Replaces the old <select> dropdown with a richer widget that shows:
+ *   • Spot count, live claim count, and live unique claimant count per campus
+ *   • A mini occupancy bar (live claims / total spots)
+ *   • Import-status badges for campuses that are still Importing or Needs Review
+ *   • A "Near you" pill on the closest campus when user location is available
  *
- * When the user selects a campus, dispatches CAMPUS_SELECTED to the store.
+ * GPS detection:
+ *   1. If userLocation is already in the store, the nearest campus is sorted
+ *      first and gets a "Near you" badge.
+ *   2. If no location is known, a subtle prompt button is shown above the row.
+ *      Clicking it calls navigator.geolocation.getCurrentPosition and dispatches
+ *      SET_USER_LOCATION on success.
+ *   3. If the user denies location, the prompt is replaced with a static note.
  *
- * Extra features:
- *  - Search input (visible when there are more than 5 campuses) that filters
- *    the <select> options in real-time and pre-fills the campus name for add.
- *  - "＋ Add your campus" option at the bottom of the dropdown. When selected,
- *    the <select> is replaced with an inline name input + Add / Cancel buttons.
- *    Submitting emits UI_CAMPUS_ADD_REQUESTED so features/campus.js can handle it.
+ * City-mode: all cards are rendered in a disabled/muted state when
+ * viewMode === 'city', matching the old <select disabled> behaviour.
+ *
+ * The "＋ Add your campus" action lives as the last card in the row. When the
+ * search input is active and contains a query, the card label updates to
+ * "＋ Add «query» as a new campus". Clicking it opens an inline add form that
+ * emits UI_CAMPUS_ADD_REQUESTED (handled by features/campus.js).
+ *
+ * @module campusSelector
  */
 
-import { on, emit, EVENTS }      from '../core/events.js';
-import { getState, dispatch }    from '../core/store.js';
+import { Users, Bookmark, Plus, Navigation } from 'lucide';
 
-/** Sentinel value for the "add campus" option. */
-const ADD_SENTINEL = '__add_campus__';
+import { on, emit, EVENTS }   from '../core/events.js';
+import { getState, dispatch }  from '../core/store.js';
+import { campusStats }         from '../state/spotState.js';
+import { iconSvg }             from './icons.js';
 
-/** Only show the search input above this campus count. */
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+/** Show search input when there are more campuses than this. */
 const SEARCH_THRESHOLD = 5;
 
-// ─── Initialise ──────────────────────────────────────────────────────────────
+/** Earth radius used for haversine distance (metres). */
+const EARTH_RADIUS_M = 6371e3;
+
+// ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
- * Initializes the campus selector. Called from main.js or header.js.
+ * Initialises the campus selector card row.
+ * Replaces the content of `container` with the card-based picker.
  *
  * @param {HTMLElement} container
  * @returns {void}
@@ -35,154 +55,283 @@ export function initCampusSelector(container) {
   if (!container) return;
   container.className = 'campus-selector-container';
 
-  // ── Search input (hidden until CAMPUSES_LOADED resolves) ──────────────────
+  // Module-level state for the inline add-form query.
+  let _searchQuery = '';
+  let _locationDenied = false;
+
+  // ── Location prompt ───────────────────────────────────────────────────────
+  const locationEl = document.createElement('div');
+  container.appendChild(locationEl);
+
+  // ── Search input (hidden until campus count exceeds threshold) ────────────
   const searchInput = document.createElement('input');
-  searchInput.type        = 'text';
-  searchInput.className   = 'input campus-selector__search';
+  searchInput.type        = 'search';
+  searchInput.className   = 'campus-search';
   searchInput.placeholder = 'Search campuses…';
   searchInput.hidden      = true;
   searchInput.setAttribute('aria-label', 'Search campuses');
   container.appendChild(searchInput);
 
-  // ── Select ────────────────────────────────────────────────────────────────
-  const select = document.createElement('select');
-  select.className = 'select campus-selector';
-  select.id        = 'campus-selector';
-
-  const loadingOpt = document.createElement('option');
-  loadingOpt.textContent = 'Loading campuses...';
-  loadingOpt.value       = '';
-  loadingOpt.disabled    = true;
-  loadingOpt.selected    = true;
-  select.appendChild(loadingOpt);
-
-  container.appendChild(select);
+  // ── Card row ──────────────────────────────────────────────────────────────
+  const cardRow = document.createElement('div');
+  cardRow.className = 'campus-card-row';
+  container.appendChild(cardRow);
 
   // ── Inline add form (hidden by default) ──────────────────────────────────
-  const addForm = _buildAddForm(container, select, searchInput);
+  const addForm = _buildAddForm(cardRow, searchInput);
   addForm.hidden = true;
   container.appendChild(addForm);
 
-  // ── Wire events ───────────────────────────────────────────────────────────
-  on(EVENTS.CAMPUSES_LOADED, () => _renderOptions(select, searchInput, ''));
-  on(EVENTS.CAMPUS_SELECTED, () => _renderOptions(select, searchInput, searchInput.value));
+  // ── Render helpers ────────────────────────────────────────────────────────
 
-  // Live search: filter options as the user types.
+  const render = () => {
+    _renderLocationPrompt(locationEl, _locationDenied, (denied) => {
+      _locationDenied = denied;
+      render();
+    });
+    const { campuses } = getState();
+    searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
+    _renderCards(cardRow, _searchQuery, addForm, searchInput);
+  };
+
+  // ── Event listeners ───────────────────────────────────────────────────────
+
+  on(EVENTS.CAMPUSES_LOADED,  render);
+  on(EVENTS.CAMPUS_SELECTED,  render);
+  on(EVENTS.SPOTS_LOADED,     render);
+  on(EVENTS.FILTERS_CHANGED,  render);
+  on(EVENTS.LOCATION_SET,     render);
+  on(EVENTS.VIEW_MODE_CHANGED, render);
+
   searchInput.addEventListener('input', () => {
-    _renderOptions(select, searchInput, searchInput.value);
+    _searchQuery = searchInput.value;
+    render();
   });
 
-  select.addEventListener('change', (e) => {
-    const value = e.target.value;
-    if (!value) return;
-
-    if (value === ADD_SENTINEL) {
-      // Pre-fill the add form's input with whatever was typed in the search box.
-      const nameInput = addForm.querySelector('.campus-selector__add-input');
-      if (nameInput) nameInput.value = searchInput.value.trim();
-
-      _showAddForm(select, searchInput, addForm);
-      return;
-    }
-
-    dispatch('CAMPUS_SELECTED', { campusId: value });
-    dispatch('SET_FILTERS', { nearBuilding: null });
-  });
-
-  // Render immediately if campuses are already in store (race-condition guard).
-  const { campuses } = getState();
-  if (campuses && campuses.length > 0) {
-    _renderOptions(select, searchInput, '');
-  }
+  // ── Initial render (campuses may already be in store) ─────────────────────
+  render();
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+// ─── Location prompt ──────────────────────────────────────────────────────────
 
 /**
- * Populate the dropdown options, optionally filtering by a search query.
+ * Render the GPS prompt / denied message into `el`.
+ * Clears and rebuilds on every call so it stays in sync with state.
  *
- * @param {HTMLSelectElement} select
- * @param {HTMLInputElement}  searchInput
- * @param {string}            query
+ * @param {HTMLElement} el
+ * @param {boolean}     denied      - true after the user has blocked geolocation
+ * @param {Function}    onDenied    - callback({ denied: true }) when permission is blocked
  */
-function _renderOptions(select, searchInput, query) {
-  const { campuses, selectedCampusId, viewMode } = getState();
+function _renderLocationPrompt(el, denied, onDenied) {
+  el.innerHTML = '';
 
-  select.innerHTML = '';
+  const { userLocation } = getState();
 
-  if (!campuses.length) {
-    const emptyOpt = document.createElement('option');
-    emptyOpt.textContent = 'No campuses available';
-    emptyOpt.disabled    = true;
-    select.appendChild(emptyOpt);
-    _updateSearchVisibility(searchInput, campuses.length);
+  // Location already known — no prompt needed.
+  if (userLocation) return;
+
+  if (denied) {
+    const msg = document.createElement('p');
+    msg.className   = 'campus-location-denied';
+    msg.textContent = 'Location blocked — scroll to find your campus.';
+    el.appendChild(msg);
     return;
   }
 
-  const needle = query.trim().toLowerCase();
-  const filtered = needle
-    ? campuses.filter((c) => c.name.toLowerCase().includes(needle))
-    : campuses;
+  const btn = document.createElement('button');
+  btn.type      = 'button';
+  btn.className = 'campus-location-prompt';
+  btn.innerHTML = `${iconSvg(Navigation, 14)} Find my campus automatically`;
 
-  filtered.forEach((campus) => {
-    const opt       = document.createElement('option');
-    opt.value       = campus.id;
-    opt.textContent = _campusLabel(campus);
-    if (campus.id === selectedCampusId) opt.selected = true;
-    select.appendChild(opt);
+  btn.addEventListener('click', () => {
+    if (!('geolocation' in navigator)) {
+      onDenied(true);
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude });
+        // render() is triggered by the LOCATION_SET event listener.
+      },
+      () => onDenied(true),
+    );
   });
 
-  // ── "＋ Add" option ───────────────────────────────────────────────────────
-  const sep = document.createElement('option');
-  sep.disabled    = true;
-  sep.textContent = '─────────────';
-  select.appendChild(sep);
-
-  const addOpt       = document.createElement('option');
-  addOpt.value       = ADD_SENTINEL;
-  addOpt.textContent = needle
-    ? `＋ Add "${query.trim()}" as a new campus`
-    : '＋ Add your campus';
-  select.appendChild(addOpt);
-
-  // Disable in city mode.
-  select.disabled = (viewMode === 'city');
-
-  on(EVENTS.VIEW_MODE_CHANGED, (e) => {
-    select.disabled = (e.detail.viewMode === 'city');
-  });
-
-  _updateSearchVisibility(searchInput, campuses.length);
+  el.appendChild(btn);
 }
 
+// ─── Card row renderer ────────────────────────────────────────────────────────
+
 /**
- * Show / hide the search input based on campus count.
+ * Rebuild the card row from current store state.
  *
+ * @param {HTMLElement}      cardRow
+ * @param {string}           query       - live search query
+ * @param {HTMLElement}      addForm     - the inline add form element
  * @param {HTMLInputElement} searchInput
- * @param {number}           count
  */
-function _updateSearchVisibility(searchInput, count) {
-  searchInput.hidden = count <= SEARCH_THRESHOLD;
+function _renderCards(cardRow, query, addForm, searchInput) {
+  cardRow.innerHTML = '';
+
+  const { campuses, selectedCampusId, spots, claims, viewMode, userLocation } = getState();
+
+  if (!campuses.length) {
+    const msg = document.createElement('div');
+    msg.className   = 'campus-card-row--loading';
+    msg.textContent = 'Loading campuses…';
+    cardRow.appendChild(msg);
+    return;
+  }
+
+  const stats   = campusStats(campuses, spots, claims);
+  const needle  = query.trim().toLowerCase();
+  const isCity  = viewMode === 'city';
+
+  // Filter by search query.
+  const filtered = needle
+    ? campuses.filter(c => c.name.toLowerCase().includes(needle) ||
+                           (c.city && c.city.toLowerCase().includes(needle)))
+    : campuses.slice();
+
+  // Sort: nearest campus first when location is known.
+  if (userLocation) {
+    filtered.sort((a, b) =>
+      _haversine(userLocation, a) - _haversine(userLocation, b)
+    );
+  }
+
+  for (const campus of filtered) {
+    const card = _buildCampusCard(campus, stats.get(campus.id), selectedCampusId, isCity, userLocation);
+    cardRow.appendChild(card);
+  }
+
+  // "Add campus" card — always last.
+  const addCard = _buildAddCard(query, addForm, searchInput, cardRow);
+  if (isCity) addCard.classList.add('campus-card--disabled');
+  cardRow.appendChild(addCard);
+}
+
+// ─── Campus card ──────────────────────────────────────────────────────────────
+
+/**
+ * Build a single campus card element.
+ *
+ * @param {object}  campus
+ * @param {{ spotCount: number, liveClaimCount: number, liveClaimantCount: number }} stat
+ * @param {string|null} selectedCampusId
+ * @param {boolean}     isCity
+ * @param {{lat:number,lng:number}|null} userLocation
+ * @returns {HTMLButtonElement}
+ */
+function _buildCampusCard(campus, stat, selectedCampusId, isCity, userLocation) {
+  const isSelected = campus.id === selectedCampusId;
+  const isNearest  = !!userLocation && _isNearest(campus, userLocation);
+
+  const card = document.createElement('button');
+  card.type      = 'button';
+  card.className = 'campus-card';
+  card.setAttribute('aria-pressed', String(isSelected));
+  card.dataset.campusId = campus.id;
+
+  if (isSelected) card.classList.add('campus-card--selected');
+  if (isCity)     card.classList.add('campus-card--disabled');
+
+  const s = stat ?? { spotCount: 0, liveClaimCount: 0, liveClaimantCount: 0 };
+
+  // Occupancy fraction (clamped 0–1), only meaningful when there are spots.
+  const occupancyFraction = s.spotCount > 0
+    ? Math.min(1, s.liveClaimCount / s.spotCount)
+    : 0;
+  const occupancyPct = Math.round(occupancyFraction * 100);
+
+  card.innerHTML = /* html */`
+    ${isNearest
+      ? `<span class="campus-card__near-badge">${iconSvg(Navigation, 10)} Near you</span>`
+      : ''}
+    ${_statusBadgeHtml(campus)}
+    <span class="campus-card__name">${_escHtml(campus.name)}</span>
+    ${campus.city
+      ? `<span class="campus-card__city">${_escHtml(campus.city)}</span>`
+      : ''}
+    <div class="campus-card__stats">
+      <span class="campus-card__stat">
+        ${iconSvg(Bookmark, 12)}
+        ${s.spotCount} ${s.spotCount === 1 ? 'spot' : 'spots'}
+      </span>
+      <span class="campus-card__stat">
+        ${iconSvg(Users, 12)}
+        ${s.liveClaimantCount} active now
+      </span>
+      ${s.spotCount > 0 ? /* html */`
+        <div class="campus-card__occupancy" title="${occupancyPct}% occupied">
+          <div class="campus-card__occupancy-bar" style="width:${occupancyPct}%"></div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  card.addEventListener('click', () => {
+    if (isCity) return;
+    dispatch('CAMPUS_SELECTED',  { campusId: campus.id });
+    dispatch('SET_FILTERS',      { nearBuilding: null });
+  });
+
+  return card;
+}
+
+// ─── "Add campus" card ────────────────────────────────────────────────────────
+
+/**
+ * Build the "＋ Add your campus" card that opens the inline add form.
+ *
+ * @param {string}           query
+ * @param {HTMLElement}      addForm
+ * @param {HTMLInputElement} searchInput
+ * @param {HTMLElement}      cardRow
+ * @returns {HTMLButtonElement}
+ */
+function _buildAddCard(query, addForm, searchInput, cardRow) {
+  const needle = query.trim();
+  const label  = needle
+    ? `Add "${needle}" as a new campus`
+    : 'Add your campus';
+
+  const card = document.createElement('button');
+  card.type      = 'button';
+  card.className = 'campus-card campus-card--add';
+  card.innerHTML = /* html */`
+    ${iconSvg(Plus, 16)}
+    <span class="campus-card__add-label">${_escHtml(label)}</span>
+  `;
+
+  card.addEventListener('click', () => {
+    const nameInput = addForm.querySelector('.campus-selector__add-input');
+    if (nameInput) nameInput.value = needle;
+    cardRow.hidden = true;
+    searchInput.hidden = true;
+    addForm.hidden = false;
+    nameInput?.focus();
+  });
+
+  return card;
 }
 
 // ─── Inline add form ─────────────────────────────────────────────────────────
 
 /**
- * Build the inline "add campus" form element.
- * The form is hidden by default; _showAddForm / _hideAddForm toggle it.
+ * Build the inline "add campus" form.
  *
- * @param {HTMLElement}       container
- * @param {HTMLSelectElement} select
- * @param {HTMLInputElement}  searchInput
+ * @param {HTMLElement}      cardRow
+ * @param {HTMLInputElement} searchInput
  * @returns {HTMLElement}
  */
-function _buildAddForm(container, select, searchInput) {
+function _buildAddForm(cardRow, searchInput) {
   const wrap = document.createElement('div');
   wrap.className = 'campus-selector__add-form';
 
   const nameInput       = document.createElement('input');
   nameInput.type        = 'text';
-  nameInput.className   = 'input campus-selector__add-input';
+  nameInput.className   = 'campus-selector__add-input';
   nameInput.placeholder = 'Campus name';
   nameInput.maxLength   = 120;
   nameInput.setAttribute('aria-label', 'New campus name');
@@ -202,87 +351,102 @@ function _buildAddForm(container, select, searchInput) {
 
   btnRow.appendChild(addBtn);
   btnRow.appendChild(cancelBtn);
-
   wrap.appendChild(nameInput);
   wrap.appendChild(btnRow);
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  const hide = () => {
+    wrap.hidden        = true;
+    cardRow.hidden     = false;
+    const { campuses } = getState();
+    searchInput.hidden = campuses.length <= SEARCH_THRESHOLD;
+    nameInput.value    = '';
+  };
+
   const submit = () => {
     const campusName = nameInput.value.trim();
-    if (!campusName) {
-      nameInput.focus();
-      return;
-    }
+    if (!campusName) { nameInput.focus(); return; }
     emit(EVENTS.UI_CAMPUS_ADD_REQUESTED, { campusName });
-    _hideAddForm(select, searchInput, wrap);
-    nameInput.value = '';
+    hide();
   };
 
   addBtn.addEventListener('click', submit);
+  cancelBtn.addEventListener('click', hide);
   nameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submit();
-    if (e.key === 'Escape') {
-      _hideAddForm(select, searchInput, wrap);
-      nameInput.value = '';
-    }
-  });
-
-  cancelBtn.addEventListener('click', () => {
-    _hideAddForm(select, searchInput, wrap);
-    nameInput.value = '';
+    if (e.key === 'Enter')  submit();
+    if (e.key === 'Escape') hide();
   });
 
   return wrap;
 }
 
-/**
- * Switch to the inline add form view.
- *
- * @param {HTMLSelectElement} select
- * @param {HTMLInputElement}  searchInput
- * @param {HTMLElement}       addForm
- */
-function _showAddForm(select, searchInput, addForm) {
-  select.hidden      = true;
-  searchInput.hidden = true;
-  addForm.hidden     = false;
+// ─── Private helpers ──────────────────────────────────────────────────────────
 
-  const nameInput = addForm.querySelector('.campus-selector__add-input');
-  nameInput?.focus();
+/**
+ * Haversine great-circle distance between a user location and a campus centre.
+ * Returns distance in metres.
+ *
+ * @param {{lat:number,lng:number}} userLocation
+ * @param {{lat:number,lng:number}} campus
+ * @returns {number}
+ */
+function _haversine(userLocation, campus) {
+  if (!userLocation || campus.lat == null || campus.lng == null) return Infinity;
+
+  const R  = EARTH_RADIUS_M;
+  const φ1 = userLocation.lat * Math.PI / 180;
+  const φ2 = campus.lat       * Math.PI / 180;
+  const Δφ = (campus.lat - userLocation.lat) * Math.PI / 180;
+  const Δλ = (campus.lng - userLocation.lng) * Math.PI / 180;
+
+  const a = Math.sin(Δφ / 2) ** 2 +
+            Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 /**
- * Restore the normal selector view after add / cancel.
+ * Returns true if `campus` is the nearest campus to `userLocation`.
+ * Used to add the "Near you" badge to only the closest card.
  *
- * @param {HTMLSelectElement} select
- * @param {HTMLInputElement}  searchInput
- * @param {HTMLElement}       addForm
+ * @param {object}              campus
+ * @param {{lat:number,lng:number}} userLocation
+ * @returns {boolean}
  */
-function _hideAddForm(select, searchInput, addForm) {
-  addForm.hidden  = false; // will be re-hidden
-  addForm.hidden  = true;
-  select.hidden   = false;
-
+function _isNearest(campus, userLocation) {
   const { campuses } = getState();
-  _updateSearchVisibility(searchInput, campuses.length);
+  if (!campuses.length) return false;
+  const nearest = campuses.reduce((best, c) =>
+    _haversine(userLocation, c) < _haversine(userLocation, best) ? c : best
+  );
+  return nearest.id === campus.id;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 /**
- * Build the display label for a campus option.
+ * Build the import-status badge HTML for a campus card.
+ * Returns an empty string for campuses with `bootstrap_status === 'ready'`.
  *
  * @param {object} campus
  * @returns {string}
  */
-function _campusLabel(campus) {
+function _statusBadgeHtml(campus) {
   if (campus.bootstrap_status === 'pending') {
-    return `${campus.name} (Importing…)`;
+    return `<span class="campus-card__status-badge campus-card__status-badge--pending">Importing…</span>`;
   }
-
   if (campus.bootstrap_status === 'needs_review') {
-    return `${campus.name} (Needs review)`;
+    return `<span class="campus-card__status-badge campus-card__status-badge--needs-review">Needs review</span>`;
   }
+  return '';
+}
 
-  return campus.name;
+/**
+ * Minimal HTML-escape for user-supplied strings rendered inside innerHTML.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function _escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
