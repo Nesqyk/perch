@@ -102,7 +102,6 @@ function _buildStep1(lat, lng, viewMode) {
     <div class="submit-spot-panel__pin-badge">📍</div>
     <div>
       <h2 class="submit-spot-panel__title">Add to the Map</h2>
-      <p class="submit-spot-panel__coords">${lat.toFixed(5)}, ${lng.toFixed(5)}</p>
     </div>
   `;
 
@@ -176,7 +175,7 @@ function _buildStep2Spot(lat, lng, buildings) {
   const wrap = document.createElement('div');
   wrap.className = 'submit-spot-panel';
 
-  wrap.appendChild(_buildWizardHeader('📍', 'Suggest a Spot', lat, lng, () => {
+  wrap.appendChild(_buildWizardHeader('📍', 'Suggest a Spot', () => {
     const content = document.getElementById(CONTENT_ID);
     if (content) { content.innerHTML = ''; content.appendChild(_buildStep1(lat, lng, getState().viewMode)); }
   }));
@@ -262,14 +261,7 @@ function _buildStep2Spot(lat, lng, buildings) {
     _showSuccess(`"${spotName}" queued for review. You'll be credited if approved.`);
   });
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'btn btn-ghost btn-full';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', _closeModal);
-
   actions.appendChild(submitBtn);
-  actions.appendChild(cancelBtn);
   wrap.appendChild(actions);
 
   return wrap;
@@ -287,7 +279,7 @@ function _buildStep2Room(lat, lng, buildings) {
   const wrap = document.createElement('div');
   wrap.className = 'submit-spot-panel';
 
-  wrap.appendChild(_buildWizardHeader('🚪', 'Add a Room', lat, lng, () => {
+  wrap.appendChild(_buildWizardHeader('🚪', 'Add a Room', () => {
     const content = document.getElementById(CONTENT_ID);
     if (content) { content.innerHTML = ''; content.appendChild(_buildStep1(lat, lng, getState().viewMode)); }
   }));
@@ -374,14 +366,7 @@ function _buildStep2Room(lat, lng, buildings) {
     _showSuccess(`"${roomName}" added. One more confirmation will make it live.`);
   });
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'btn btn-ghost btn-full';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', _closeModal);
-
   actions.appendChild(submitBtn);
-  actions.appendChild(cancelBtn);
   wrap.appendChild(actions);
 
   return wrap;
@@ -398,7 +383,7 @@ function _buildStep2Building(lat, lng) {
   const wrap = document.createElement('div');
   wrap.className = 'submit-spot-panel';
 
-  wrap.appendChild(_buildWizardHeader('🏢', 'Add a Building', lat, lng, () => {
+  wrap.appendChild(_buildWizardHeader('🏢', 'Add a Building', () => {
     const content = document.getElementById(CONTENT_ID);
     if (content) { content.innerHTML = ''; content.appendChild(_buildStep1(lat, lng, getState().viewMode)); }
   }));
@@ -446,14 +431,7 @@ function _buildStep2Building(lat, lng) {
     _showSuccess(`"${name}" added. One more confirmation will verify it.`);
   });
 
-  const cancelBtn = document.createElement('button');
-  cancelBtn.type = 'button';
-  cancelBtn.className = 'btn btn-ghost btn-full';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', _closeModal);
-
   actions.appendChild(submitBtn);
-  actions.appendChild(cancelBtn);
   wrap.appendChild(actions);
 
   return wrap;
@@ -478,6 +456,7 @@ function _showSuccess(message) {
     <div class="wizard-success__icon">✅</div>
     <h2 class="wizard-success__title">Submitted!</h2>
     <p class="wizard-success__body">${_escapeHtml(message)}</p>
+    <p class="wizard-success__body">Thanks for helping the community.</p>
   `;
 
   const doneBtn = document.createElement('button');
@@ -535,23 +514,20 @@ function _renderExistingSpots(venueInput, container) {
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
 /**
- * Build a wizard step header with title, coords, and a back button.
+ * Build a wizard step header with title, emoji, and a back button.
  *
  * @param {string} emoji
  * @param {string} title
- * @param {number} lat
- * @param {number} lng
  * @param {() => void} onBack
  * @returns {HTMLElement}
  */
-function _buildWizardHeader(emoji, title, lat, lng, onBack) {
+function _buildWizardHeader(emoji, title, onBack) {
   const header = document.createElement('div');
   header.className = 'submit-spot-panel__header';
   header.innerHTML = /* html */`
     <div class="submit-spot-panel__pin-badge">${emoji}</div>
     <div>
       <h2 class="submit-spot-panel__title">${title}</h2>
-      <p class="submit-spot-panel__coords">${lat.toFixed(5)}, ${lng.toFixed(5)}</p>
     </div>
   `;
 

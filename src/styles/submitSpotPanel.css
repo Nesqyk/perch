@@ -1,0 +1,189 @@
+/* ============================================================
+   submitSpotPanel.css — Unified submit / wizard modal
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Modal box variant — flush edges so the tinted header sits edge-to-edge
+   ------------------------------------------------------------------ */
+
+.modal-box--submit {
+  max-width: 440px;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------
+   Panel root
+   ------------------------------------------------------------------ */
+
+.submit-spot-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+/* ------------------------------------------------------------------
+   Header — tinted band that spans the full modal width
+   ------------------------------------------------------------------ */
+
+.submit-spot-panel__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: var(--color-brand-light);
+  margin: calc(-1 * var(--space-5));
+  margin-bottom: 0;
+}
+
+.submit-spot-panel__pin-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  background: var(--color-surface);
+  border-radius: var(--radius-full);
+  font-size: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.submit-spot-panel__title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.submit-spot-panel__desc {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------
+   Form fields
+   ------------------------------------------------------------------ */
+
+.submit-spot-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.submit-spot-panel__textarea {
+  resize: none;
+  font-family: inherit;
+}
+
+/* ------------------------------------------------------------------
+   Action buttons
+   ------------------------------------------------------------------ */
+
+.submit-spot-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* ------------------------------------------------------------------
+   Step 1 — type selection grid (horizontal row)
+   ------------------------------------------------------------------ */
+
+.wizard-type-grid {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.wizard-type-card {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.wizard-type-card:hover {
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.wizard-type-card:active {
+  transform: translateY(0);
+}
+
+.wizard-type-card__emoji {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.wizard-type-card__label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.wizard-type-card__sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* ------------------------------------------------------------------
+   Step 2 — back button (trailing edge of header)
+   ------------------------------------------------------------------ */
+
+.wizard-back-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------
+   Step 3 — success screen
+   ------------------------------------------------------------------ */
+
+.wizard-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-8) var(--space-5) var(--space-5);
+  text-align: center;
+}
+
+.wizard-success__icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.wizard-success__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.wizard-success__body {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  max-width: 28ch;
+}

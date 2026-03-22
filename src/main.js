@@ -42,6 +42,7 @@ import './styles/spotCard.css';
 import './styles/filters.css';
 import './styles/campusSelector.css';
 import './styles/navMenu.css';
+import './styles/submitSpotPanel.css';
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
