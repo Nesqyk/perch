@@ -50,7 +50,6 @@ let _selectedFloor = null;
  */
 export function initBuildingPanel() {
   on(EVENTS.MAP_BUILDING_CLICKED, _onBuildingClicked);
-  on(EVENTS.UI_SUBMIT_SPOT_REQUESTED, _onCampusMapClicked);
 }
 
 async function _onBuildingClicked(e) {
@@ -58,19 +57,6 @@ async function _onBuildingClicked(e) {
   if (!buildingId || getState().viewMode !== 'campus') return;
 
   await openBuildingPanel(buildingId);
-}
-
-async function _onCampusMapClicked(e) {
-  const { viewMode, currentUser } = getState();
-  if (viewMode !== 'campus') return;
-
-  if (!currentUser) {
-    emit(EVENTS.UI_LOGIN_REQUESTED, {});
-    return;
-  }
-
-  _renderIntoModal(_buildAddBuildingForm(e.detail.lat, e.detail.lng));
-  _openModal();
 }
 
 /**

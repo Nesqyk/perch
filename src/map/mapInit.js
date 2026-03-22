@@ -17,16 +17,17 @@
  * Map click:
  *   A single-click on the map (not on a marker) emits
  *   UI_SUBMIT_SPOT_REQUESTED with the click coordinates so the panel can
- *   open the "Suggest a Spot" form.
+ *   open the "Suggest a Spot" wizard.
  *
  * View mode:
- *   Always stays in 'campus' mode — building markers are the primary UI.
- *   Room detail is accessed via the building modal.
+ *   Zoom ≥ _ZOOM_ROOM_THRESHOLD → 'city' (individual spot/room markers).
+ *   Zoom  < _ZOOM_ROOM_THRESHOLD → 'campus' (building cluster markers).
+ *   The user can also switch manually via the toggle in filterPanel.js.
  */
 
 import { L }                    from './mapLoader.js';
 import { on, emit, EVENTS }     from '../core/events.js';
-import { getState }             from '../core/store.js';
+import { getState, dispatch }   from '../core/store.js';
 
 /** @type {import('leaflet').Map | null} */
 let _map = null;
@@ -41,6 +42,13 @@ const DEFAULT_CENTER = {
 };
 
 const DEFAULT_ZOOM = 17;
+
+/**
+ * Zoom level at which the map auto-switches from building cluster markers
+ * (campus mode) to individual room/spot markers (city mode).
+ * The user can also switch manually via the toggle in filterPanel.js.
+ */
+const _ZOOM_ROOM_THRESHOLD = 18;
 
 // CartoDB Positron tile URL — clean grey/minimal palette, no API key required.
 const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
@@ -84,6 +92,9 @@ export function initMap() {
   // ── Map click → suggest a spot ──────────────────────────────────────────
   _map.on('click', _onMapClick);
 
+  // ── Zoom-based view mode reveal ──────────────────────────────────────────
+  _map.on('zoomend', _onZoomChanged);
+
   // ── Spot selection navigation ───────────────────────────────────────────
   on(EVENTS.SPOT_SELECTED, _onSpotSelected);
 
@@ -93,6 +104,19 @@ export function initMap() {
   emit(EVENTS.MAP_READY, { map: _map });
 
   return _map;
+}
+
+// ─── Zoom-based view mode ─────────────────────────────────────────────────────
+
+/**
+ * Auto-switch view mode based on current zoom level.
+ * Zoom ≥ _ZOOM_ROOM_THRESHOLD → 'city' (individual room/spot markers).
+ * Zoom  < _ZOOM_ROOM_THRESHOLD → 'campus' (building cluster markers).
+ */
+function _onZoomChanged() {
+  if (!_map) return;
+  const zoom = _map.getZoom();
+  dispatch('SET_VIEW_MODE', zoom >= _ZOOM_ROOM_THRESHOLD ? 'city' : 'campus');
 }
 
 // ─── Campus viewport ─────────────────────────────────────────────────────────

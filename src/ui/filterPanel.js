@@ -191,6 +191,7 @@ function _buildTabBody() {
   body.className = 'filter-tab-body';
 
   if (_activeTab === 'find') {
+    body.appendChild(_buildViewModeToggle());
     body.appendChild(_buildCampusSelectorBox());
     body.appendChild(_buildFilterAccordion());
     body.appendChild(_buildFindButton());
@@ -199,6 +200,37 @@ function _buildTabBody() {
   }
 
   return body;
+}
+
+// ─── View mode toggle ─────────────────────────────────────────────────────────
+
+/**
+ * Two-chip row that lets the user manually switch between campus and city
+ * view mode. Stays in sync when zoom-based auto-switching fires.
+ *
+ * @returns {HTMLElement}
+ */
+function _buildViewModeToggle() {
+  const { viewMode } = getState();
+
+  const row     = document.createElement('div');
+  row.className = 'chip-row';
+  row.id        = 'view-mode-toggle';
+
+  [{ key: 'campus', label: 'Campus' }, { key: 'city', label: 'City' }].forEach(({ key, label }) => {
+    const chip       = document.createElement('button');
+    chip.type        = 'button';
+    chip.className   = `chip${viewMode === key ? ' chip-active' : ''}`;
+    chip.dataset.key = key;
+    chip.textContent = label;
+    chip.setAttribute('aria-pressed', String(viewMode === key));
+    chip.addEventListener('click', () => {
+      dispatch('SET_VIEW_MODE', key);
+    });
+    row.appendChild(chip);
+  });
+
+  return row;
 }
 
 // ─── Campus selector ─────────────────────────────────────────────────────────
@@ -530,6 +562,13 @@ function _buildJoinForm(section) {
  */
 function _syncFromState() {
   const { filters, viewMode } = getState();
+
+  // View mode toggle chips
+  document.querySelectorAll('#view-mode-toggle .chip').forEach((chip) => {
+    const active = chip.dataset.key === viewMode;
+    chip.classList.toggle('chip-active', active);
+    chip.setAttribute('aria-pressed', String(active));
+  });
 
   // Group size chips
   document.querySelectorAll('#chips-group-size .chip').forEach((chip) => {
