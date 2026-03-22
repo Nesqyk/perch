@@ -84,17 +84,33 @@ describe('_rankSpots — no filters', () => {
     expect(result.map(s => s.id)).toEqual(['a', 'c', 'b']);
   });
 
-  it('ranks on-campus spots above off-campus in campus mode via soft bonus', () => {
-    // On-campus receives +0.15 bonus in campus mode (default viewMode).
-    // Equal raw confidence means on-campus effective score wins.
-    const onCampus  = spot({ id: 'on',  on_campus: true,  walk_time_min: 0 });
-    const offCampus = spot({ id: 'off', on_campus: false, walk_time_min: 0 });
-    const confidence = {
-      [onCampus.id]:  conf(0.7),
-      [offCampus.id]: conf(0.7),
-    };
-    const result = _rankSpots([offCampus, onCampus], confidence, noFilters);
-    expect(result[0].id).toBe('on');
+  it('uses 0.4 as the default score when no confidence data exists', () => {
+    const s = spot({ id: 'no-conf', on_campus: false, walk_time_min: 0 });
+    const result = _rankSpots([s], {}, { ...noFilters, viewMode: 'city' });
+    expect(result[0]._score).toBeCloseTo(0.4, 5);
+  });
+});
+
+describe('_rankSpots — campus mode pre-filter', () => {
+  it('excludes off-campus spots entirely in campus mode', () => {
+    const onCampus  = spot({ id: 'on',  on_campus: true });
+    const offCampus = spot({ id: 'off', on_campus: false });
+    const result = _rankSpots([onCampus, offCampus], {}, { ...noFilters, viewMode: 'campus' });
+    expect(result.map(s => s.id)).toEqual(['on']);
+  });
+
+  it('includes both on-campus and off-campus spots in city mode', () => {
+    const onCampus  = spot({ id: 'on',  on_campus: true });
+    const offCampus = spot({ id: 'off', on_campus: false });
+    const result = _rankSpots([onCampus, offCampus], {}, { ...noFilters, viewMode: 'city' });
+    expect(result).toHaveLength(2);
+  });
+
+  it('defaults to campus mode when viewMode is not provided', () => {
+    const onCampus  = spot({ id: 'on',  on_campus: true });
+    const offCampus = spot({ id: 'off', on_campus: false });
+    const result = _rankSpots([onCampus, offCampus], {}, noFilters);
+    expect(result.map(s => s.id)).toEqual(['on']);
   });
 });
 
@@ -175,12 +191,12 @@ describe('_rankSpots — nearBuilding filter', () => {
     expect(result.map(s => s.id)).toEqual(['bldg-eng']);
   });
 
-  it('does not filter off-campus spots by building', () => {
+  it('does not filter off-campus spots by building (in city mode)', () => {
     const offCampus = spot({ id: 'bldg-off', on_campus: false, building: null });
     const result = _rankSpots(
       [offCampus],
       {},
-      { ...noFilters, nearBuilding: 'engineering' }
+      { ...noFilters, nearBuilding: 'engineering', viewMode: 'city' }
     );
     expect(result).toHaveLength(1);
   });
@@ -188,71 +204,79 @@ describe('_rankSpots — nearBuilding filter', () => {
 
 describe('_rankSpots — distance-based ranking', () => {
   it('prioritizes closer spots when userLocation is provided', () => {
-    // a is far, b is near
-    const a = spot({ id: 'far', lat: 10.3, lng: 123.9 });
-    const b = spot({ id: 'near', lat: 10.2936, lng: 123.8809 });
+    // a is far, b is near — both on-campus with equal (default) confidence
+    const a = spot({ id: 'far',  on_campus: true, lat: 10.3,    lng: 123.9 });
+    const b = spot({ id: 'near', on_campus: true, lat: 10.2936, lng: 123.8809 });
     const userLocation = { lat: 10.2935, lng: 123.8808 };
-    
+
     const result = _rankSpots([a, b], {}, { ...noFilters, userLocation });
     expect(result[0].id).toBe('near');
   });
 
-  it('still respects confidence scores alongside distance', () => {
-    // near has low confidence, far has high confidence
-    const near = spot({ id: 'near', lat: 10.2936, lng: 123.8809 });
-    const far  = spot({ id: 'far',  lat: 10.296,  lng: 123.883  }); // ~350m away
+  it('quality beats proximity: high-confidence far spot beats low-confidence near spot', () => {
+    // near has very low confidence, far has high confidence (~350m away)
+    const near = spot({ id: 'near', on_campus: true, lat: 10.2936, lng: 123.8809 });
+    const far  = spot({ id: 'far',  on_campus: true, lat: 10.296,  lng: 123.883  });
     const userLocation = { lat: 10.2935, lng: 123.8808 };
-    
+
     const confidence = {
       [near.id]: conf(0.1),
       [far.id]:  conf(0.9),
     };
-    
+
+    // far: 0.9 × ~0.895 ≈ 0.806; near: 0.1 × ~0.999 ≈ 0.1 — far wins
     const result = _rankSpots([near, far], confidence, { ...noFilters, userLocation });
     expect(result[0].id).toBe('far');
+  });
+
+  it('applies a proximity multiplier not a subtracted penalty (far spot score stays above 0)', () => {
+    // A spot 20 minutes walk away should still have a positive score (floor 0.5×)
+    // Old code: 0.4 - (0.05 × 20) = -0.6 → clamped to 0. New code: 0.4 × 0.5 = 0.2.
+    const farSpot = spot({ id: 'very-far', on_campus: false, lat: 10.5, lng: 124.5 });
+    const userLocation = { lat: 10.2935, lng: 123.8808 };
+
+    const result = _rankSpots([farSpot], {}, { ...noFilters, userLocation, viewMode: 'city' });
+    expect(result[0]._score).toBeGreaterThan(0);
   });
 });
 
 describe('_rankSpots — viewMode context', () => {
-  it('gives on-campus a soft score bonus in campus mode (not a hard sort tier)', () => {
-    // With the soft bonus, an on-campus spot at moderate distance still beats
-    // an off-campus spot at the same distance when confidence is equal.
+  it('in campus mode, off-campus spots are excluded from results', () => {
     const onCampusNear  = spot({ id: 'on-near',  on_campus: true,  lat: 10.2936, lng: 123.8809 });
     const offCampusNear = spot({ id: 'off-near', on_campus: false, lat: 10.2937, lng: 123.8810 });
     const userLocation  = { lat: 10.2935, lng: 123.8808 };
 
     const result = _rankSpots([offCampusNear, onCampusNear], {}, { ...noFilters, userLocation, viewMode: 'campus' });
-    expect(result[0].id).toBe('on-near');
+    expect(result.map(s => s.id)).toEqual(['on-near']);
   });
 
-  it('off-campus can beat on-campus with sufficiently higher confidence', () => {
-    // The soft bonus is +0.15, so off-campus with much higher confidence wins.
+  it('in city mode, higher-confidence off-campus beats lower-confidence on-campus', () => {
     const onCampus  = spot({ id: 'on',  on_campus: true,  walk_time_min: 0 });
     const offCampus = spot({ id: 'off', on_campus: false, walk_time_min: 0 });
     const confidence = {
-      [onCampus.id]:  conf(0.3),   // effective: 0.3 + 0.15 = 0.45
-      [offCampus.id]: conf(0.9),   // effective: 0.9
+      [onCampus.id]:  conf(0.3),
+      [offCampus.id]: conf(0.9),
     };
-    const result = _rankSpots([onCampus, offCampus], confidence, { ...noFilters, viewMode: 'campus' });
+    // No campus bonus exists anymore — off-campus 0.9 simply beats on-campus 0.3
+    const result = _rankSpots([onCampus, offCampus], confidence, { ...noFilters, viewMode: 'city' });
     expect(result[0].id).toBe('off');
   });
 
   it('prioritizes nearest spots in city mode regardless of campus status', () => {
-    const onCampusFar = spot({ id: 'on-far', on_campus: true,  lat: 10.4, lng: 124.0 });
+    const onCampusFar   = spot({ id: 'on-far',   on_campus: true,  lat: 10.4,    lng: 124.0 });
     const offCampusNear = spot({ id: 'off-near', on_campus: false, lat: 10.2936, lng: 123.8809 });
-    const userLocation = { lat: 10.2935, lng: 123.8808 };
-    
+    const userLocation  = { lat: 10.2935, lng: 123.8808 };
+
     const result = _rankSpots([onCampusFar, offCampusNear], {}, { ...noFilters, userLocation, viewMode: 'city' });
     expect(result[0].id).toBe('off-near');
   });
 
-  it('does not apply campus bonus in city mode', () => {
-    // Equal confidence — on-campus should NOT win in city mode (no bonus applied)
+  it('does not apply campus bonus in city mode (no such bonus exists)', () => {
     const onCampus  = spot({ id: 'on',  on_campus: true,  walk_time_min: 0 });
     const offCampus = spot({ id: 'off', on_campus: false, walk_time_min: 0 });
     const confidence = {
       [onCampus.id]:  conf(0.7),
-      [offCampus.id]: conf(0.9),  // higher raw score, no on-campus bonus applied
+      [offCampus.id]: conf(0.9),
     };
     const result = _rankSpots([onCampus, offCampus], confidence, { ...noFilters, viewMode: 'city' });
     expect(result[0].id).toBe('off');
@@ -264,7 +288,7 @@ describe('_rankSpots — recency bonus', () => {
     const recent = spot({ id: 'recent', on_campus: false, walk_time_min: 0 });
     const stale  = spot({ id: 'stale',  on_campus: false, walk_time_min: 0 });
 
-    const recentUpdatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+    const recentUpdatedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();  // 5 min ago
     const staleUpdatedAt  = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 min ago
 
     const confidence = {
@@ -272,7 +296,7 @@ describe('_rankSpots — recency bonus', () => {
       [stale.id]:  conf(0.5, null, staleUpdatedAt),
     };
 
-    // In city mode (no campus bonus) the only difference is the recency bonus
+    // In city mode the only difference is the recency bonus
     const result = _rankSpots([stale, recent], confidence, { ...noFilters, viewMode: 'city' });
     expect(result[0].id).toBe('recent');
   });
@@ -290,10 +314,21 @@ describe('_rankSpots — recency bonus', () => {
     const result = _rankSpots([a, b], confidence, { ...noFilters, viewMode: 'city' });
     expect(result[0].id).toBe('b');
   });
+
+  it('caps availability score at 1.0 after recency bonus', () => {
+    const s = spot({ id: 's', on_campus: false, walk_time_min: 0 });
+    const recentUpdatedAt = new Date(Date.now() - 1 * 60 * 1000).toISOString(); // 1 min ago
+    const confidence = { [s.id]: conf(1.0, null, recentUpdatedAt) };
+
+    const result = _rankSpots([s], confidence, { ...noFilters, viewMode: 'city' });
+    // Score = min(1.0, 1.0 + 0.08) × 1.0 = 1.0
+    expect(result[0]._score).toBeCloseTo(1.0, 5);
+  });
 });
 
 describe('_rankSpots — _isBusy flag', () => {
-  it('annotates _isBusy: true when effective score is below 0.15', () => {
+  it('annotates _isBusy: true when effective score is below 0.25', () => {
+    // conf(0.1) × 1.0 multiplier = 0.1 < 0.25 → busy
     const busySpot = spot({ id: 'busy', on_campus: false, walk_time_min: 0 });
     const confidence = { [busySpot.id]: conf(0.1) };
 
@@ -301,7 +336,8 @@ describe('_rankSpots — _isBusy flag', () => {
     expect(result[0]._isBusy).toBe(true);
   });
 
-  it('does not set _isBusy: true when score is 0.15 or above', () => {
+  it('does not set _isBusy: true when score is 0.25 or above', () => {
+    // conf(0.5) × 1.0 = 0.5 ≥ 0.25 → not busy
     const okSpot = spot({ id: 'ok', on_campus: false, walk_time_min: 0 });
     const confidence = { [okSpot.id]: conf(0.5) };
 
@@ -320,5 +356,20 @@ describe('_rankSpots — _isBusy flag', () => {
     const result = _rankSpots([busySpot, goodSpot], confidence, { ...noFilters, viewMode: 'city' });
     expect(result).toHaveLength(2);
     expect(result.find(s => s.id === 'busy')?._isBusy).toBe(true);
+  });
+
+  it('_isBusy triggers at the 0.25 boundary correctly', () => {
+    // A spot with conf(0.25) and no walk penalty → score = 0.25, not busy
+    const borderSpot = spot({ id: 'border', on_campus: false, walk_time_min: 0 });
+    const confidence = { [borderSpot.id]: conf(0.25) };
+
+    const result = _rankSpots([borderSpot], confidence, { ...noFilters, viewMode: 'city' });
+    expect(result[0]._isBusy).toBe(false);
+
+    // conf(0.24) → score = 0.24, is busy
+    const justBelowSpot = spot({ id: 'just-below', on_campus: false, walk_time_min: 0 });
+    const confidence2 = { [justBelowSpot.id]: conf(0.24) };
+    const result2 = _rankSpots([justBelowSpot], confidence2, { ...noFilters, viewMode: 'city' });
+    expect(result2[0]._isBusy).toBe(true);
   });
 });

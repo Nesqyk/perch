@@ -9,7 +9,7 @@
  * Imported styles: src/styles/suggestionsList.css
  */
 
-import { X, Zap, Volume2, Utensils, Wifi } from 'lucide';
+import { X, Zap, Volume2, Utensils, Wifi, ArrowRight } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
 import { formatWalkTime } from '../utils/time.js';
 import { iconSvg } from './icons.js';
@@ -196,15 +196,16 @@ function _buildCard(spot, rank) {
 
   const amenities = document.createElement('span');
   amenities.className = 'suggestion-item__amenities';
-  if (spot.noise_baseline === 'quiet') amenities.innerHTML += iconSvg(Volume2, 14);
-  if (spot.has_outlets)               amenities.innerHTML += iconSvg(Zap, 14);
-  if (spot.wifi_strength !== 'none')  amenities.innerHTML += iconSvg(Wifi, 14);
-  if (spot.has_food)                  amenities.innerHTML += iconSvg(Utensils, 14);
+  if (spot.noise_baseline === 'quiet') amenities.innerHTML += iconSvg(Volume2, 16);
+  if (spot.has_outlets)               amenities.innerHTML += iconSvg(Zap, 16);
+  if (spot.wifi_strength !== 'none')  amenities.innerHTML += iconSvg(Wifi, 16);
+  if (spot.has_food)                  amenities.innerHTML += iconSvg(Utensils, 16);
   if (amenities.innerHTML) meta.appendChild(amenities);
 
   const goBtn = document.createElement('button');
-  goBtn.className = 'suggestion-item__go';
-  goBtn.textContent = 'Go →';
+  goBtn.className = `suggestion-item__go suggestion-item__go--${borderMod}`;
+  goBtn.setAttribute('aria-label', 'Navigate to spot');
+  goBtn.innerHTML = iconSvg(ArrowRight, 14);
   goBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     emit(EVENTS.SPOT_SELECTED, { spotId: spot.id, navigate: true });

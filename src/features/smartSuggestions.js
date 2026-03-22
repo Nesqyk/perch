@@ -57,22 +57,30 @@ async function _onSpotSelected(e) {
  * Filter and rank spots for the current filter selection.
  *
  * Ranking criteria:
- *  1. Meets all required filter criteria (hard filter)
- *  2. Sorted by effective score descending
- *     - On-campus spots receive a +0.15 soft bonus in campus mode
- *     - Spots with a recency signal (confidence updated < 15 min ago) get +0.10
- *     - Walk-time distance penalty applied when GPS is available
- *  3. Spots with _score < 0.15 are annotated _isBusy: true (not excluded)
+ *  1. In campus mode, off-campus spots are excluded entirely before scoring.
+ *  2. Meets all required filter criteria (hard filter — nearBuilding, needs, groupSize).
+ *  3. Sorted by effective score descending:
+ *     - availabilityScore: conf.score (0–1), or 0.4 when unknown/expired
+ *     - Recency signal (confidence updated < 15 min ago): +0.08 capped at 1.0
+ *     - Proximity multiplier: max(0.5, 1 − walkMins × 0.025) — multiplicative,
+ *       so quality outweighs proximity rather than being erased by it
+ *  4. Spots with _score < 0.25 are annotated _isBusy: true (not excluded).
  *
  * @param {object[]} spots
- * @param {object}   confidence  - Record<spotId, { score, updatedAt? }>
+ * @param {object}   confidence  - Record<spotId, { score, updatedAt?, validUntil? }>
  * @param {object}   filters     - { groupSize, needs, nearBuilding, userLocation, viewMode }
  * @returns {object[]} filtered + ranked spots (annotated with _score, _distance, _isBusy)
  */
 export function _rankSpots(spots, confidence, filters) {
   const { userLocation, viewMode = 'campus' } = filters;
 
-  return spots
+  // In campus mode, off-campus spots are excluded entirely — they don't
+  // compete with on-campus results at all.
+  const candidates = viewMode === 'campus'
+    ? spots.filter(s => s.on_campus)
+    : spots;
+
+  return candidates
     .filter(spot => _matchesFilters(spot, filters))
     .map(spot => {
       const score = _effectiveScore(spot, confidence, userLocation, viewMode);
@@ -80,7 +88,7 @@ export function _rankSpots(spots, confidence, filters) {
         ...spot,
         _distance: userLocation ? _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng }) : null,
         _score: score,
-        _isBusy: score < 0.15,
+        _isBusy: score < 0.25,
       };
     })
     .sort((a, b) => b._score - a._score);
@@ -135,41 +143,44 @@ function _matchesFilters(spot, filters) {
   return true;
 }
 
-function _effectiveScore(spot, confidence, userLocation, viewMode = 'campus') {
+function _effectiveScore(spot, confidence, userLocation, _viewMode = 'campus') {
   const conf = confidence[spot.id];
-  let baseScore = 0.5;
+
+  // ── Availability score (0.0 – 1.0) ────────────────────────────────────────
+  // Unknown / expired confidence → 0.4 (uncertain, not neutral).
+  // Valid confidence record → use server score directly.
+  let availabilityScore = 0.4;
 
   if (conf) {
     const isValid = !conf.validUntil || new Date(conf.validUntil) > new Date();
-    if (isValid) baseScore = conf.score ?? 0.5;
+    if (isValid) availabilityScore = conf.score ?? 0.4;
   }
 
-  // Soft on-campus bonus in campus mode.
-  if (viewMode === 'campus' && spot.on_campus) {
-    baseScore += 0.15;
-  }
-
-  // Recency bonus: confidence entry updated within the last 15 minutes.
+  // Recency bonus: fresh confirmation is a quality signal (+0.08, capped at 1.0).
   if (conf?.updatedAt) {
     const ageMs = Date.now() - new Date(conf.updatedAt).getTime();
     if (ageMs < 15 * 60 * 1000) {
-      baseScore += 0.10;
+      availabilityScore = Math.min(1.0, availabilityScore + 0.08);
     }
   }
 
-  let walkPenalty = 0;
+  // ── Proximity multiplier (0.5 – 1.0) ──────────────────────────────────────
+  // Multiplicative so proximity scales the quality signal rather than
+  // overriding it. A far excellent spot still beats a nearby mediocre one.
+  let proximityMultiplier = 1.0;
 
   if (userLocation && spot.lat !== undefined && spot.lng !== undefined) {
-    // Calculate distance-based penalty (assuming 84m/min walking speed)
     const distanceMeters = _calculateDistance(userLocation, { lat: spot.lat, lng: spot.lng });
-    const walkMins      = distanceMeters / 84;
-    walkPenalty         = 0.05 * walkMins;
+    const walkMins = distanceMeters / 84;
+    proximityMultiplier = Math.max(0.5, 1 - walkMins * 0.025);
   } else if (!spot.on_campus) {
-    // Fallback to static walk_time_min for off-campus spots if GPS unavailable
-    walkPenalty = 0.05 * (spot.walk_time_min ?? 0);
+    // Fallback: use static walk_time_min for off-campus spots when GPS unavailable.
+    const walkMins = spot.walk_time_min ?? 0;
+    proximityMultiplier = Math.max(0.5, 1 - walkMins * 0.025);
   }
+  // On-campus spots with no GPS: multiplier stays 1.0 (no penalty).
 
-  return Math.max(0, baseScore - walkPenalty);
+  return availabilityScore * proximityMultiplier;
 }
 
 // ─── Map highlight ────────────────────────────────────────────────────────────

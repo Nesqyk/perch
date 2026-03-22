@@ -108,16 +108,16 @@
 }
 
 .suggestion-item__rank {
-  font-size: var(--text-lg);
-  font-weight: var(--font-bold);
+  font-size: var(--text-xs);
+  font-weight: var(--font-normal);
   color: var(--color-text-dim);
   line-height: 1;
 }
 
 .suggestion-item__building {
   font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  font-weight: var(--font-medium);
+  color: var(--color-text-dim);
+  font-weight: var(--font-normal);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -132,9 +132,9 @@
 }
 
 .suggestion-item__name {
-  font-size: 1.05rem;
-  font-weight: var(--font-semibold);
-  color: var(--color-gray-900);
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
   line-height: 1.2;
 }
 
@@ -164,9 +164,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+  min-width: 0;
+  overflow: hidden;
 }
 
 .suggestion-item__sep {
@@ -187,26 +189,56 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  color: var(--color-gray-400);
+  color: var(--color-text-muted);
 }
 
 /* ─── Go button ──────────────────────────────────────────────────────────────── */
 
+/* Structural base — no colour here */
 .suggestion-item__go {
   flex-shrink: 0;
-  padding: 4px var(--space-3);
+  padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
-  background: var(--color-brand-light);
-  color: var(--color-green-700);
   border: 1px solid transparent;
   font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
+  font-weight: var(--font-bold);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 }
 
-.suggestion-item__go:hover {
+/* Colour variants — keyed to the card's availability state */
+.suggestion-item__go--free {
+  background: var(--color-green-100);
+  color: var(--color-green-700);
+}
+
+.suggestion-item__go--free:hover {
   background: var(--color-white);
-  border-color: var(--color-brand);
-  color: var(--color-brand);
+  border-color: var(--pin-free);
+  color: var(--color-green-700);
+}
+
+.suggestion-item__go--maybe {
+  background: var(--color-yellow-100);
+  color: var(--color-yellow-700);
+}
+
+.suggestion-item__go--maybe:hover {
+  background: var(--color-white);
+  border-color: var(--pin-maybe);
+  color: var(--color-yellow-700);
+}
+
+.suggestion-item__go--full {
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+}
+
+.suggestion-item__go--full:hover {
+  background: var(--color-white);
+  border-color: var(--pin-full);
+  color: var(--color-red-700);
 }
