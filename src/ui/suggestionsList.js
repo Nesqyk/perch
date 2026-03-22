@@ -6,10 +6,13 @@
  * spot name, score-coloured left border, walk time, capacity, amenity icons,
  * and a "Go →" CTA. Busy/full spots get a red border and "Likely full" badge.
  *
+ * Results are injected into the #suggestions-inject slot inside the Find tab
+ * body of filterPanel.js — no standalone header or close button is needed.
+ *
  * Imported styles: src/styles/suggestionsList.css
  */
 
-import { X, Zap, Volume2, Utensils, Wifi, ArrowRight } from 'lucide';
+import { Zap, Volume2, Utensils, Wifi, ArrowRight } from 'lucide';
 import { emit, EVENTS } from '../core/events.js';
 import { formatWalkTime } from '../utils/time.js';
 import { iconSvg } from './icons.js';
@@ -72,25 +75,6 @@ export function renderSuggestionsList(container, rankedSpots) {
 function _buildSuggestionsList(suggestions) {
   const wrapper = document.createElement('div');
   wrapper.className = 'suggestions-list';
-
-  const header = document.createElement('div');
-  header.className = 'suggestions-list__header';
-
-  const title = document.createElement('h2');
-  title.className = 'suggestions-list__title';
-  title.textContent = 'Top Suggestions';
-
-  const closeBtn = document.createElement('button');
-  closeBtn.className = 'suggestions-list__close';
-  closeBtn.setAttribute('aria-label', 'Close suggestions');
-  closeBtn.innerHTML = iconSvg(X, 20);
-  closeBtn.addEventListener('click', () => {
-    emit(EVENTS.SPOT_DESELECTED);
-  });
-
-  header.appendChild(title);
-  header.appendChild(closeBtn);
-  wrapper.appendChild(header);
 
   if (suggestions.length === 0) {
     const empty = document.createElement('p');

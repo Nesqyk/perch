@@ -19,6 +19,7 @@
 
 import { on, emit, EVENTS }      from '../core/events.js';
 import { getState, dispatch }    from '../core/store.js';
+import { renderSuggestionsList } from './suggestionsList.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
 import { timeAgo }               from '../utils/time.js';
 import { LogOut, Copy, Link,
@@ -80,6 +81,7 @@ export function initFilterPanel() {
   on(EVENTS.GROUP_LEFT,           _syncGroupTab);
   on(EVENTS.GROUP_MEMBERS_UPDATED, _syncGroupTab);
   on(EVENTS.GROUP_PINS_UPDATED,   _syncGroupTab);
+  on(EVENTS.UI_SUGGEST_OPENED,    _onSuggestOpened);
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -195,6 +197,11 @@ function _buildTabBody() {
     body.appendChild(_buildCampusSelectorBox());
     body.appendChild(_buildFilterAccordion());
     body.appendChild(_buildFindButton());
+
+    // Suggestions inject slot — populated by _onSuggestOpened
+    const inject = document.createElement('div');
+    inject.id    = 'suggestions-inject';
+    body.appendChild(inject);
   } else {
     body.appendChild(_buildGroupSection());
   }
@@ -553,6 +560,19 @@ function _buildJoinForm(section) {
 }
 
 // ─── Sync helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Inject ranked suggestions into the #suggestions-inject slot inside the
+ * Find tab body. Called when UI_SUGGEST_OPENED fires.
+ *
+ * @param {CustomEvent<{ rankedSpots: object[] }>} e
+ * @returns {void}
+ */
+function _onSuggestOpened(e) {
+  const slot = document.getElementById('suggestions-inject');
+  if (!slot) return;
+  renderSuggestionsList(slot, e.detail.rankedSpots);
+}
 
 /**
  * Re-sync all chip active states and filter-dependent visibility

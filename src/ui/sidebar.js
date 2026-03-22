@@ -3,12 +3,11 @@
  *
  * Desktop right-panel controller.
  * Manages which view is rendered inside #panel on desktop layouts.
+ * Always renders the filter panel — suggestions are injected inside
+ * the Find tab body by filterPanel.js when UI_SUGGEST_OPENED fires.
  *
- * Views (mutually exclusive):
- *   'filters'   — default; filter form + legend
- *   'spotCard'  — spot detail for a selected spot
- *   'claim'     — post-claim "you're heading here" panel
- *   'report'    — post-report "it's full" + alternatives panel
+ * The spot detail card is rendered in the #spot-modal-overlay by spotCard.js
+ * and is not part of the panel view system.
  *
  * On mobile, this module is inactive — bottomSheet.js takes over.
  * The breakpoint is defined in CSS (--breakpoint-desktop: 768px).
@@ -17,15 +16,16 @@
 import { on, EVENTS }         from '../core/events.js';
 import { getState }            from '../core/store.js';
 import { renderFilterPanel, initFilterPanel } from './filterPanel.js';
-import { renderSpotCard }      from './spotCard.js';
+import { renderSpotCard, closeSpotCard }      from './spotCard.js';
 import { renderReportPanel }   from './reportPanel.js';
-import { renderSuggestionsList } from './suggestionsList.js';
-
-let _currentView = 'filters';
-let _lastRanked = [];
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 
+/**
+ * Bootstrap the sidebar: register event listeners and render the default view.
+ *
+ * @returns {void}
+ */
 export function initSidebar() {
   initFilterPanel();
 
@@ -37,82 +37,71 @@ export function initSidebar() {
   on(EVENTS.GROUP_JOINED,       _onGroupJoined);
   on(EVENTS.GROUP_LEFT,         _onGroupLeft);
   on(EVENTS.GROUP_PINS_UPDATED, _onGroupPinsUpdated);
-  on(EVENTS.UI_SUGGEST_OPENED,  _onSuggestOpened);
 
   // Render the default filter view on startup.
-  _renderView('filters');
+  _renderFilterPanel();
 }
 
 // ─── Event handlers ──────────────────────────────────────────────────────────
 
-function _onSuggestOpened(e) {
-  _lastRanked = e.detail.rankedSpots;
-  _renderView('suggestions');
-}
-
 function _onSpotSelected(e) {
-  // Always show the spotCard in the sidebar — the floating overlay handles claims.
-  _renderView('spotCard', e.detail.spotId);
+  if (!_isDesktop()) return;
+  // Open the spot card modal; panel stays on the filter view.
+  renderSpotCard(e.detail.spotId);
 }
 
 function _onSpotDeselected() {
-  _renderView('filters');
+  if (!_isDesktop()) return;
+  closeSpotCard();
 }
 
 function _onClaimUpdated() {
-  // Re-render the spotCard so the inline claim section appears/disappears.
+  if (!_isDesktop()) return;
+  // Re-render the spot card modal so the inline claim section updates.
   const { selectedSpotId } = getState();
-  if (selectedSpotId && _currentView === 'spotCard') {
-    _renderView('spotCard', selectedSpotId);
-  }
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onGroupPinsUpdated() {
+  if (!_isDesktop()) return;
   const { selectedSpotId } = getState();
-  _renderView(_currentView, selectedSpotId);
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onCorrectionFiled(e) {
-  // Report panel is now a modal — open it without switching the sidebar view.
+  if (!_isDesktop()) return;
+  // Report panel is a modal — open it without touching the sidebar view.
   renderReportPanel(null, e.detail.spotId);
 }
 
 function _onGroupJoined() {
+  if (!_isDesktop()) return;
   const { selectedSpotId } = getState();
-  if (selectedSpotId && _currentView === 'spotCard') {
-    _renderView('spotCard', selectedSpotId);
-  } else {
-    _renderView('filters');
-  }
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onGroupLeft() {
-  _renderView('filters');
+  if (!_isDesktop()) return;
+  closeSpotCard();
 }
 
 // ─── View renderer ────────────────────────────────────────────────────────────
 
-function _renderView(view, spotId) {
-  // Guard: only act on desktop breakpoint.
+/**
+ * Render the filter panel into #panel-content (desktop only).
+ *
+ * @returns {void}
+ */
+function _renderFilterPanel() {
   if (!_isDesktop()) return;
-
-  _currentView = view;
   const container = document.getElementById('panel-content');
   if (!container) return;
-
-  switch (view) {
-    case 'filters':
-      renderFilterPanel(container);
-      break;
-    case 'spotCard':
-      renderSpotCard(container, spotId);
-      break;
-    case 'suggestions':
-      renderSuggestionsList(container, _lastRanked);
-      break;
-  }
+  renderFilterPanel(container);
 }
 
+/**
+ * @returns {boolean}
+ */
 function _isDesktop() {
   return window.matchMedia('(min-width: 768px)').matches;
 }

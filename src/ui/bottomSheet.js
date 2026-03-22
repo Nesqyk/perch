@@ -10,20 +10,25 @@
  * States:
  *   closed  — sheet sits below the viewport fold (default on load)
  *   peek    — sheet shows ~40% of viewport height (filter form visible)
- *   open    — sheet covers ~80% of viewport (spot detail / claim / report)
+ *   open    — sheet covers ~80% of viewport (room to scroll suggestions)
+ *
+ * The filter panel is always the content of #panel-content. Suggestions are
+ * injected into the Find tab body by filterPanel.js when UI_SUGGEST_OPENED
+ * fires; this module only expands the sheet to 'open' so there's room to scroll.
+ *
+ * The spot detail card is rendered in the #spot-modal-overlay by spotCard.js.
+ * When a spot is selected, the sheet stays at 'peek' and the modal opens on top.
  *
  * Gesture:
  *   Drag the handle bar up → expand to 'open'
  *   Drag down              → shrink to 'peek' or 'closed'
- *   Tap a map pin          → auto-expand to 'open' with spot detail
  */
 
 import { on, emit, EVENTS }    from '../core/events.js';
 import { getState }             from '../core/store.js';
 import { renderFilterPanel }    from './filterPanel.js';
-import { renderSpotCard }       from './spotCard.js';
+import { renderSpotCard, closeSpotCard } from './spotCard.js';
 import { renderReportPanel }    from './reportPanel.js';
-import { renderSuggestionsList } from './suggestionsList.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -33,13 +38,23 @@ const DRAG_THRESHOLD  = 50;   // px drag needed to trigger state change
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-let _sheetState = 'peek'; // 'closed' | 'peek' | 'open'
+/** @type {'closed' | 'peek' | 'open'} */
+let _sheetState = 'peek';
+
+/** @type {number} */
 let _dragStartY = 0;
+
+/** @type {number} */
 let _dragStartH = 0;
-let _lastRanked = [];
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 
+/**
+ * Bootstrap the bottom sheet: register gesture and event listeners,
+ * then render the default filter view.
+ *
+ * @returns {void}
+ */
 export function initBottomSheet() {
   const panel  = document.getElementById('panel');
   const handle = document.getElementById('panel-handle');
@@ -65,70 +80,59 @@ export function initBottomSheet() {
   on(EVENTS.UI_SUGGEST_OPENED,  _onSuggestOpened);
 
   // Default render — filter form.
-  _renderView('filters');
+  _renderFilterPanel();
 }
 
 // ─── Event handlers ──────────────────────────────────────────────────────────
 
-function _onSuggestOpened(e) {
+function _onSuggestOpened() {
   if (_isDesktop()) return;
-  _lastRanked = e.detail.rankedSpots;
-  _renderView('suggestions');
+  // Suggestions are injected into the Find tab body by filterPanel.js.
+  // Just expand the sheet so the list is scrollable.
   _setSheetState('open');
 }
 
 function _onSpotSelected(e) {
   if (_isDesktop()) return;
-  // Always show the spotCard in the sheet — the overlay handles claims.
-  _renderView('spotCard', e.detail.spotId);
-  _setSheetState('open');
+  // Open the spot card modal; sheet stays at peek with the filter view.
+  renderSpotCard(e.detail.spotId);
+  _setSheetState('peek');
 }
 
 function _onSpotDeselected() {
   if (_isDesktop()) return;
-  _renderView('filters');
+  closeSpotCard();
   _setSheetState('peek');
 }
 
 function _onClaimUpdated() {
   if (_isDesktop()) return;
-  // Re-render the spotCard so the inline claim section appears/disappears.
+  // Re-render the spot card modal so the inline claim section updates.
   const { selectedSpotId } = getState();
-  if (selectedSpotId) {
-    _renderView('spotCard', selectedSpotId);
-  }
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onGroupPinsUpdated() {
   if (_isDesktop()) return;
   const { selectedSpotId } = getState();
-  if (selectedSpotId) {
-    _renderView('spotCard', selectedSpotId);
-  } else {
-    _renderView('filters');
-  }
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onCorrectionFiled(e) {
   if (_isDesktop()) return;
-  // Report panel is now a modal — open it without changing the bottom sheet view.
+  // Report panel is a modal — open it without changing the bottom sheet.
   renderReportPanel(null, e.detail.spotId);
 }
 
 function _onGroupJoined() {
   if (_isDesktop()) return;
   const { selectedSpotId } = getState();
-  if (selectedSpotId) {
-    _renderView('spotCard', selectedSpotId);
-  } else {
-    _renderView('filters');
-  }
-  _setSheetState('open');
+  if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
 function _onGroupLeft() {
   if (_isDesktop()) return;
-  _renderView('filters');
+  closeSpotCard();
   _setSheetState('peek');
 }
 
@@ -179,6 +183,12 @@ function _onDragEnd(e) {
 
 // ─── Sheet state ─────────────────────────────────────────────────────────────
 
+/**
+ * Transition the sheet to the given state.
+ *
+ * @param {'closed' | 'peek' | 'open'} state
+ * @returns {void}
+ */
 function _setSheetState(state) {
   _sheetState = state;
   const panel = document.getElementById('panel');
@@ -197,24 +207,21 @@ function _setSheetState(state) {
 
 // ─── View renderer ────────────────────────────────────────────────────────────
 
-function _renderView(view, spotId) {
+/**
+ * Render the filter panel into #panel-content (mobile only).
+ *
+ * @returns {void}
+ */
+function _renderFilterPanel() {
   if (_isDesktop()) return;
   const container = document.getElementById('panel-content');
   if (!container) return;
-
-  switch (view) {
-    case 'filters':
-      renderFilterPanel(container);
-      break;
-    case 'spotCard':
-      renderSpotCard(container, spotId);
-      break;
-    case 'suggestions':
-      renderSuggestionsList(container, _lastRanked);
-      break;
-  }
+  renderFilterPanel(container);
 }
 
+/**
+ * @returns {boolean}
+ */
 function _isDesktop() {
   return window.matchMedia('(min-width: 768px)').matches;
 }

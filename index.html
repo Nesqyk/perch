@@ -6,12 +6,10 @@
   <meta name="description" content="Find your spot before the panic does. Real-time campus space finder." />
   <meta name="theme-color" content="#1a6b3c" />
 
-  <title>Perch — Find Your Spot</title>
+  <title>Perch - Find Your Spot</title>
 
-  <!-- Favicon placeholder -->
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-  <!-- All styles are CSS-module-free; one cascade, CSS variables for theming -->
   <link rel="stylesheet" href="/src/styles/main.css" />
   <link rel="stylesheet" href="/src/styles/map.css" />
   <link rel="stylesheet" href="/src/styles/mapPopup.css" />
@@ -19,41 +17,11 @@
   <link rel="stylesheet" href="/src/styles/bottomSheet.css" />
   <link rel="stylesheet" href="/src/styles/spotCard.css" />
   <link rel="stylesheet" href="/src/styles/filters.css" />
+  <link rel="stylesheet" href="/src/styles/navMenu.css" />
 </head>
 <body>
-
-  <!-- ─── Header ─────────────────────────────────────────────────────────── -->
-  <header id="app-header" class="app-header">
-    <!-- Owl logo SVG + wordmark -->
-    <div class="app-logo-lockup">
-      <img class="app-logo-owl" src="/logo.svg" alt="Perch owl logo" width="40" height="40" />
-      <span class="app-logo-text">Perch</span>
-    </div>
-
-    <!-- User Profile button -->
-    <button id="profile-btn" class="btn-icon header-profile-btn" aria-label="Your identity">
-      <span id="profile-btn-icon"></span>
-    </button>
-
-    <!-- Hamburger — visible on mobile only (CSS controls display) -->
-    <button id="menu-toggle" class="btn-icon" aria-label="Open menu" aria-expanded="false">
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-      <span class="hamburger-line"></span>
-    </button>
-  </header>
-
-  <!-- ─── Main layout ─────────────────────────────────────────────────────── -->
-  <!--
-    Desktop: two-column grid (map | sidebar)
-    Mobile:  map full-screen + bottom sheet overlay
-    Layout switching is handled entirely by CSS (no JS class toggling for layout).
-  -->
   <main id="app-layout" class="app-layout">
-
-    <!-- Leaflet renders into this element. mapInit.js passes this id. -->
-    <div id="map-container" class="map-container" aria-label="Campus map">
-      <!-- Map legend — bottom-centre pill -->
+    <div id="map-container" class="map-container view--active" aria-label="Campus map">
       <div class="map-legend" aria-label="Map legend">
         <span class="map-legend-dot map-legend-dot--free"></span><span>Free</span>
         <span class="map-legend-dot map-legend-dot--maybe"></span><span>Maybe</span>
@@ -61,64 +29,47 @@
       </div>
     </div>
 
-
-    <!-- ─── Desktop sidebar / Mobile bottom sheet ─────────────────────────
-         Same element, same content — CSS repositions it.
-         JS populates #panel-content based on app state.
-    ──────────────────────────────────────────────────────────────────────── -->
-    <aside id="panel" class="panel" aria-label="Spot panel">
-      <!-- Drag handle — visible on mobile only -->
+    <aside id="panel" class="panel view--active" aria-label="Spot panel">
       <div id="panel-handle" class="panel-handle" aria-hidden="true"></div>
-
-      <!-- Panel content is fully managed by ui/sidebar.js + ui/bottomSheet.js -->
-      <div id="panel-content" class="panel-content">
-        <!-- Default state: filter form (rendered by filterPanel.js on init) -->
-      </div>
+      <div id="panel-content" class="panel-content"></div>
     </aside>
 
+    <section id="view-profile" class="page-view" aria-label="Profile and settings"></section>
+    <section id="view-group" class="page-view" aria-label="My squad"></section>
   </main>
 
-  <!-- ─── Toast notifications ─────────────────────────────────────────────
-       Rendered by ui/toast.js. Lives outside #app-layout so it is never
-       clipped by overflow:hidden on the panel or map container.
-  ──────────────────────────────────────────────────────────────────────── -->
   <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
-  <!-- ─── Generic modal ──────────────────────────────────────────────────── -->
   <div id="modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="modal-box" class="modal-box">
       <div id="modal-content"></div>
     </div>
   </div>
 
-  <!-- ─── Report ("It's Full") modal ─────────────────────────────────────────
-       Dedicated modal so it can be opened without disturbing the sidebar or
-       the generic confirmation modal.
-  ──────────────────────────────────────────────────────────────────────── -->
   <div id="report-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="report-modal-box" class="modal-box modal-box--report">
       <div id="report-modal-content"></div>
     </div>
   </div>
 
-  <!-- ─── Profile ("Your Identity") modal ────────────────────────────────────── -->
   <div id="profile-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="profile-modal-box" class="modal-box modal-box--profile">
       <div id="profile-modal-content"></div>
     </div>
   </div>
 
-  <!-- ─── Submit ("Suggest a Spot") modal ────────────────────────────────────── -->
   <div id="submit-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
     <div id="submit-modal-box" class="modal-box modal-box--submit">
       <div id="submit-modal-content"></div>
     </div>
   </div>
 
-  <!-- ─── Entry point ─────────────────────────────────────────────────────
-       type="module" enables ES6 imports. Vite handles bundling for prod.
-  ──────────────────────────────────────────────────────────────────────── -->
-  <script type="module" src="/src/main.js"></script>
+  <div id="spot-modal-overlay" class="modal-overlay" aria-modal="true" role="dialog" hidden>
+    <div id="spot-modal-box" class="modal-box modal-box--spot">
+      <div id="spot-modal-content"></div>
+    </div>
+  </div>
 
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>

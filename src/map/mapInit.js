@@ -56,6 +56,9 @@ const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png
 /** @type {import('leaflet').Rectangle | null} Temporary marker shown on click */
 let _clickMarker = null;
 
+/** @type {import('leaflet').CircleMarker | null} Marker shown at the selected spot's location */
+let _selectionMarker = null;
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 /**
@@ -96,7 +99,8 @@ export function initMap() {
   _map.on('zoomend', _onZoomChanged);
 
   // ── Spot selection navigation ───────────────────────────────────────────
-  on(EVENTS.SPOT_SELECTED, _onSpotSelected);
+  on(EVENTS.SPOT_SELECTED,   _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED, _onSpotDeselected);
 
   // ── Campus selected → fly to new bounds ─────────────────────────────────
   on(EVENTS.CAMPUS_SELECTED, _onCampusSelected);
@@ -180,6 +184,8 @@ function _onMapClick(e) {
 
 /**
  * Clear the click marker programmatically (e.g. when panel closes).
+ *
+ * @returns {void}
  */
 export function clearClickMarker() {
   if (_clickMarker) {
@@ -188,17 +194,56 @@ export function clearClickMarker() {
   }
 }
 
+/**
+ * Clear the selection marker programmatically (e.g. when the spot card closes).
+ *
+ * @returns {void}
+ */
+export function clearSelectionMarker() {
+  if (_selectionMarker) {
+    _selectionMarker.remove();
+    _selectionMarker = null;
+  }
+}
+
 // ─── Spot navigation ─────────────────────────────────────────────────────────
 
+/**
+ * Place a selection marker at the spot's location and pan to it (no zoom change).
+ * Fires on every SPOT_SELECTED regardless of the navigate flag.
+ *
+ * @param {CustomEvent<{ spotId: string, navigate: boolean }>} e
+ */
 function _onSpotSelected(e) {
-  if (!e.detail.navigate) return;
-
   const { spots } = getState();
   const spot = spots.find(s => s.id === e.detail.spotId);
+  if (!spot || !spot.lat || !spot.lng) return;
 
-  if (spot && spot.lat && spot.lng) {
-    panTo({ lat: spot.lat, lng: spot.lng }, 18);
+  // Remove any previous selection marker.
+  if (_selectionMarker) {
+    _selectionMarker.remove();
+    _selectionMarker = null;
   }
+
+  // Place a circle marker at the spot's position.
+  _selectionMarker = L.circleMarker([spot.lat, spot.lng], {
+    radius:      12,
+    color:       'var(--color-brand, #7BDEB7)',
+    fillColor:   'var(--color-brand, #7BDEB7)',
+    fillOpacity: 0.25,
+    weight:      3,
+    opacity:     1,
+  }).addTo(_map);
+
+  // Pan to the spot without changing the zoom level or triggering view-mode switch.
+  panTo({ lat: spot.lat, lng: spot.lng });
+}
+
+/**
+ * Clear the selection marker when the spot card is closed.
+ */
+function _onSpotDeselected() {
+  clearSelectionMarker();
 }
 
 // ─── Public helpers ───────────────────────────────────────────────────────────

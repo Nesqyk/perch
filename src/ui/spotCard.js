@@ -1,12 +1,13 @@
 /**
  * src/ui/spotCard.js
  *
- * Renders the detailed view for a single selected spot.
- * Used by both sidebar.js (desktop) and bottomSheet.js (mobile) — they each
- * pass their container element, so the render logic is never duplicated.
+ * Renders the detailed view for a single selected spot inside the
+ * #spot-modal-overlay. Opening and closing is managed here; callers only
+ * need to call renderSpotCard(spotId) and closeSpotCard().
  *
  * Layout (top → bottom):
- *   1. Header — spot name, subtitle, × close button
+ *   1. Header — spot name, subtitle, × close button  [sticky, outside scroll]
+ *   ── scrollable region ──
  *   2. Status chips — "Likely Free" pill + percentage pill
  *   3. Photo placeholder (full-width, striped)
  *   4. Info row — capacity (person icon + number) | amenity icons
@@ -64,13 +65,17 @@ let _groupSubForm = 'create';
 // ─── Public render ────────────────────────────────────────────────────────────
 
 /**
- * Render the spot detail card into a container element.
+ * Render the spot detail card into the #spot-modal-overlay and open it.
+ * Safe to call multiple times — re-renders in place if the modal is already open.
  *
- * @param {HTMLElement} container
- * @param {string}      spotId
+ * @param {string} spotId
  * @returns {void}
  */
-export function renderSpotCard(container, spotId) {
+export function renderSpotCard(spotId) {
+  const overlay = document.getElementById('spot-modal-overlay');
+  const content = document.getElementById('spot-modal-content');
+  if (!overlay || !content) return;
+
   const {
     spots, confidence, claims, group,
     myActiveClaim, groupMember, groupPins, groupPinJoins, myGroupPinId,
@@ -86,14 +91,28 @@ export function renderSpotCard(container, spotId) {
   // Is OUR claim on this spot?
   const ownClaim = myActiveClaim?.spotId === spotId ? myActiveClaim : null;
 
-  container.innerHTML = '';
-  container.appendChild(
+  content.innerHTML = '';
+  content.appendChild(
     _buildCard(
       spot, confDisplay, status, activeClaims,
       group, groupMember, groupPins, groupPinJoins, myGroupPinId,
       ownClaim, spots,
     ),
   );
+
+  overlay.hidden = false;
+}
+
+/**
+ * Close the spot card modal and clear its contents.
+ *
+ * @returns {void}
+ */
+export function closeSpotCard() {
+  const overlay = document.getElementById('spot-modal-overlay');
+  const content = document.getElementById('spot-modal-content');
+  if (overlay) overlay.hidden = true;
+  if (content) content.innerHTML = '';
 }
 
 // ─── Card builder ─────────────────────────────────────────────────────────────
@@ -120,28 +139,35 @@ function _buildCard(
   const card     = document.createElement('div');
   card.className = 'spot-card';
 
+  // Header is sticky — sits outside the scrollable region
   card.appendChild(_buildHeader(spot));
-  card.appendChild(_buildStatusRow(confDisplay, status));
-  card.appendChild(_buildPhoto());
-  card.appendChild(_buildInfoRow(spot));
-  card.appendChild(_buildDivider());
-  card.appendChild(_buildReportedRow(activeClaims));
+
+  // All remaining sections scroll together inside the modal box
+  const scrollable     = document.createElement('div');
+  scrollable.className = 'spot-card__scrollable';
+
+  scrollable.appendChild(_buildStatusRow(confDisplay, status));
+  scrollable.appendChild(_buildPhoto());
+  scrollable.appendChild(_buildInfoRow(spot));
+  scrollable.appendChild(_buildDivider());
+  scrollable.appendChild(_buildReportedRow(activeClaims));
 
   if (ownClaim) {
-    card.appendChild(_buildClaimSection(spot, activeClaims, ownClaim));
+    scrollable.appendChild(_buildClaimSection(spot, activeClaims, ownClaim));
   } else {
-    card.appendChild(_buildActions(spot.id, status));
+    scrollable.appendChild(_buildActions(spot.id, status));
   }
 
-  card.appendChild(_buildDivider());
+  scrollable.appendChild(_buildDivider());
   if (group) {
-    card.appendChild(_buildGroupMembersSection(
+    scrollable.appendChild(_buildGroupMembersSection(
       group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots,
     ));
   } else {
-    card.appendChild(_buildGroupSection());
+    scrollable.appendChild(_buildGroupSection());
   }
 
+  card.appendChild(scrollable);
   return card;
 }
 
