@@ -3,9 +3,9 @@
  *
  * Building-first campus modal.
  *
- * Clicking a building marker opens a room directory with search, status
- * filters, pending peer-review cards, and an inline add-room flow.
- * Clicking an empty campus area opens the add-building flow.
+ * Clicking a building marker opens a room directory with floor chips,
+ * search, status filters, pending peer-review cards, and an inline
+ * add-room flow. Clicking an empty campus area opens the add-building flow.
  *
  * Self-confirm guard: users cannot confirm a building or room submission
  * they created. Ownership is determined by comparing the row's `created_by`
@@ -35,6 +35,13 @@ import { Link } from 'lucide';
 
 const OVERLAY_ID = 'submit-modal-overlay';
 const CONTENT_ID = 'submit-modal-content';
+
+/**
+ * Currently selected floor filter within the building modal.
+ * null means "All floors". Reset each time a new building is opened.
+ * @type {string | null}
+ */
+let _selectedFloor = null;
 
 /**
  * Wire the building-first campus listeners.
@@ -76,6 +83,8 @@ export async function openBuildingPanel(buildingId) {
   const { buildings } = getState();
   const building = buildings.find((entry) => entry.id === buildingId);
   if (!building) return;
+
+  _selectedFloor = null;
 
   const pendingSubmissions = await fetchPendingSpotSubmissions({
     campusId: building.campus_id,
@@ -282,6 +291,36 @@ function _buildBuildingPanel(building, pendingSubmissions) {
   `;
   wrap.appendChild(controls);
 
+  // ── Floor chips ──────────────────────────────────────────────────────────
+  const allFloors = [...new Set(
+    canonicalRooms
+      .map((r) => (r.floor ?? '').trim())
+      .filter(Boolean),
+  )].sort(_compareFloors);
+
+  const floorChipsRow = document.createElement('div');
+  floorChipsRow.className = 'campus-building-panel__floor-chips';
+  floorChipsRow.id = 'building-floor-chips';
+
+  if (allFloors.length > 1) {
+    const chips = [{ label: 'All', value: null }, ...allFloors.map((f) => ({ label: f, value: f }))];
+    chips.forEach(({ label, value }) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = `building-floor-chip${_selectedFloor === value ? ' building-floor-chip--active' : ''}`;
+      chip.textContent = label;
+      chip.addEventListener('click', () => {
+        _selectedFloor = value;
+        floorChipsRow.querySelectorAll('.building-floor-chip').forEach((c) => {
+          c.classList.toggle('building-floor-chip--active', c.textContent === label);
+        });
+        renderRooms();
+      });
+      floorChipsRow.appendChild(chip);
+    });
+    wrap.appendChild(floorChipsRow);
+  }
+
   const roomsContainer = document.createElement('div');
   roomsContainer.className = 'campus-building-panel__rooms';
   wrap.appendChild(roomsContainer);
@@ -296,7 +335,11 @@ function _buildBuildingPanel(building, pendingSubmissions) {
   const renderRooms = () => {
     const search = /** @type {HTMLInputElement} */(controls.querySelector('#building-room-search'))?.value ?? '';
     const status = /** @type {HTMLSelectElement} */(controls.querySelector('#building-room-status'))?.value ?? 'all';
-    const visibleRooms = getVisibleRooms(canonicalRooms, claims, confidence, { search, status });
+    let visibleRooms = getVisibleRooms(canonicalRooms, claims, confidence, { search, status });
+
+    if (_selectedFloor !== null) {
+      visibleRooms = visibleRooms.filter((r) => (r.floor ?? '').trim() === _selectedFloor);
+    }
 
     if (!visibleRooms.length) {
       roomsContainer.innerHTML = '<div class="campus-building-panel__empty">No canonical rooms match this filter yet.</div>';
@@ -441,4 +484,23 @@ function _escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+/**
+ * Sort floor labels logically: ground/basement first, then numeric (1F, 2F…),
+ * then any non-numeric labels alphabetically.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function _compareFloors(a, b) {
+  const _rank = (f) => {
+    const lower = f.toLowerCase();
+    if (lower === 'g' || lower === 'gf' || lower === 'ground') return -2;
+    if (lower === 'b' || lower === 'b1' || lower === 'basement') return -1;
+    const num = parseInt(f, 10);
+    return isNaN(num) ? 999 : num;
+  };
+  return _rank(a) - _rank(b);
 }
