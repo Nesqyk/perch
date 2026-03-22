@@ -40,6 +40,7 @@
 
   /* Colour — UI roles */
   --color-brand: #7BDEB7;
+  --color-brand-dark : #55cfa0;
   /* Perch teal-green */
   --color-brand-light: #e8f5ee;
   --color-surface: var(--color-white);
@@ -441,6 +442,19 @@ a {
   flex-direction: column;
   gap: var(--space-2);
   margin-bottom: var(--space-5);
+}
+
+/* Campus picker modal — no padding, list scrolls internally */
+.modal-box--campus {
+  max-width: 440px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.modal-title--padded {
+  padding: var(--space-5) var(--space-4) var(--space-3);
+  border-bottom: var(--border);
+  margin-bottom: 0;
 }
 
 /* Report / "It's Full" modal variant — scrollable, slightly wider */

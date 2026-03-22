@@ -1,42 +1,45 @@
 /**
  * src/styles/campusSelector.css
  *
- * Campus picker — searchable popover overlay variant.
+ * Campus picker styles.
  *
- * The overlay uses `position: fixed` (coordinates set by _positionOverlay()
- * in campusSelector.js via getBoundingClientRect) so it escapes any ancestor
- * overflow:hidden / overflow:auto clipping — both #panel on mobile and
- * #panel-content on desktop would otherwise clip an absolute-positioned child.
+ * The picker now opens as a modal dialog (via openModalWithElement in
+ * modal.js) rather than a fixed popover, so there are no positioning
+ * or overflow-escape rules here. The modal box itself is styled by
+ * .modal-box--campus in main.css.
  *
  * Class inventory:
- *   .campus-selector-container    outer wrapper (position: relative)
- *   .campus-trigger               single-line trigger button
- *   .campus-trigger--disabled     city-mode muted state
- *   .campus-trigger__label        left-side label area
- *   .campus-trigger__name         selected campus name text
- *   .campus-trigger__placeholder  "Select campus" placeholder text
- *   .campus-trigger__near-dot     green dot when selected == nearest
- *   .campus-trigger__chevron      right-side chevron icon (rotates when open)
- *   .campus-overlay               absolute dropdown panel
- *   .campus-overlay__gps          GPS prompt row
- *   .campus-overlay__gps-btn      "Use my location" button
- *   .campus-overlay__gps-denied   blocked-location static note
- *   .campus-overlay__search-wrap  search input wrapper
- *   .campus-overlay__search       search text input
- *   .campus-overlay__list         scrollable campus list (role="listbox")
- *   .campus-overlay__row          individual campus button
- *   .campus-overlay__row--selected  selected campus row highlight
- *   .campus-overlay__row-body     name + city stacked column
- *   .campus-overlay__row-name     campus name (bold)
- *   .campus-overlay__row-city     campus city (muted, smaller)
- *   .campus-overlay__row-end      right-side icon cluster
- *   .campus-overlay__near-dot     green dot for nearest campus in list
- *   .campus-overlay__check        checkmark icon for selected campus
- *   .campus-overlay__empty        no-results message
- *   .campus-overlay__add-row      "+ Add campus" list row button
- *   .campus-overlay__add-form     inline add-campus form
- *   .campus-overlay__add-input    text input inside add form
- *   .campus-overlay__add-actions  button row inside add form
+ *   Trigger (in panel):
+ *     .campus-selector-container    outer wrapper
+ *     .campus-trigger               single-line trigger button
+ *     .campus-trigger--disabled     city-mode muted state
+ *     .campus-trigger__label        left-side label area
+ *     .campus-trigger__name         selected campus name text
+ *     .campus-trigger__placeholder  "Select campus" placeholder
+ *     .campus-trigger__near-dot     green dot when selected == nearest
+ *     .campus-trigger__chevron      right-side chevron icon
+ *
+ *   Modal content (inside .modal-box--campus):
+ *     .campus-modal                 content wrapper
+ *     .campus-modal__gps            GPS prompt row
+ *     .campus-modal__gps-btn        "Use my location" button
+ *     .campus-modal__gps-denied     blocked-location note
+ *     .campus-modal__search-wrap    search input wrapper
+ *     .campus-modal__search         search text input
+ *     .campus-modal__list           scrollable campus list (role="listbox")
+ *     .campus-modal__row            individual campus button
+ *     .campus-modal__row--selected  selected campus row highlight
+ *     .campus-modal__row-body       name + city stacked column
+ *     .campus-modal__row-name       campus name
+ *     .campus-modal__row-city       campus city (muted)
+ *     .campus-modal__row-end        right-side icon cluster
+ *     .campus-modal__near-dot       green dot for nearest campus
+ *     .campus-modal__check          checkmark icon for selected
+ *     .campus-modal__empty          no-results message
+ *     .campus-modal__add-row        "+ Add campus" list row button
+ *     .campus-modal__add-form       inline add-campus form
+ *     .campus-modal__add-input      text input inside add form
+ *     .campus-modal__add-actions    button row inside add form
  */
 
 /* ─── Container ──────────────────────────────────────────────────────────────── */
@@ -136,32 +139,24 @@
   transform: rotate(180deg);
 }
 
-/* ─── Overlay panel ──────────────────────────────────────────────────────────── */
+/* ─── Modal content wrapper ──────────────────────────────────────────────────── */
 
-.campus-overlay {
-  position: fixed;
-  /* top / left / width set dynamically by _positionOverlay() in campusSelector.js */
-  z-index: 300;
+.campus-modal {
   display: flex;
   flex-direction: column;
-  background: var(--color-surface);
-  border: var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  overflow: hidden;
 }
 
 /* ─── GPS prompt row ─────────────────────────────────────────────────────────── */
 
-.campus-overlay__gps {
+.campus-modal__gps {
   display: flex;
   align-items: center;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
   border-bottom: var(--border);
   background: var(--color-surface-alt);
 }
 
-.campus-overlay__gps-btn {
+.campus-modal__gps-btn {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
@@ -176,27 +171,27 @@
   transition: color var(--transition-fast);
 }
 
-.campus-overlay__gps-btn:hover {
+.campus-modal__gps-btn:hover {
   color: var(--color-green-700);
 }
 
-.campus-overlay__gps-btn svg {
+.campus-modal__gps-btn svg {
   flex-shrink: 0;
 }
 
-.campus-overlay__gps-denied {
+.campus-modal__gps-denied {
   font-size: var(--text-xs);
   color: var(--color-text-dim);
 }
 
 /* ─── Search input ───────────────────────────────────────────────────────────── */
 
-.campus-overlay__search-wrap {
-  padding: var(--space-2) var(--space-3);
+.campus-modal__search-wrap {
+  padding: var(--space-3) var(--space-4);
   border-bottom: var(--border);
 }
 
-.campus-overlay__search {
+.campus-modal__search {
   width: 100%;
   padding: var(--space-2) var(--space-3);
   background: var(--color-surface-alt);
@@ -211,32 +206,32 @@
     box-shadow var(--transition-fast);
 }
 
-.campus-overlay__search:focus {
+.campus-modal__search:focus {
   border-color: var(--color-brand);
   box-shadow: 0 0 0 3px var(--color-brand-light);
 }
 
-.campus-overlay__search::placeholder {
+.campus-modal__search::placeholder {
   color: var(--color-text-dim);
 }
 
 /* ─── Campus list ────────────────────────────────────────────────────────────── */
 
-.campus-overlay__list {
+.campus-modal__list {
   overflow-y: auto;
-  max-height: 200px;
+  max-height: 50vh;
   display: flex;
   flex-direction: column;
 }
 
 /* ── Campus row ──────────────────────────────────────────────────────────── */
 
-.campus-overlay__row {
+.campus-modal__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: none;
   border: none;
   border-bottom: var(--border);
@@ -248,25 +243,25 @@
   transition: background var(--transition-fast);
 }
 
-.campus-overlay__row:last-of-type {
+.campus-modal__row:last-of-type {
   border-bottom: none;
 }
 
-.campus-overlay__row:hover {
+.campus-modal__row:hover {
   background: var(--color-surface-alt);
 }
 
-.campus-overlay__row--selected {
+.campus-modal__row--selected {
   background: var(--color-brand-light);
 }
 
-.campus-overlay__row--selected:hover {
+.campus-modal__row--selected:hover {
   background: var(--color-brand-light);
 }
 
 /* ── Row body (name + city) ──────────────────────────────────────────────── */
 
-.campus-overlay__row-body {
+.campus-modal__row-body {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -275,14 +270,14 @@
   overflow: hidden;
 }
 
-.campus-overlay__row-name {
+.campus-modal__row-name {
   font-weight: var(--font-medium);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.campus-overlay__row-city {
+.campus-modal__row-city {
   font-size: var(--text-xs);
   color: var(--color-text-dim);
   white-space: nowrap;
@@ -292,15 +287,15 @@
 
 /* ── Row end (dots + checkmark) ──────────────────────────────────────────── */
 
-.campus-overlay__row-end {
+.campus-modal__row-end {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   flex-shrink: 0;
-  margin-left: var(--space-2);
+  margin-left: var(--space-3);
 }
 
-.campus-overlay__near-dot {
+.campus-modal__near-dot {
   display: inline-block;
   width: 6px;
   height: 6px;
@@ -309,7 +304,7 @@
   flex-shrink: 0;
 }
 
-.campus-overlay__check {
+.campus-modal__check {
   display: flex;
   align-items: center;
   color: var(--color-green-700);
@@ -317,8 +312,8 @@
 
 /* ── Empty state ─────────────────────────────────────────────────────────── */
 
-.campus-overlay__empty {
-  padding: var(--space-3);
+.campus-modal__empty {
+  padding: var(--space-4);
   font-size: var(--text-sm);
   color: var(--color-text-dim);
   text-align: center;
@@ -326,12 +321,12 @@
 
 /* ── "+ Add campus" row ──────────────────────────────────────────────────── */
 
-.campus-overlay__add-row {
+.campus-modal__add-row {
   display: flex;
   align-items: center;
   gap: var(--space-1);
   width: 100%;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   background: none;
   border: none;
   border-top: var(--border);
@@ -344,43 +339,27 @@
   transition: color var(--transition-fast), background var(--transition-fast);
 }
 
-.campus-overlay__add-row:hover {
+.campus-modal__add-row:hover {
   color: var(--color-text);
   background: var(--color-surface-alt);
 }
 
 /* ─── Inline add form ────────────────────────────────────────────────────────── */
 
-.campus-overlay__add-form {
+.campus-modal__add-form {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-3);
+  padding: var(--space-4);
   border-top: var(--border);
   background: var(--color-surface-alt);
 }
 
-.campus-overlay__add-input {
+.campus-modal__add-input {
   width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--color-surface);
-  border: var(--border);
-  border-radius: var(--radius-md);
-  font-family: var(--font-sans);
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  outline: none;
-  transition:
-    border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
 }
 
-.campus-overlay__add-input:focus {
-  border-color: var(--color-brand);
-  box-shadow: 0 0 0 3px var(--color-brand-light);
-}
-
-.campus-overlay__add-actions {
+.campus-modal__add-actions {
   display: flex;
   gap: var(--space-2);
 }

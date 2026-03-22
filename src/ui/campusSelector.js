@@ -2,23 +2,24 @@
  * src/ui/campusSelector.js
  *
  * Renders the campus picker as a single trigger button that opens a
- * searchable popover overlay. Scales to hundreds of campuses without
- * visual clutter — the current campus is always shown in one line,
- * the full list is only surfaced on demand.
+ * full modal dialog with a searchable list of campuses. Using a modal
+ * gives more vertical room for long campus lists and avoids the
+ * complexity of positioning a fixed popover relative to the trigger.
  *
- * Overlay behaviour:
- *   • The overlay is appended to <body> and positioned with `position: fixed`
- *     so it escapes any ancestor overflow:hidden / overflow:auto clipping
- *     (both #panel on mobile and #panel-content on desktop clip absolute children).
- *   • `_positionOverlay` reads the trigger's getBoundingClientRect() on every
- *     open and on window resize to keep the overlay aligned to the trigger.
- *   • Closes on: item select, Escape, or click outside the container.
- *   • In city mode the trigger is muted and the overlay cannot open.
+ * Trigger renders the selected campus name (or placeholder) with a
+ * chevron. In city mode the trigger is muted and cannot be clicked.
+ *
+ * Modal contents:
+ *   • Optional GPS "Use my location" row (hidden once location is known).
+ *   • Search input that filters the list in real time.
+ *   • Scrollable listbox of campuses, sorted by proximity when location
+ *     is available, alphabetical otherwise.
+ *   • "Add campus" inline form at the bottom.
  *
  * Preserved from the original implementation:
  *   • Haversine nearest-campus detection (_haversine, _isNearest).
  *   • GPS prompt / denied message.
- *   • Inline "Add campus" flow (now a list-row at the bottom of the overlay).
+ *   • Inline "Add campus" flow.
  *   • CAMPUSES_LOADED / CAMPUS_SELECTED / SPOTS_LOADED event re-render hooks.
  *
  * @module campusSelector
@@ -26,9 +27,10 @@
 
 import { Navigation, Plus, Check, ChevronDown } from 'lucide';
 
-import { on, emit, EVENTS }  from '../core/events.js';
-import { getState, dispatch } from '../core/store.js';
-import { iconSvg }            from './icons.js';
+import { on, emit, EVENTS }              from '../core/events.js';
+import { getState, dispatch }            from '../core/store.js';
+import { iconSvg }                       from './icons.js';
+import { openModalWithElement, closeModal } from './modal.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,7 +41,7 @@ const EARTH_RADIUS_M = 6371e3;
 
 /**
  * Initialises the campus selector inside `container`.
- * Replaces the container's content with the trigger button and overlay.
+ * Replaces the container's content with the trigger button.
  *
  * @param {HTMLElement} container
  * @returns {void}
@@ -57,17 +59,9 @@ export function initCampusSelector(container) {
   const trigger = document.createElement('button');
   trigger.type      = 'button';
   trigger.className = 'campus-trigger';
-  trigger.setAttribute('aria-haspopup', 'listbox');
+  trigger.setAttribute('aria-haspopup', 'dialog');
   trigger.setAttribute('aria-expanded', 'false');
   container.appendChild(trigger);
-
-  // ── Overlay ───────────────────────────────────────────────────────────────
-  const overlay = document.createElement('div');
-  overlay.className = 'campus-overlay';
-  overlay.hidden    = true;
-  overlay.setAttribute('role', 'dialog');
-  overlay.setAttribute('aria-label', 'Select campus');
-  container.appendChild(overlay);
 
   // ── Render helpers ────────────────────────────────────────────────────────
 
@@ -93,45 +87,46 @@ export function initCampusSelector(container) {
     `;
   };
 
-  const renderOverlay = () => {
-    overlay.innerHTML = '';
+  const buildModalContent = () => {
+    const wrap = document.createElement('div');
+    wrap.className = 'campus-modal';
 
     const { userLocation } = getState();
 
-    // ── GPS prompt ──────────────────────────────────────────────────────────
+    // ── GPS prompt ────────────────────────────────────────────────────────
     if (!userLocation) {
       const gpsRow = document.createElement('div');
-      gpsRow.className = 'campus-overlay__gps';
+      gpsRow.className = 'campus-modal__gps';
 
       if (_locationDenied) {
         const msg       = document.createElement('span');
-        msg.className   = 'campus-overlay__gps-denied';
+        msg.className   = 'campus-modal__gps-denied';
         msg.textContent = 'Location blocked — select manually.';
         gpsRow.appendChild(msg);
       } else {
         const gpsBtn       = document.createElement('button');
         gpsBtn.type        = 'button';
-        gpsBtn.className   = 'campus-overlay__gps-btn';
+        gpsBtn.className   = 'campus-modal__gps-btn';
         gpsBtn.innerHTML   = `${iconSvg(Navigation, 12)} Use my location`;
         gpsBtn.addEventListener('click', () => {
-          if (!('geolocation' in navigator)) { _locationDenied = true; renderOverlay(); return; }
+          if (!('geolocation' in navigator)) { _locationDenied = true; refreshList(); return; }
           navigator.geolocation.getCurrentPosition(
             (pos) => dispatch('SET_USER_LOCATION', { lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            ()    => { _locationDenied = true; renderOverlay(); },
+            ()    => { _locationDenied = true; refreshList(); },
           );
         });
         gpsRow.appendChild(gpsBtn);
       }
-      overlay.appendChild(gpsRow);
+      wrap.appendChild(gpsRow);
     }
 
-    // ── Search input ────────────────────────────────────────────────────────
+    // ── Search input ──────────────────────────────────────────────────────
     const searchWrap = document.createElement('div');
-    searchWrap.className = 'campus-overlay__search-wrap';
+    searchWrap.className = 'campus-modal__search-wrap';
 
     const searchInput       = document.createElement('input');
     searchInput.type        = 'search';
-    searchInput.className   = 'campus-overlay__search';
+    searchInput.className   = 'campus-modal__search';
     searchInput.placeholder = 'Search universities…';
     searchInput.value       = _searchQuery;
     searchInput.setAttribute('aria-label', 'Search campuses');
@@ -140,23 +135,20 @@ export function initCampusSelector(container) {
       _showAddForm = false;
       renderList();
     });
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-    });
     searchWrap.appendChild(searchInput);
-    overlay.appendChild(searchWrap);
+    wrap.appendChild(searchWrap);
 
-    // ── List ────────────────────────────────────────────────────────────────
+    // ── List ──────────────────────────────────────────────────────────────
     const list = document.createElement('div');
-    list.className = 'campus-overlay__list';
+    list.className = 'campus-modal__list';
     list.setAttribute('role', 'listbox');
-    overlay.appendChild(list);
+    wrap.appendChild(list);
 
-    // ── Add form (initially hidden) ─────────────────────────────────────────
+    // ── Add form (initially hidden) ───────────────────────────────────────
     const addFormWrap = document.createElement('div');
-    addFormWrap.className = 'campus-overlay__add-form';
+    addFormWrap.className = 'campus-modal__add-form';
     addFormWrap.hidden    = !_showAddForm;
-    overlay.appendChild(addFormWrap);
+    wrap.appendChild(addFormWrap);
 
     if (_showAddForm) {
       _renderAddForm(addFormWrap, searchInput, list, close);
@@ -180,7 +172,7 @@ export function initCampusSelector(container) {
 
       if (!filtered.length) {
         const empty = document.createElement('div');
-        empty.className   = 'campus-overlay__empty';
+        empty.className   = 'campus-modal__empty';
         empty.textContent = needle ? `No results for "${needle}"` : 'No campuses yet.';
         list.appendChild(empty);
       }
@@ -191,18 +183,18 @@ export function initCampusSelector(container) {
 
         const row       = document.createElement('button');
         row.type        = 'button';
-        row.className   = `campus-overlay__row${isSelected ? ' campus-overlay__row--selected' : ''}`;
+        row.className   = `campus-modal__row${isSelected ? ' campus-modal__row--selected' : ''}`;
         row.setAttribute('role', 'option');
         row.setAttribute('aria-selected', String(isSelected));
 
         row.innerHTML = /* html */`
-          <span class="campus-overlay__row-body">
-            <span class="campus-overlay__row-name">${_escHtml(campus.name)}</span>
-            ${campus.city ? `<span class="campus-overlay__row-city">${_escHtml(campus.city)}</span>` : ''}
+          <span class="campus-modal__row-body">
+            <span class="campus-modal__row-name">${_escHtml(campus.name)}</span>
+            ${campus.city ? `<span class="campus-modal__row-city">${_escHtml(campus.city)}</span>` : ''}
           </span>
-          <span class="campus-overlay__row-end">
-            ${isNearest ? '<span class="campus-overlay__near-dot" title="Nearest campus"></span>' : ''}
-            ${isSelected ? `<span class="campus-overlay__check">${iconSvg(Check, 14)}</span>` : ''}
+          <span class="campus-modal__row-end">
+            ${isNearest ? '<span class="campus-modal__near-dot" title="Nearest campus"></span>' : ''}
+            ${isSelected ? `<span class="campus-modal__check">${iconSvg(Check, 14)}</span>` : ''}
           </span>
         `;
 
@@ -215,10 +207,10 @@ export function initCampusSelector(container) {
         list.appendChild(row);
       }
 
-      // ── "Add campus" row ─────────────────────────────────────────────────
+      // ── "Add campus" row ───────────────────────────────────────────────
       const addRow       = document.createElement('button');
       addRow.type        = 'button';
-      addRow.className   = 'campus-overlay__add-row';
+      addRow.className   = 'campus-modal__add-row';
       addRow.innerHTML   = `${iconSvg(Plus, 13)} Add campus`;
       addRow.addEventListener('click', () => {
         _showAddForm = true;
@@ -227,44 +219,51 @@ export function initCampusSelector(container) {
         _renderAddForm(addFormWrap, searchInput, list, close);
         list.hidden = true;
         addRow.hidden = true;
-        const inp = addFormWrap.querySelector('.campus-overlay__add-input');
-        if (inp) { inp.value = _searchQuery.trim(); inp.focus(); }
+        const inp = addFormWrap.querySelector('.campus-modal__add-input');
+        if (inp) { /** @type {HTMLInputElement} */ (inp).value = _searchQuery.trim(); inp.focus(); }
       });
       list.appendChild(addRow);
     };
 
+    // Expose so GPS refresh can re-render
+    /** @type {() => void} */
+    wrap._renderList = renderList;
+
     renderList();
 
-    // Focus the search input after paint
     requestAnimationFrame(() => searchInput.focus());
+
+    return wrap;
+  };
+
+  // Re-render the list inside an already-open modal (e.g. after GPS resolves)
+  const refreshList = () => {
+    const existing = document.querySelector('.campus-modal');
+    if (!existing) return;
+    const newContent = buildModalContent();
+    existing.replaceWith(newContent);
   };
 
   const open = () => {
-    _isOpen = true;
+    _isOpen      = true;
     _showAddForm = false;
-    // Mount overlay on <body> so it escapes any ancestor overflow clipping.
-    document.body.appendChild(overlay);
-    overlay.hidden = false;
-    _positionOverlay(trigger, overlay);
     trigger.setAttribute('aria-expanded', 'true');
-    renderOverlay();
+    openModalWithElement(buildModalContent(), {
+      title:    'Choose campus',
+      boxClass: 'modal-box--campus',
+      onClose:  close,
+    });
   };
 
   const close = () => {
+    if (!_isOpen) return;
     _isOpen      = false;
     _searchQuery = '';
     _showAddForm = false;
-    overlay.hidden = true;
-    // Move overlay back inside container so it stays with the component.
-    container.appendChild(overlay);
     trigger.setAttribute('aria-expanded', 'false');
+    closeModal();
     renderTrigger();
   };
-
-  // ── Reposition on resize while open ──────────────────────────────────────
-  window.addEventListener('resize', () => {
-    if (_isOpen) _positionOverlay(trigger, overlay);
-  });
 
   // ── Trigger click ─────────────────────────────────────────────────────────
   trigger.addEventListener('click', () => {
@@ -273,24 +272,12 @@ export function initCampusSelector(container) {
     if (_isOpen) close(); else open();
   });
 
-  // ── Click outside ─────────────────────────────────────────────────────────
-  document.addEventListener('click', (e) => {
-    if (!_isOpen) return;
-    const t = /** @type {Node} */ (e.target);
-    if (!container.contains(t) && !overlay.contains(t)) close();
-  });
-
-  // ── Keyboard close ────────────────────────────────────────────────────────
-  document.addEventListener('keydown', (e) => {
-    if (_isOpen && e.key === 'Escape') close();
-  });
-
   // ── Store event listeners ─────────────────────────────────────────────────
-  on(EVENTS.CAMPUSES_LOADED,   () => { renderTrigger(); if (_isOpen) renderOverlay(); });
-  on(EVENTS.CAMPUS_SELECTED,   () => { renderTrigger(); if (_isOpen) renderOverlay(); });
-  on(EVENTS.SPOTS_LOADED,      () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.CAMPUSES_LOADED,   () => { renderTrigger(); if (_isOpen) refreshList(); });
+  on(EVENTS.CAMPUS_SELECTED,   () => { renderTrigger(); if (_isOpen) refreshList(); });
+  on(EVENTS.SPOTS_LOADED,      () => { renderTrigger(); if (_isOpen) refreshList(); });
   on(EVENTS.FILTERS_CHANGED,   () => { renderTrigger(); });
-  on(EVENTS.LOCATION_SET,      () => { renderTrigger(); if (_isOpen) renderOverlay(); });
+  on(EVENTS.LOCATION_SET,      () => { renderTrigger(); if (_isOpen) refreshList(); });
   on(EVENTS.VIEW_MODE_CHANGED, () => { close(); renderTrigger(); });
 
   // ── Initial render ────────────────────────────────────────────────────────
@@ -311,13 +298,13 @@ export function initCampusSelector(container) {
 function _renderAddForm(wrap, searchInput, list, close) {
   const nameInput       = document.createElement('input');
   nameInput.type        = 'text';
-  nameInput.className   = 'campus-overlay__add-input input';
+  nameInput.className   = 'campus-modal__add-input input';
   nameInput.placeholder = 'University name';
   nameInput.maxLength   = 120;
   nameInput.setAttribute('aria-label', 'New campus name');
 
   const btnRow       = document.createElement('div');
-  btnRow.className   = 'campus-overlay__add-actions';
+  btnRow.className   = 'campus-modal__add-actions';
 
   const addBtn       = document.createElement('button');
   addBtn.type        = 'button';
@@ -337,9 +324,8 @@ function _renderAddForm(wrap, searchInput, list, close) {
   const hide = () => {
     wrap.hidden   = true;
     list.hidden   = false;
-    /** @type {HTMLElement|null} */ (list.querySelector('.campus-overlay__add-row')) && (
-      /** @type {HTMLElement} */ (list.querySelector('.campus-overlay__add-row')).hidden = false
-    );
+    const addRow = /** @type {HTMLElement|null} */ (list.querySelector('.campus-modal__add-row'));
+    if (addRow) addRow.hidden = false;
   };
 
   const submit = () => {
@@ -360,24 +346,6 @@ function _renderAddForm(wrap, searchInput, list, close) {
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
-
-/**
- * Position the overlay using fixed coordinates derived from the trigger's
- * bounding rect. Called on open and on window resize.
- *
- * Using `position: fixed` (set in CSS) lets the overlay escape any ancestor
- * `overflow: hidden` / `overflow: auto` clipping box (e.g. #panel, #panel-content).
- *
- * @param {HTMLElement} trigger
- * @param {HTMLElement} overlay
- * @returns {void}
- */
-function _positionOverlay(trigger, overlay) {
-  const rect = trigger.getBoundingClientRect();
-  overlay.style.top   = `${rect.bottom + 4}px`;
-  overlay.style.left  = `${rect.left}px`;
-  overlay.style.width = `${rect.width}px`;
-}
 
 /**
  * Haversine great-circle distance between a user location and a campus centre.
