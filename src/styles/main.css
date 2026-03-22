@@ -21,8 +21,10 @@
   --color-yellow-700: #a16207;
   --color-blue-500: #3b82f6;
   --color-blue-700: #1d4ed8;
+  --color-red-100: #fee2e2;
   --color-red-500: #ef4444;
   --color-red-700: #b91c1c;
+  --color-yellow-100: #fef9c3;
   --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
   --color-gray-200: #e5e7eb;
@@ -999,13 +1001,6 @@ a {
     font-size: var(--text-xs);
   }
 
-  /* ── Building panel hero ─────────────────────────────────────────────────── */
-  .campus-building-panel__hero-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    flex-shrink: 0;
-  }
 
   .campus-building-panel__copy-link {
     display: inline-flex;

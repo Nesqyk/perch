@@ -8,8 +8,11 @@
 
 .modal-box--submit {
   max-width: 440px;
+  max-height: 90vh;
   padding: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ------------------------------------------------------------------

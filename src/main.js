@@ -43,6 +43,7 @@ import './styles/filters.css';
 import './styles/campusSelector.css';
 import './styles/navMenu.css';
 import './styles/submitSpotPanel.css';
+import './styles/buildingPanel.css';
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 

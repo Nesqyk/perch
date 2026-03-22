@@ -1,0 +1,334 @@
+/* ============================================================
+   buildingPanel.css — Building room-directory modal
+   ============================================================ */
+
+/* ------------------------------------------------------------------
+   Panel root — fills the flex modal-box--submit column
+   ------------------------------------------------------------------ */
+
+.campus-building-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0;
+}
+
+/* ------------------------------------------------------------------
+   Scrollable content region (hero → controls → chips → rooms)
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__scrollable {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Hide scrollbar track but keep scrollability */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-200) transparent;
+}
+
+.campus-building-panel__scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+
+.campus-building-panel__scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.campus-building-panel__scrollable::-webkit-scrollbar-thumb {
+  background: var(--color-gray-200);
+  border-radius: var(--radius-full);
+}
+
+/* ------------------------------------------------------------------
+   Hero — building name + action buttons
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.campus-building-panel__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+.campus-building-panel__eyebrow {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.campus-building-panel__title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+  line-height: 1.2;
+}
+
+.campus-building-panel__meta {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+
+.campus-building-panel__copy-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.campus-building-panel__copy-link:hover {
+  background: var(--color-gray-100);
+  color: var(--color-text);
+}
+
+/* ------------------------------------------------------------------
+   Peer-verify banner
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__verify {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-brand-light);
+  font-size: var(--text-sm);
+}
+
+/* ------------------------------------------------------------------
+   Controls — search input + status select
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  gap: var(--space-2);
+}
+
+@media (max-width: 400px) {
+  .campus-building-panel__controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Floor chips — horizontal scroll row, no wrapping, hidden scrollbar
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__floor-chips {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: var(--space-1);
+}
+
+.campus-building-panel__floor-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.building-floor-chip {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.building-floor-chip:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-dark, var(--color-brand));
+}
+
+.building-floor-chip--active {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-white);
+}
+
+/* ------------------------------------------------------------------
+   Room list + pending section
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__rooms,
+.campus-building-panel__pending {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.campus-building-panel__pending-header {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+  padding-top: var(--space-2);
+}
+
+.campus-building-panel__empty {
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-gray-50);
+  color: var(--color-text-muted);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+
+/* ------------------------------------------------------------------
+   Room cards
+   ------------------------------------------------------------------ */
+
+.campus-room-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    box-shadow var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.campus-room-card:hover {
+  border-color: var(--color-brand);
+  box-shadow: var(--shadow-sm);
+}
+
+.campus-room-card--pending {
+  border-style: dashed;
+  background: var(--color-gray-50);
+  cursor: default;
+}
+
+.campus-room-card--pending:hover {
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+.campus-room-card__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.campus-room-card__name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campus-room-card__meta {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.campus-room-card__status {
+  flex-shrink: 0;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  text-transform: capitalize;
+}
+
+.campus-room-card__status--free {
+  background: var(--color-green-100);
+  color: var(--color-green-700);
+}
+
+.campus-room-card__status--claimed {
+  background: var(--color-brand-light);
+  color: var(--color-brand-dark, var(--color-brand));
+}
+
+.campus-room-card__status--maybe {
+  background: var(--color-yellow-100);
+  color: var(--color-yellow-700);
+}
+
+.campus-room-card__status--full {
+  background: var(--color-red-100);
+  color: var(--color-red-700);
+}
+
+.campus-room-card__own-badge {
+  flex-shrink: 0;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+   Composer — hidden by default, revealed by toggle
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__composer {
+  display: none;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.campus-building-panel__composer--open {
+  display: flex;
+}
+
+/* ------------------------------------------------------------------
+   Sticky footer — "+ Add Unmapped Room" / "✕ Cancel" toggle button
+   ------------------------------------------------------------------ */
+
+.campus-building-panel__footer {
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}

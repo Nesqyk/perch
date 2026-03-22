@@ -203,7 +203,7 @@ function _buildBuildingPanel(building, pendingSubmissions) {
   const wrap = document.createElement('div');
   wrap.className = 'campus-building-panel';
 
-  const { spots, claims, confidence } = getState();
+  const { spots, claims, confidence, currentUser } = getState();
   const canonicalRooms = getVisibleRooms(
     spots.filter((spot) => spot.campus_id === building.campus_id),
     claims,
@@ -214,7 +214,11 @@ function _buildBuildingPanel(building, pendingSubmissions) {
 
   const inventory = summarizeBuildingInventory(canonicalRooms, pendingSubmissions);
 
-  wrap.innerHTML = /* html */`
+  // ── Scrollable inner region ──────────────────────────────────────────────
+  const scrollable = document.createElement('div');
+  scrollable.className = 'campus-building-panel__scrollable';
+
+  scrollable.innerHTML = /* html */`
     <div class="campus-building-panel__hero">
       <div>
         <p class="campus-building-panel__eyebrow">${building.verification_status === 'pending' ? 'Community review' : 'Campus building'}</p>
@@ -228,7 +232,7 @@ function _buildBuildingPanel(building, pendingSubmissions) {
     </div>
   `;
 
-  wrap.querySelector('.campus-building-panel__copy-link')?.addEventListener('click', async () => {
+  scrollable.querySelector('.campus-building-panel__copy-link')?.addEventListener('click', async () => {
     const { selectedCampusId } = getState();
     const shareUrl = buildBuildingShareUrl(selectedCampusId, building.id);
     try {
@@ -239,9 +243,8 @@ function _buildBuildingPanel(building, pendingSubmissions) {
     }
   });
 
-  wrap.querySelector('.spot-card__close')?.addEventListener('click', _closeModal);
+  scrollable.querySelector('.spot-card__close')?.addEventListener('click', _closeModal);
 
-  const { currentUser } = getState();
   if (building.verification_status === 'pending' && building.created_by !== currentUser?.id) {
     const verifyRow = document.createElement('div');
     verifyRow.className = 'campus-building-panel__verify';
@@ -260,7 +263,7 @@ function _buildBuildingPanel(building, pendingSubmissions) {
       _closeModal();
       await openBuildingPanel(building.id);
     });
-    wrap.appendChild(verifyRow);
+    scrollable.appendChild(verifyRow);
   }
 
   const controls = document.createElement('div');
@@ -275,9 +278,9 @@ function _buildBuildingPanel(building, pendingSubmissions) {
       <option value="full">Full</option>
     </select>
   `;
-  wrap.appendChild(controls);
+  scrollable.appendChild(controls);
 
-  // ── Floor chips ──────────────────────────────────────────────────────────
+  // ── Floor chips (always rendered; empty if only one floor) ──────────────
   const allFloors = [...new Set(
     canonicalRooms
       .map((r) => (r.floor ?? '').trim())
@@ -288,35 +291,55 @@ function _buildBuildingPanel(building, pendingSubmissions) {
   floorChipsRow.className = 'campus-building-panel__floor-chips';
   floorChipsRow.id = 'building-floor-chips';
 
-  if (allFloors.length > 1) {
-    const chips = [{ label: 'All', value: null }, ...allFloors.map((f) => ({ label: f, value: f }))];
-    chips.forEach(({ label, value }) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = `building-floor-chip${_selectedFloor === value ? ' building-floor-chip--active' : ''}`;
-      chip.textContent = label;
-      chip.addEventListener('click', () => {
-        _selectedFloor = value;
-        floorChipsRow.querySelectorAll('.building-floor-chip').forEach((c) => {
-          c.classList.toggle('building-floor-chip--active', c.textContent === label);
-        });
-        renderRooms();
+  const chips = [{ label: 'All', value: null }, ...allFloors.map((f) => ({ label: f, value: f }))];
+  chips.forEach(({ label, value }) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = `building-floor-chip${_selectedFloor === value ? ' building-floor-chip--active' : ''}`;
+    chip.textContent = label;
+    chip.addEventListener('click', () => {
+      _selectedFloor = value;
+      floorChipsRow.querySelectorAll('.building-floor-chip').forEach((c) => {
+        c.classList.toggle('building-floor-chip--active', c.textContent === label);
       });
-      floorChipsRow.appendChild(chip);
+      renderRooms();
     });
-    wrap.appendChild(floorChipsRow);
-  }
+    floorChipsRow.appendChild(chip);
+  });
+  scrollable.appendChild(floorChipsRow);
 
   const roomsContainer = document.createElement('div');
   roomsContainer.className = 'campus-building-panel__rooms';
-  wrap.appendChild(roomsContainer);
+  scrollable.appendChild(roomsContainer);
 
   const pendingContainer = document.createElement('div');
   pendingContainer.className = 'campus-building-panel__pending';
-  wrap.appendChild(pendingContainer);
+  scrollable.appendChild(pendingContainer);
 
-  const addRoom = _buildAddRoomComposer(building);
-  wrap.appendChild(addRoom);
+  wrap.appendChild(scrollable);
+
+  // ── Composer (hidden by default) ─────────────────────────────────────────
+  const composerDiv = document.createElement('div');
+  composerDiv.className = 'campus-building-panel__composer';
+  composerDiv.appendChild(_buildAddRoomComposer(building));
+  wrap.appendChild(composerDiv);
+
+  // ── Sticky footer with toggle button ─────────────────────────────────────
+  const footer = document.createElement('div');
+  footer.className = 'campus-building-panel__footer';
+
+  const toggleBtn = document.createElement('button');
+  toggleBtn.type = 'button';
+  toggleBtn.className = 'btn btn-primary btn-full';
+  toggleBtn.textContent = '+ Add Unmapped Room';
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = composerDiv.classList.toggle('campus-building-panel__composer--open');
+    toggleBtn.textContent = isOpen ? '✕ Cancel' : '+ Add Unmapped Room';
+    toggleBtn.className = isOpen ? 'btn btn-ghost btn-full' : 'btn btn-primary btn-full';
+  });
+
+  footer.appendChild(toggleBtn);
+  wrap.appendChild(footer);
 
   const renderRooms = () => {
     const search = /** @type {HTMLInputElement} */(controls.querySelector('#building-room-search'))?.value ?? '';
@@ -332,9 +355,9 @@ function _buildBuildingPanel(building, pendingSubmissions) {
     } else {
       roomsContainer.innerHTML = visibleRooms.map((room) => /* html */`
         <button type="button" class="campus-room-card" data-room-id="${room.id}">
-          <div>
-            <strong>${_escapeHtml(room.name)}</strong>
-            <div class="campus-room-card__meta">${_escapeHtml(room.floor || 'Floor not set')}</div>
+          <div class="campus-room-card__info">
+            <span class="campus-room-card__name">${_escapeHtml(room.name)}</span>
+            <span class="campus-room-card__meta">${_escapeHtml(room.floor || 'Floor not set')}</span>
           </div>
           <span class="campus-room-card__status campus-room-card__status--${room.derivedStatus}">${room.derivedStatus}</span>
         </button>
@@ -357,9 +380,9 @@ function _buildBuildingPanel(building, pendingSubmissions) {
       <div class="campus-building-panel__pending-header">Pending room confirmations</div>
       ${pendingSubmissions.map((submission) => /* html */`
         <div class="campus-room-card campus-room-card--pending">
-          <div>
-            <strong>${_escapeHtml(submission.spot_name)}</strong>
-            <div class="campus-room-card__meta">${_escapeHtml(submission.floor || 'Floor not set')} • ${submission.confirmation_count ?? 0}/2 confirmations</div>
+          <div class="campus-room-card__info">
+            <span class="campus-room-card__name">${_escapeHtml(submission.spot_name)}</span>
+            <span class="campus-room-card__meta">${_escapeHtml(submission.floor || 'Floor not set')} • ${submission.confirmation_count ?? 0}/2 confirmations</span>
           </div>
           ${submission.user_id === currentUser?.id
             ? '<span class="campus-room-card__own-badge">Awaiting peer confirmation</span>'
@@ -399,15 +422,12 @@ function _buildBuildingPanel(building, pendingSubmissions) {
 
 function _buildAddRoomComposer(building) {
   const wrap = document.createElement('div');
-  wrap.className = 'campus-building-panel__composer';
+  wrap.className = 'submit-spot-panel__form';
   wrap.innerHTML = /* html */`
-    <h3 class="campus-building-panel__section-title">Add a missing room</h3>
-    <div class="submit-spot-panel__form">
-      <input id="composer-room-name" class="input" type="text" placeholder="Room 404" maxlength="60" />
-      <input id="composer-room-floor" class="input" type="text" placeholder="4F (optional)" maxlength="12" />
-      <textarea id="composer-room-notes" class="input submit-spot-panel__textarea" rows="3" placeholder="Quiet after 3pm, strong WiFi"></textarea>
-      <button type="button" class="btn btn-primary btn-full" id="composer-add-room">Add Room for Peer Review</button>
-    </div>
+    <input id="composer-room-name" class="input" type="text" placeholder="Room 404" maxlength="60" />
+    <input id="composer-room-floor" class="input" type="text" placeholder="4F (optional)" maxlength="12" />
+    <textarea id="composer-room-notes" class="input submit-spot-panel__textarea" rows="3" placeholder="Quiet after 3pm, strong WiFi"></textarea>
+    <button type="button" class="btn btn-primary btn-full" id="composer-add-room">Add Room for Peer Review</button>
   `;
 
   wrap.querySelector('#composer-add-room')?.addEventListener('click', async () => {
