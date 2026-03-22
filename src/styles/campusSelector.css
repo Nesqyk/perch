@@ -465,3 +465,92 @@
   display: flex;
   gap: var(--space-2);
 }
+
+/* ─── Nominatim search results dropdown ─────────────────────────────────────── */
+
+.campus-modal__nom-results {
+  display: flex;
+  flex-direction: column;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.campus-modal__nom-result {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background var(--transition-fast);
+}
+
+.campus-modal__nom-result:last-child {
+  border-bottom: none;
+}
+
+.campus-modal__nom-result:hover {
+  background: var(--color-surface-alt);
+}
+
+.campus-modal__nom-empty {
+  padding: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  text-align: center;
+}
+
+/* ─── Confirmed location chip ────────────────────────────────────────────────── */
+
+.campus-modal__nom-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-brand-light);
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-md);
+}
+
+.campus-modal__nom-selected-text {
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campus-modal__nom-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.campus-modal__nom-clear:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}

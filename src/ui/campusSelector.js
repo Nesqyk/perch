@@ -38,6 +38,7 @@ import { getState, dispatch }            from '../core/store.js';
 import { campusStats }                   from '../state/spotState.js';
 import { iconSvg }                       from './icons.js';
 import { openModalWithElement, closeModal } from './modal.js';
+import { searchUniversities }            from '../utils/nominatim.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -395,6 +396,8 @@ export function initCampusSelector(container) {
 
 /**
  * Render the inline add-campus form into `wrap`.
+ * Includes a Nominatim-powered university search so users can select their
+ * campus from real OSM data to get accurate lat/lng/bounds.
  *
  * @param {HTMLElement}      wrap
  * @param {HTMLInputElement} searchInput
@@ -403,20 +406,54 @@ export function initCampusSelector(container) {
  * @returns {void}
  */
 function _renderAddForm(wrap, searchInput, list, close) {
+  /** @type {object | null} The confirmed Nominatim result, or null. */
+  let _osmResult = null;
+
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let _debounceTimer = null;
+
+  // ── Campus name input ────────────────────────────────────────────────────
   const nameInput       = document.createElement('input');
   nameInput.type        = 'text';
   nameInput.className   = 'campus-modal__add-input input';
-  nameInput.placeholder = 'University name';
+  nameInput.placeholder = 'Search your university…';
   nameInput.maxLength   = 120;
   nameInput.setAttribute('aria-label', 'New campus name');
+  nameInput.setAttribute('autocomplete', 'off');
 
-  const btnRow       = document.createElement('div');
-  btnRow.className   = 'campus-modal__add-actions';
+  // ── Nominatim results dropdown ────────────────────────────────────────────
+  const nomResults       = document.createElement('div');
+  nomResults.className   = 'campus-modal__nom-results';
+  nomResults.hidden      = true;
+  nomResults.setAttribute('role', 'listbox');
+  nomResults.setAttribute('aria-label', 'University search results');
+
+  // ── Confirmed location chip ───────────────────────────────────────────────
+  const nomSelected       = document.createElement('div');
+  nomSelected.className   = 'campus-modal__nom-selected';
+  nomSelected.hidden      = true;
+
+  const nomSelectedText   = document.createElement('span');
+  nomSelectedText.className = 'campus-modal__nom-selected-text';
+
+  const nomClearBtn       = document.createElement('button');
+  nomClearBtn.type        = 'button';
+  nomClearBtn.className   = 'campus-modal__nom-clear';
+  nomClearBtn.setAttribute('aria-label', 'Clear selected location');
+  nomClearBtn.innerHTML   = iconSvg(X, 12);
+
+  nomSelected.appendChild(nomSelectedText);
+  nomSelected.appendChild(nomClearBtn);
+
+  // ── Button row ────────────────────────────────────────────────────────────
+  const btnRow     = document.createElement('div');
+  btnRow.className = 'campus-modal__add-actions';
 
   const addBtn       = document.createElement('button');
   addBtn.type        = 'button';
   addBtn.className   = 'btn btn-primary btn-sm';
   addBtn.textContent = 'Add';
+  addBtn.disabled    = true;
 
   const cancelBtn       = document.createElement('button');
   cancelBtn.type        = 'button';
@@ -425,25 +462,103 @@ function _renderAddForm(wrap, searchInput, list, close) {
 
   btnRow.appendChild(addBtn);
   btnRow.appendChild(cancelBtn);
+
   wrap.appendChild(nameInput);
+  wrap.appendChild(nomResults);
+  wrap.appendChild(nomSelected);
   wrap.appendChild(btnRow);
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
   const hide = () => {
-    wrap.hidden   = true;
-    list.hidden   = false;
+    wrap.hidden = true;
+    list.hidden = false;
     const addRow = /** @type {HTMLElement|null} */ (list.querySelector('.campus-modal__add-row'));
     if (addRow) addRow.hidden = false;
+  };
+
+  const confirmResult = (result) => {
+    _osmResult = result;
+    addBtn.disabled = false;
+
+    nomResults.hidden = true;
+    nomResults.innerHTML = '';
+
+    nomSelectedText.textContent = result.display_name;
+    nomSelected.hidden = false;
+
+    nameInput.value = result.display_name.split(',')[0].trim();
+    nameInput.disabled = true;
+  };
+
+  const clearResult = () => {
+    _osmResult = null;
+    addBtn.disabled = true;
+    nomSelected.hidden = true;
+    nameInput.disabled = false;
+    nameInput.value = '';
+    nameInput.focus();
+  };
+
+  const renderResults = (results) => {
+    nomResults.innerHTML = '';
+
+    if (!results.length) {
+      const empty       = document.createElement('div');
+      empty.className   = 'campus-modal__nom-empty';
+      empty.textContent = 'No results found.';
+      nomResults.appendChild(empty);
+      nomResults.hidden = false;
+      return;
+    }
+
+    results.forEach((result) => {
+      const btn       = document.createElement('button');
+      btn.type        = 'button';
+      btn.className   = 'campus-modal__nom-result';
+      btn.setAttribute('role', 'option');
+      btn.textContent = result.display_name;
+      btn.addEventListener('click', () => confirmResult(result));
+      nomResults.appendChild(btn);
+    });
+
+    nomResults.hidden = false;
   };
 
   const submit = () => {
     const campusName = nameInput.value.trim();
     if (!campusName) { nameInput.focus(); return; }
-    emit(EVENTS.UI_CAMPUS_ADD_REQUESTED, { campusName });
+    emit(EVENTS.UI_CAMPUS_ADD_REQUESTED, { campusName, osmResult: _osmResult });
     close();
   };
 
+  // ── Event wiring ──────────────────────────────────────────────────────────
+
+  nameInput.addEventListener('input', () => {
+    const q = nameInput.value.trim();
+
+    // Hide results when input is cleared
+    if (!q) {
+      nomResults.hidden = true;
+      nomResults.innerHTML = '';
+      addBtn.disabled = true;
+      return;
+    }
+
+    // Debounce 350 ms to respect Nominatim rate limit
+    if (_debounceTimer !== null) clearTimeout(_debounceTimer);
+    _debounceTimer = setTimeout(async () => {
+      _debounceTimer = null;
+      const results = await searchUniversities(q);
+      renderResults(results);
+    }, 350);
+  });
+
+  nomClearBtn.addEventListener('click', clearResult);
+
   addBtn.addEventListener('click', submit);
   cancelBtn.addEventListener('click', hide);
+
   nameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter')  submit();
     if (e.key === 'Escape') hide();

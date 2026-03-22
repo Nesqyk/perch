@@ -8,6 +8,7 @@
 import { supabase } from './supabaseClient.js';
 
 import { deriveCampusShell, normalizeCampusName } from '../utils/campusBootstrap.js';
+import { extractCity }                            from '../utils/nominatim.js';
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
 
@@ -109,11 +110,15 @@ export async function fetchCampusImportRuns() {
 
 /**
  * Find or create a campus shell for community-led mapping.
+ * When `osmResult` is provided the shell is built from real OSM data
+ * (lat/lng, bounding box, city, osm_type, osm_id) instead of the
+ * placeholder coordinates produced by deriveCampusShell().
  *
- * @param {string} campusName
+ * @param {string}       campusName
+ * @param {object | null} osmResult  - Nominatim result from searchUniversities(), or null.
  * @returns {Promise<{ campus: object | null, created: boolean, error: string | null }>}
  */
-export async function ensureCampus(campusName) {
+export async function ensureCampus(campusName, osmResult = null) {
   const normalizedName = normalizeCampusName(campusName);
   if (!normalizedName) {
     return { campus: null, created: false, error: 'Campus name is required.' };
@@ -124,13 +129,40 @@ export async function ensureCampus(campusName) {
     return { campus: existing, created: false, error: null };
   }
 
-  const shell = deriveCampusShell(campusName);
-  const campusShell = {
-    ...shell,
-    bootstrap_status: 'ready',
-    bootstrap_source: 'manual',
-    import_error: null,
-  };
+  let campusShell;
+
+  if (osmResult) {
+    const bb   = osmResult.boundingbox ?? [];     // [sw_lat, ne_lat, sw_lng, ne_lng]
+    const city = osmResult.city || extractCity(osmResult.address ?? {});
+
+    campusShell = {
+      name:             campusName.trim(),
+      normalized_name:  normalizedName,
+      lat:              parseFloat(osmResult.lat),
+      lng:              parseFloat(osmResult.lng),
+      bounds_sw_lat:    parseFloat(bb[0]) || null,
+      bounds_ne_lat:    parseFloat(bb[1]) || null,
+      bounds_sw_lng:    parseFloat(bb[2]) || null,
+      bounds_ne_lng:    parseFloat(bb[3]) || null,
+      city:             city || null,
+      default_zoom:     17,
+      is_active:        true,
+      osm_type:         osmResult.osm_type   || null,
+      osm_id:           osmResult.osm_id     || null,
+      osm_display_name: osmResult.display_name || null,
+      bootstrap_source: 'osm',
+      bootstrap_status: 'ready',
+      import_error:     null,
+    };
+  } else {
+    const shell = deriveCampusShell(campusName);
+    campusShell = {
+      ...shell,
+      bootstrap_status: 'ready',
+      bootstrap_source: 'manual',
+      import_error:     null,
+    };
+  }
 
   const { data: insertedCampus, error: insertError } = await supabase
     .from('campuses')

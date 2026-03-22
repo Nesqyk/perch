@@ -39,10 +39,10 @@ export function initCampus() {
 /**
  * Handles UI_CAMPUS_ADD_REQUESTED event from campusSelector.js.
  *
- * @param {CustomEvent<{ campusName: string }>} e
+ * @param {CustomEvent<{ campusName: string, osmResult: object | null }>} e
  */
 async function _onAddCampusRequested(e) {
-  const { campusName } = e.detail;
+  const { campusName, osmResult = null } = e.detail;
   const { currentUser } = getState();
 
   if (!currentUser) {
@@ -58,7 +58,7 @@ async function _onAddCampusRequested(e) {
 
   dispatch('SET_STATUS', { campusPending: true });
 
-  const { campus, created, error } = await ensureCampus(name);
+  const { campus, created, error } = await ensureCampus(name, osmResult);
 
   dispatch('SET_STATUS', { campusPending: false });
 
