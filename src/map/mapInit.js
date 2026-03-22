@@ -4,8 +4,8 @@
  * Constructs and configures the Leaflet map instance.
  * Called once from main.js after loadGoogleMaps() resolves (now a no-op).
  *
- * Tile layer: CartoDB Voyager — free, no API key required, richer labels
- * and styling similar to Google Maps while letting coloured pins dominate.
+ * Tile layer: CartoDB Positron — clean grey/minimal palette that keeps the
+ * coloured pins visually dominant without competing road styling.
  *
  * The map object is module-level so other map/ modules can import it
  * via getMap() without prop-drilling through the whole app.
@@ -18,11 +18,15 @@
  *   A single-click on the map (not on a marker) emits
  *   UI_SUBMIT_SPOT_REQUESTED with the click coordinates so the panel can
  *   open the "Suggest a Spot" form.
+ *
+ * View mode:
+ *   Always stays in 'campus' mode — building markers are the primary UI.
+ *   Room detail is accessed via the building modal.
  */
 
 import { L }                    from './mapLoader.js';
 import { on, emit, EVENTS }     from '../core/events.js';
-import { getState, dispatch }   from '../core/store.js';
+import { getState }             from '../core/store.js';
 
 /** @type {import('leaflet').Map | null} */
 let _map = null;
@@ -38,15 +42,8 @@ const DEFAULT_CENTER = {
 
 const DEFAULT_ZOOM = 17;
 
-/**
- * Zoom level at which the map switches from building markers (campus mode)
- * to individual room/spot markers (city mode). Leaflet's zoomend fires
- * after the animation completes, so no debounce is needed.
- */
-const _ZOOM_ROOM_THRESHOLD = 18;
-
-// CartoDB Voyager tile URL — richer labels, Google Maps-like feel.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+// CartoDB Positron tile URL — clean grey/minimal palette, no API key required.
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
 
 /** @type {import('leaflet').Rectangle | null} Temporary marker shown on click */
 let _clickMarker = null;
@@ -87,9 +84,6 @@ export function initMap() {
   // ── Map click → suggest a spot ──────────────────────────────────────────
   _map.on('click', _onMapClick);
 
-  // ── Zoom-based view mode reveal ──────────────────────────────────────────
-  _map.on('zoomend', _onZoomChanged);
-
   // ── Spot selection navigation ───────────────────────────────────────────
   on(EVENTS.SPOT_SELECTED, _onSpotSelected);
 
@@ -128,25 +122,6 @@ function _onCampusSelected(e) {
     duration:  0.8,
     easeLinearity: 0.5,
   });
-}
-
-// ─── Zoom-based view reveal ───────────────────────────────────────────────────
-
-/**
- * Fires after every Leaflet zoom animation completes.
- * Zoom ≥ _ZOOM_ROOM_THRESHOLD → show individual room/spot markers (city mode).
- * Zoom  < _ZOOM_ROOM_THRESHOLD → show aggregate building markers (campus mode).
- *
- * Leaflet's zoomend event is already rate-limited to one fire per gesture,
- * so no debounce is required.
- *
- * @returns {void}
- */
-function _onZoomChanged() {
-  if (!_map) return;
-  const zoom     = _map.getZoom();
-  const viewMode = zoom >= _ZOOM_ROOM_THRESHOLD ? 'city' : 'campus';
-  dispatch('SET_VIEW_MODE', viewMode);
 }
 
 // ─── Map click ────────────────────────────────────────────────────────────────
