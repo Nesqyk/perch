@@ -7,8 +7,11 @@
  * the full list is only surfaced on demand.
  *
  * Overlay behaviour:
- *   • Desktop  — absolutely-positioned dropdown below the trigger.
- *   • Mobile   — same, but constrained so it doesn't overflow the sheet.
+ *   • The overlay is appended to <body> and positioned with `position: fixed`
+ *     so it escapes any ancestor overflow:hidden / overflow:auto clipping
+ *     (both #panel on mobile and #panel-content on desktop clip absolute children).
+ *   • `_positionOverlay` reads the trigger's getBoundingClientRect() on every
+ *     open and on window resize to keep the overlay aligned to the trigger.
  *   • Closes on: item select, Escape, or click outside the container.
  *   • In city mode the trigger is muted and the overlay cannot open.
  *
@@ -239,7 +242,10 @@ export function initCampusSelector(container) {
   const open = () => {
     _isOpen = true;
     _showAddForm = false;
+    // Mount overlay on <body> so it escapes any ancestor overflow clipping.
+    document.body.appendChild(overlay);
     overlay.hidden = false;
+    _positionOverlay(trigger, overlay);
     trigger.setAttribute('aria-expanded', 'true');
     renderOverlay();
   };
@@ -249,9 +255,16 @@ export function initCampusSelector(container) {
     _searchQuery = '';
     _showAddForm = false;
     overlay.hidden = true;
+    // Move overlay back inside container so it stays with the component.
+    container.appendChild(overlay);
     trigger.setAttribute('aria-expanded', 'false');
     renderTrigger();
   };
+
+  // ── Reposition on resize while open ──────────────────────────────────────
+  window.addEventListener('resize', () => {
+    if (_isOpen) _positionOverlay(trigger, overlay);
+  });
 
   // ── Trigger click ─────────────────────────────────────────────────────────
   trigger.addEventListener('click', () => {
@@ -262,9 +275,9 @@ export function initCampusSelector(container) {
 
   // ── Click outside ─────────────────────────────────────────────────────────
   document.addEventListener('click', (e) => {
-    if (_isOpen && !container.contains(/** @type {Node} */(e.target))) {
-      close();
-    }
+    if (!_isOpen) return;
+    const t = /** @type {Node} */ (e.target);
+    if (!container.contains(t) && !overlay.contains(t)) close();
   });
 
   // ── Keyboard close ────────────────────────────────────────────────────────
@@ -347,6 +360,24 @@ function _renderAddForm(wrap, searchInput, list, close) {
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Position the overlay using fixed coordinates derived from the trigger's
+ * bounding rect. Called on open and on window resize.
+ *
+ * Using `position: fixed` (set in CSS) lets the overlay escape any ancestor
+ * `overflow: hidden` / `overflow: auto` clipping box (e.g. #panel, #panel-content).
+ *
+ * @param {HTMLElement} trigger
+ * @param {HTMLElement} overlay
+ * @returns {void}
+ */
+function _positionOverlay(trigger, overlay) {
+  const rect = trigger.getBoundingClientRect();
+  overlay.style.top   = `${rect.bottom + 4}px`;
+  overlay.style.left  = `${rect.left}px`;
+  overlay.style.width = `${rect.width}px`;
+}
 
 /**
  * Haversine great-circle distance between a user location and a campus centre.

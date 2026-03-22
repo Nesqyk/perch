@@ -3,9 +3,10 @@
  *
  * Campus picker — searchable popover overlay variant.
  *
- * The selector renders as a single trigger button; clicking it opens an
- * absolutely-positioned overlay containing a GPS prompt (when needed),
- * a search input, and a scrollable list of campuses.
+ * The overlay uses `position: fixed` (coordinates set by _positionOverlay()
+ * in campusSelector.js via getBoundingClientRect) so it escapes any ancestor
+ * overflow:hidden / overflow:auto clipping — both #panel on mobile and
+ * #panel-content on desktop would otherwise clip an absolute-positioned child.
  *
  * Class inventory:
  *   .campus-selector-container    outer wrapper (position: relative)
@@ -138,11 +139,9 @@
 /* ─── Overlay panel ──────────────────────────────────────────────────────────── */
 
 .campus-overlay {
-  position: absolute;
-  top: calc(100% + var(--space-1));
-  left: 0;
-  right: 0;
-  z-index: 200;
+  position: fixed;
+  /* top / left / width set dynamically by _positionOverlay() in campusSelector.js */
+  z-index: 300;
   display: flex;
   flex-direction: column;
   background: var(--color-surface);
