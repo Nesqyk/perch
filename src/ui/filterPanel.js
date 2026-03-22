@@ -22,7 +22,8 @@ import { getState, dispatch }    from '../core/store.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
 import { timeAgo }               from '../utils/time.js';
 import { LogOut, Copy, Link,
-         Search, MapPin, Star }  from 'lucide';
+         Search, MapPin, Star,
+         Eye, EyeOff }           from 'lucide';
 import { openModal }             from './modal.js';
 import { showToast }             from './toast.js';
 import { iconSvg }               from './icons.js';
@@ -190,7 +191,6 @@ function _buildTabBody() {
   body.className = 'filter-tab-body';
 
   if (_activeTab === 'find') {
-    body.appendChild(_buildViewModeToggle());
     body.appendChild(_buildCampusSelectorBox());
     body.appendChild(_buildFilterAccordion());
     body.appendChild(_buildFindButton());
@@ -199,29 +199,6 @@ function _buildTabBody() {
   }
 
   return body;
-}
-
-// ─── View mode toggle ─────────────────────────────────────────────────────────
-
-function _buildViewModeToggle() {
-  const row     = document.createElement('div');
-  row.className = 'chip-row view-mode-toggle';
-  row.id        = 'toggle-view-mode';
-
-  const { viewMode } = getState();
-
-  [{ key: 'campus', label: 'Campus' }, { key: 'city', label: 'City' }].forEach(({ key, label }) => {
-    const chip       = document.createElement('button');
-    chip.type        = 'button';
-    chip.className   = `chip ${viewMode === key ? 'chip-active' : ''}`;
-    chip.dataset.key = key;
-    chip.textContent = label;
-    chip.setAttribute('aria-pressed', String(viewMode === key));
-    chip.addEventListener('click', () => dispatch('SET_VIEW_MODE', key));
-    row.appendChild(chip);
-  });
-
-  return row;
 }
 
 // ─── Campus selector ─────────────────────────────────────────────────────────
@@ -238,14 +215,6 @@ function _buildCampusSelectorBox() {
   const container = document.createElement('div');
   initCampusSelector(container);
   wrapper.appendChild(container);
-
-  // Hide the entire row in city mode — campus picker is irrelevant there.
-  const syncVisibility = () => {
-    const { viewMode } = getState();
-    wrapper.hidden = viewMode === 'city';
-  };
-  syncVisibility();
-  on(EVENTS.VIEW_MODE_CHANGED, syncVisibility);
 
   return wrapper;
 }
@@ -469,7 +438,7 @@ function _buildCreateForm(section) {
 
   const createBtn       = document.createElement('button');
   createBtn.type        = 'button';
-  createBtn.className   = 'btn btn-primary btn-sm';
+  createBtn.className   = 'btn btn-primary';
   createBtn.textContent = 'Create group';
   createBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
@@ -481,7 +450,7 @@ function _buildCreateForm(section) {
 
   const joinLink     = document.createElement('button');
   joinLink.type      = 'button';
-  joinLink.className = 'btn btn-ghost btn-sm';
+  joinLink.className = 'btn btn-ghost';
   joinLink.textContent = 'Join one instead';
   joinLink.addEventListener('click', () => {
     _groupSubForm = 'join';
@@ -561,13 +530,6 @@ function _buildJoinForm(section) {
  */
 function _syncFromState() {
   const { filters, viewMode } = getState();
-
-  // View mode toggle
-  document.querySelectorAll('#toggle-view-mode .chip').forEach((chip) => {
-    const active = chip.dataset.key === viewMode;
-    chip.classList.toggle('chip-active', active);
-    chip.setAttribute('aria-pressed', String(active));
-  });
 
   // Group size chips
   document.querySelectorAll('#chips-group-size .chip').forEach((chip) => {
@@ -673,6 +635,21 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
     });
   });
   header.appendChild(leaveBtn);
+
+  // ── Group pins visibility toggle ──────────────────────────────────────────
+  const pinToggleBtn     = document.createElement('button');
+  pinToggleBtn.type      = 'button';
+  pinToggleBtn.className = 'spot-card__gm-leave';
+  const { groupPinsVisible } = getState();
+  pinToggleBtn.setAttribute('aria-label', groupPinsVisible ? 'Hide group pins' : 'Show group pins');
+  pinToggleBtn.innerHTML = iconSvg(groupPinsVisible ? Eye : EyeOff, 18);
+  pinToggleBtn.addEventListener('click', () => {
+    const current = getState().groupPinsVisible;
+    dispatch('SET_GROUP_PINS_VISIBLE', !current);
+    pinToggleBtn.innerHTML = iconSvg(!current ? Eye : EyeOff, 18);
+    pinToggleBtn.setAttribute('aria-label', !current ? 'Hide group pins' : 'Show group pins');
+  });
+  header.appendChild(pinToggleBtn);
 
   section.appendChild(header);
 
