@@ -27,7 +27,6 @@
   gap: var(--space-3);
   padding-bottom: var(--space-2);
   margin-bottom: 0;
-  border-bottom: 1px solid var(--color-border);
 }
 
 .panel-brand__logo {
@@ -160,7 +159,6 @@
    ------------------------------------------------------------------ */
 
 .spot-card__group-section {
-  border-top: var(--border);
   padding-top: var(--space-3);
 }
 
@@ -222,4 +220,149 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+/* ------------------------------------------------------------------
+   Group tab — colour badge on tab button
+   ------------------------------------------------------------------ */
+
+.filter-tab__badge {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  margin-left: var(--space-1);
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------
+   Group tab — hint text (no group)
+   ------------------------------------------------------------------ */
+
+.group-tab__hint {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin: 0;
+  padding-top: var(--space-2);
+}
+
+/* ------------------------------------------------------------------
+   Group tab — session summary card (in group)
+   ------------------------------------------------------------------ */
+
+.group-tab__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: var(--border);
+}
+
+.group-tab__summary-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.group-tab__summary-stat svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.group-tab__summary-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------
+   Group tab — recent activity feed (in group)
+   ------------------------------------------------------------------ */
+
+.group-tab__activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.group-tab__activity-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.group-tab__activity-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--color-white, #fff);
+  flex-shrink: 0;
+}
+
+.group-tab__activity-body {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-tab__activity-name {
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.group-tab__activity-spot {
+  color: var(--color-text-muted);
+}
+
+.group-tab__activity-time {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ------------------------------------------------------------------
+   Group tab — spot sharing shortcut (in group, active pin)
+   ------------------------------------------------------------------ */
+
+.group-tab__share-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: var(--border);
+}
+
+.group-tab__share-label {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.group-tab__share-label svg {
+  flex-shrink: 0;
 }

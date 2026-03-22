@@ -5,21 +5,24 @@
  * that reduces vertical clutter by keeping spot-finding controls separate
  * from group management.
  *
- * Find tab:  view mode toggle → campus selector → "Find My Spot" CTA →
- *            filter section (group size, amenities, near building — always visible).
- * Group tab: create / join a group form, or members section if already in one.
+ * Find tab:  view mode toggle → campus selector → filter section →
+ *            "Find My Spot" CTA (always visible, never collapsible).
+ * Group tab (no group): hint text + create / join form.
+ * Group tab (in group): session summary card → members table →
+ *                       recent activity feed → spot sharing shortcut.
  *
  * This module owns the rendering of the filter UI inside #panel-content.
  * It emits EVENTS.UI_FILTER_SUBMITTED when the user taps "Find My Spot".
- * It listens for EVENTS.FILTERS_CHANGED / VIEW_MODE_CHANGED to keep
- * the UI in sync if filters are updated programmatically.
+ * It listens for EVENTS.FILTERS_CHANGED / VIEW_MODE_CHANGED / GROUP_* to
+ * keep the UI in sync if state is updated programmatically or via Realtime.
  */
 
 import { on, emit, EVENTS }      from '../core/events.js';
 import { getState, dispatch }    from '../core/store.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
+import { timeAgo }               from '../utils/time.js';
 import { LogOut, Copy, Link,
-         Search }                from 'lucide';
+         Search, MapPin, Star }  from 'lucide';
 import { openModal }             from './modal.js';
 import { showToast }             from './toast.js';
 import { iconSvg }               from './icons.js';
@@ -68,10 +71,14 @@ const _AMENITY_CHIPS = [
  * @returns {void}
  */
 export function initFilterPanel() {
-  on(EVENTS.FILTERS_CHANGED,  _syncFromState);
-  on(EVENTS.VIEW_MODE_CHANGED, _syncFromState);
-  on(EVENTS.SPOTS_LOADED,     _populateBuildingDropdown);
-  on(EVENTS.BUILDINGS_LOADED, _populateBuildingDropdown);
+  on(EVENTS.FILTERS_CHANGED,      _syncFromState);
+  on(EVENTS.VIEW_MODE_CHANGED,    _syncFromState);
+  on(EVENTS.SPOTS_LOADED,         _populateBuildingDropdown);
+  on(EVENTS.BUILDINGS_LOADED,     _populateBuildingDropdown);
+  on(EVENTS.GROUP_JOINED,         _syncGroupTab);
+  on(EVENTS.GROUP_LEFT,           _syncGroupTab);
+  on(EVENTS.GROUP_MEMBERS_UPDATED, _syncGroupTab);
+  on(EVENTS.GROUP_PINS_UPDATED,   _syncGroupTab);
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -123,15 +130,30 @@ function _buildPanelBrand() {
 function _buildTabRow(form) {
   const row     = document.createElement('div');
   row.className = 'filter-tabs';
+  row.id        = 'filter-tab-row';
 
   [{ key: 'find', label: 'Find' }, { key: 'group', label: 'Group' }].forEach(({ key, label }) => {
     const btn       = document.createElement('button');
     btn.type        = 'button';
     btn.className   = `filter-tab${_activeTab === key ? ' filter-tab--active' : ''}`;
     btn.dataset.tab = key;
-    btn.textContent = label;
     btn.setAttribute('role', 'tab');
     btn.setAttribute('aria-selected', String(_activeTab === key));
+
+    // Label + optional group colour badge
+    const labelSpan     = document.createElement('span');
+    labelSpan.textContent = label;
+    btn.appendChild(labelSpan);
+
+    if (key === 'group') {
+      const { group } = getState();
+      const badge     = document.createElement('span');
+      badge.className = 'filter-tab__badge';
+      badge.id        = 'group-tab-badge';
+      badge.hidden    = !group;
+      if (group) badge.style.background = group.color ?? 'var(--color-brand)';
+      btn.appendChild(badge);
+    }
 
     btn.addEventListener('click', () => {
       if (_activeTab === key) return;
@@ -170,8 +192,8 @@ function _buildTabBody() {
   if (_activeTab === 'find') {
     body.appendChild(_buildViewModeToggle());
     body.appendChild(_buildCampusSelectorBox());
-    body.appendChild(_buildFindButton());
     body.appendChild(_buildFilterAccordion());
+    body.appendChild(_buildFindButton());
   } else {
     body.appendChild(_buildGroupSection());
   }
@@ -347,6 +369,9 @@ function _buildGroupSection() {
   const section     = document.createElement('div');
   section.className = 'spot-card__group-section';
 
+  // Hint for users who haven't joined a group yet
+  section.appendChild(_buildGroupHint());
+
   if (_groupSubForm === 'join') {
     section.appendChild(_buildJoinForm(section));
   } else {
@@ -354,6 +379,18 @@ function _buildGroupSection() {
   }
 
   return section;
+}
+
+/**
+ * Hint blurb shown above the create/join form when the user is not in a group.
+ *
+ * @returns {HTMLElement}
+ */
+function _buildGroupHint() {
+  const p     = document.createElement('p');
+  p.className = 'group-tab__hint';
+  p.textContent = 'Coordinate with friends — see where everyone is heading in real time.';
+  return p;
 }
 
 /**
@@ -570,6 +607,7 @@ function _populateBuildingDropdown() {
 
 /**
  * Replaces the create/join form when the user is already in a group.
+ * Renders: header → session summary → members table → activity feed → spot share.
  *
  * @param {object}      group
  * @param {object|null} groupMember
@@ -620,6 +658,29 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
 
   section.appendChild(header);
 
+  // ── Session summary card ──────────────────────────────────────────────────
+  const mySessionId = _mySessionId();
+  const myPins      = Object.values(groupPins).filter(
+    (p) => p.session_id === mySessionId && p.pin_type === 'live',
+  );
+  const myMember    = groupMembers.find((m) => m.session_id === mySessionId);
+  const myPoints    = myMember?.scout_points ?? 0;
+
+  const summary     = document.createElement('div');
+  summary.className = 'group-tab__summary';
+  summary.innerHTML = /* html */`
+    <span class="group-tab__summary-stat">
+      ${iconSvg(MapPin, 13)}
+      <span>${myPins.length} spot${myPins.length !== 1 ? 's' : ''} scouted</span>
+    </span>
+    <span class="group-tab__summary-sep"></span>
+    <span class="group-tab__summary-stat">
+      ${iconSvg(Star, 13)}
+      <span>${myPoints} pt${myPoints !== 1 ? 's' : ''}</span>
+    </span>
+  `;
+  section.appendChild(summary);
+
   // ── Member count ─────────────────────────────────────────────────────────
   const memberCount = groupMembers.length || 1;
   const count     = document.createElement('p');
@@ -633,7 +694,7 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
 
   if (groupMembers.length > 0) {
     groupMembers.forEach((mem) => {
-      const isMine   = mem.session_id === _mySessionId();
+      const isMine   = mem.session_id === mySessionId;
       const initials = _toInitials(mem.display_name ?? '?');
 
       const livePins = Object.values(groupPins).filter(
@@ -724,10 +785,123 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
   codeRow.appendChild(codeCopyBtn);
 
   section.appendChild(codeRow);
+
+  // ── Recent activity feed ─────────────────────────────────────────────────
+  const allLivePins = Object.values(groupPins)
+    .filter((p) => p.pin_type === 'live' && !p.ended_at && p.created_at)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  if (allLivePins.length > 0) {
+    const feed     = document.createElement('div');
+    feed.className = 'group-tab__activity';
+
+    const feedLabel     = document.createElement('p');
+    feedLabel.className = 'filter-accordion__label';
+    feedLabel.textContent = 'Recent activity';
+    feed.appendChild(feedLabel);
+
+    allLivePins.forEach((pin) => {
+      const mem      = groupMembers.find((m) => m.session_id === pin.session_id);
+      const memName  = mem?.display_name ?? 'Someone';
+      const spotName = spots.find((s) => s.id === pin.spot_id)?.name ?? 'a spot';
+      const when     = timeAgo(pin.created_at);
+      const initials = _toInitials(memName);
+
+      const item     = document.createElement('div');
+      item.className = 'group-tab__activity-item';
+      item.innerHTML = /* html */`
+        <span class="group-tab__activity-avatar" style="background:${group.color ?? 'var(--color-brand)'}">${_escHtml(initials)}</span>
+        <span class="group-tab__activity-body">
+          <span class="group-tab__activity-name">${_escHtml(memName)}</span>
+          <span class="group-tab__activity-spot"> → ${_escHtml(spotName)}</span>
+        </span>
+        <span class="group-tab__activity-time">${_escHtml(when)}</span>
+      `;
+      feed.appendChild(item);
+    });
+
+    section.appendChild(feed);
+  }
+
+  // ── Spot sharing shortcut (my active pin) ────────────────────────────────
+  if (myGroupPinId) {
+    const activePin  = groupPins[myGroupPinId];
+    const activeSpot = activePin ? spots.find((s) => s.id === activePin.spot_id) : null;
+
+    if (activeSpot) {
+      const shareRow     = document.createElement('div');
+      shareRow.className = 'group-tab__share-row';
+
+      const shareLabel     = document.createElement('span');
+      shareLabel.className = 'group-tab__share-label';
+      shareLabel.innerHTML = /* html */`${iconSvg(MapPin, 13)} Sharing: <strong>${_escHtml(activeSpot.name)}</strong>`;
+      shareRow.appendChild(shareLabel);
+
+      const shareBtn     = document.createElement('button');
+      shareBtn.type      = 'button';
+      shareBtn.className = 'spot-card__gm-copy';
+      shareBtn.setAttribute('aria-label', 'Copy spot link');
+      shareBtn.innerHTML = iconSvg(Copy, 14);
+      shareBtn.addEventListener('click', async () => {
+        const url = `${window.location.origin}?spot=${activeSpot.id}`;
+        try {
+          await navigator.clipboard.writeText(url);
+          showToast(`Spot link for "${activeSpot.name}" copied!`, 'success');
+        } catch {
+          showToast(`Find me at: ${activeSpot.name}`, 'success');
+        }
+      });
+      shareRow.appendChild(shareBtn);
+
+      section.appendChild(shareRow);
+    }
+  }
+
   return section;
 }
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Escape a string for safe insertion into innerHTML.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function _escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Re-render the group tab body and update the colour badge whenever
+ * group state changes (join, leave, members update, pins update).
+ *
+ * @returns {void}
+ */
+function _syncGroupTab() {
+  // Always keep the badge in sync regardless of active tab
+  const badge = document.getElementById('group-tab-badge');
+  if (badge) {
+    const { group } = getState();
+    badge.hidden = !group;
+    if (group) badge.style.background = group.color ?? 'var(--color-brand)';
+  }
+
+  // Re-render the body only when the group tab is visible
+  if (_activeTab !== 'group') return;
+
+  const form     = document.querySelector('.filter-form');
+  const existing = form?.querySelector('.filter-tab-body');
+  if (!existing) return;
+
+  const next = _buildTabBody();
+  existing.replaceWith(next);
+}
 
 /**
  * Derive 1–2 letter initials from a display name.
