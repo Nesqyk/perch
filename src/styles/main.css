@@ -449,6 +449,7 @@ a {
   max-width: 440px;
   padding: 0;
   overflow: hidden;
+  box-shadow: none;
 }
 
 .modal-title--padded {

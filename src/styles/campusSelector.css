@@ -28,18 +28,24 @@
  *     .campus-modal__search         search text input
  *     .campus-modal__list           scrollable campus list (role="listbox")
  *     .campus-modal__row            individual campus button
- *     .campus-modal__row--selected  selected campus row highlight
- *     .campus-modal__row-body       name + city stacked column
- *     .campus-modal__row-name       campus name
- *     .campus-modal__row-city       campus city (muted)
- *     .campus-modal__row-end        right-side icon cluster
- *     .campus-modal__near-dot       green dot for nearest campus
- *     .campus-modal__check          checkmark icon for selected
- *     .campus-modal__empty          no-results message
- *     .campus-modal__add-row        "+ Add campus" list row button
- *     .campus-modal__add-form       inline add-campus form
- *     .campus-modal__add-input      text input inside add form
- *     .campus-modal__add-actions    button row inside add form
+ *     .campus-modal__row--selected   selected campus row highlight
+ *     .campus-modal__row--last-used  last-visited campus row modifier
+ *     .campus-modal__row-body        name + city stacked column
+ *     .campus-modal__row-name        campus name
+ *     .campus-modal__row-city        campus city (muted)
+ *     .campus-modal__row-stats       live stats row below city
+ *     .campus-modal__row-stat        individual stat pill
+ *     .campus-modal__row-stat--active active-claims pill (orange accent)
+ *     .campus-modal__row-end         right-side icon cluster
+ *     .campus-modal__near-dot        green dot for nearest campus
+ *     .campus-modal__check           checkmark icon for selected
+ *     .campus-modal__last-used-badge "Last visited" inline badge
+ *     .campus-modal__empty           no-results message
+ *     .campus-modal__empty-add       "Add as new campus" link in empty state
+ *     .campus-modal__add-row         "+ Add campus" list row button
+ *     .campus-modal__add-form        inline add-campus form
+ *     .campus-modal__add-input       text input inside add form
+ *     .campus-modal__add-actions     button row inside add form
  */
 
 /* ─── Container ──────────────────────────────────────────────────────────────── */
@@ -51,6 +57,7 @@
 /* ─── Trigger button ─────────────────────────────────────────────────────────── */
 
 .campus-trigger {
+  height: 45px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -296,6 +303,10 @@
   background: var(--color-brand-light);
 }
 
+.campus-modal__row--last-used {
+  border-left: 2px solid var(--color-brand);
+}
+
 /* ── Row body (name + city) ──────────────────────────────────────────────── */
 
 .campus-modal__row-body {
@@ -320,6 +331,41 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Row stats (spot count + live claims) ────────────────────────────────── */
+
+.campus-modal__row-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.campus-modal__row-stat {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.campus-modal__row-stat--active {
+  color: var(--color-orange, var(--color-brand));
+  font-weight: var(--font-medium);
+}
+
+/* ── "Last visited" inline badge ─────────────────────────────────────────── */
+
+.campus-modal__last-used-badge {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-1);
+  background: var(--color-brand-light);
+  color: var(--color-brand);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+  line-height: 1.4;
 }
 
 /* ── Row end (dots + checkmark) ──────────────────────────────────────────── */
@@ -354,6 +400,25 @@
   font-size: var(--text-sm);
   color: var(--color-text-dim);
   text-align: center;
+}
+
+.campus-modal__empty-add {
+  display: inline;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast);
+}
+
+.campus-modal__empty-add:hover {
+  color: var(--color-green-700);
 }
 
 /* ── "+ Add campus" row ──────────────────────────────────────────────────── */

@@ -13,8 +13,14 @@
  *   • Optional GPS "Use my location" row (hidden once location is known).
  *   • Search input that filters the list in real time.
  *   • Scrollable listbox of campuses, sorted by proximity when location
- *     is available, alphabetical otherwise.
- *   • "Add campus" inline form at the bottom.
+ *     is available, alphabetical otherwise. Last-used campus floats to
+ *     the top when not already first.
+ *   • Per-campus live stats (spot count, active claims) derived from
+ *     campusStats() in spotState.js.
+ *   • "Add campus" inline form at the bottom. When search has no
+ *     results the empty state offers to pre-fill the add form.
+ *   • Keyboard navigation: ArrowDown/Up move focus through rows,
+ *     Escape closes the modal.
  *
  * Preserved from the original implementation:
  *   • Haversine nearest-campus detection (_haversine, _isNearest).
@@ -29,6 +35,7 @@ import { Navigation, Plus, Check, ChevronRight, X } from 'lucide';
 
 import { on, emit, EVENTS }              from '../core/events.js';
 import { getState, dispatch }            from '../core/store.js';
+import { campusStats }                   from '../state/spotState.js';
 import { iconSvg }                       from './icons.js';
 import { openModalWithElement, closeModal } from './modal.js';
 
@@ -36,6 +43,9 @@ import { openModalWithElement, closeModal } from './modal.js';
 
 /** Earth radius used for haversine distance (metres). */
 const EARTH_RADIUS_M = 6371e3;
+
+/** localStorage key used to persist the last-selected campus id. */
+const LAST_CAMPUS_KEY = 'perch_last_campus';
 
 // ─── Initialise ───────────────────────────────────────────────────────────────
 
@@ -172,11 +182,33 @@ export function initCampusSelector(container) {
       _renderAddForm(addFormWrap, searchInput, list, close);
     }
 
+    // ── Keyboard navigation ───────────────────────────────────────────────
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { close(); return; }
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const rows = /** @type {HTMLButtonElement[]} */ (
+          Array.from(list.querySelectorAll('.campus-modal__row:not([hidden])'))
+        );
+        if (!rows.length) return;
+        const focused = document.activeElement;
+        const idx     = rows.indexOf(/** @type {HTMLButtonElement} */ (focused));
+        if (e.key === 'ArrowDown') {
+          rows[idx < 0 ? 0 : Math.min(idx + 1, rows.length - 1)].focus();
+        } else {
+          rows[idx <= 0 ? 0 : idx - 1].focus();
+        }
+      }
+    });
+
     const renderList = () => {
       list.innerHTML = '';
 
-      const { campuses, selectedCampusId, userLocation: loc } = getState();
-      const needle = _searchQuery.trim().toLowerCase();
+      const { campuses, selectedCampusId, spots, claims, userLocation: loc } = getState();
+      const needle  = _searchQuery.trim().toLowerCase();
+      const stats   = campusStats(campuses, spots, claims);
+      const lastId  = _getLastCampusId();
 
       const _unordered = needle
         ? campuses.filter(c =>
@@ -184,31 +216,86 @@ export function initCampusSelector(container) {
             (c.city && c.city.toLowerCase().includes(needle)))
         : campuses.slice();
 
-      const filtered = loc
+      // Sort by proximity if location is available, else alphabetical.
+      const sorted = loc
         ? _unordered.slice().sort((a, b) => _haversine(loc, a) - _haversine(loc, b))
-        : _unordered;
+        : _unordered.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+      // Float last-used campus to the top when not already first and not
+      // searching (proximity / alpha sort take precedence during search).
+      const filtered = (!needle && lastId && sorted.length > 1 && sorted[0].id !== lastId)
+        ? _floatToTop(sorted, lastId)
+        : sorted;
 
       if (!filtered.length) {
         const empty = document.createElement('div');
-        empty.className   = 'campus-modal__empty';
-        empty.textContent = needle ? `No results for "${needle}"` : 'No campuses yet.';
+        empty.className = 'campus-modal__empty';
+
+        if (needle) {
+          // Offer to pre-fill the add form with the search term.
+          const msg = document.createElement('span');
+          msg.textContent = `No results for "${needle}". `;
+          empty.appendChild(msg);
+
+          const addHint       = document.createElement('button');
+          addHint.type        = 'button';
+          addHint.className   = 'campus-modal__empty-add';
+          addHint.textContent = `Add "${needle}" as a new campus`;
+          addHint.addEventListener('click', () => {
+            _showAddForm = true;
+            addFormWrap.hidden = false;
+            addFormWrap.innerHTML = '';
+            _renderAddForm(addFormWrap, searchInput, list, close);
+            list.hidden   = true;
+            const inp = addFormWrap.querySelector('.campus-modal__add-input');
+            if (inp) { /** @type {HTMLInputElement} */ (inp).value = needle; inp.focus(); }
+          });
+          empty.appendChild(addHint);
+        } else {
+          empty.textContent = 'No campuses yet.';
+        }
+
         list.appendChild(empty);
       }
 
       for (const campus of filtered) {
-        const isSelected = campus.id === selectedCampusId;
-        const isNearest  = !!loc && _isNearest(campus, loc);
+        const isSelected  = campus.id === selectedCampusId;
+        const isNearest   = !!loc && _isNearest(campus, loc);
+        const isLastUsed  = !needle && campus.id === lastId && filtered[0]?.id === lastId && filtered.indexOf(campus) === 0 && filtered.length > 1;
+        const stat        = stats.get(campus.id);
 
         const row       = document.createElement('button');
         row.type        = 'button';
-        row.className   = `campus-modal__row${isSelected ? ' campus-modal__row--selected' : ''}`;
+        row.className   = [
+          'campus-modal__row',
+          isSelected ? 'campus-modal__row--selected' : '',
+          isLastUsed ? 'campus-modal__row--last-used' : '',
+        ].filter(Boolean).join(' ');
         row.setAttribute('role', 'option');
         row.setAttribute('aria-selected', String(isSelected));
 
+        // Build the stats fragment.
+        const statParts = [];
+        if (stat && stat.spotCount > 0) {
+          statParts.push(`${stat.spotCount} ${stat.spotCount === 1 ? 'spot' : 'spots'}`);
+        }
+        const statsHtml = statParts.length
+          ? `<span class="campus-modal__row-stats">
+               ${statParts.map(p => `<span class="campus-modal__row-stat">${_escHtml(p)}</span>`).join('')}
+               ${stat && stat.liveClaimCount > 0
+                 ? `<span class="campus-modal__row-stat campus-modal__row-stat--active">${stat.liveClaimCount} active</span>`
+                 : ''}
+             </span>`
+          : '';
+
         row.innerHTML = /* html */`
           <span class="campus-modal__row-body">
-            <span class="campus-modal__row-name">${_escHtml(campus.name)}</span>
+            <span class="campus-modal__row-name">
+              ${_escHtml(campus.name)}
+              ${isLastUsed ? '<span class="campus-modal__last-used-badge">Last visited</span>' : ''}
+            </span>
             ${campus.city ? `<span class="campus-modal__row-city">${_escHtml(campus.city)}</span>` : ''}
+            ${statsHtml}
           </span>
           <span class="campus-modal__row-end">
             ${isNearest ? '<span class="campus-modal__near-dot" title="Nearest campus"></span>' : ''}
@@ -219,28 +306,31 @@ export function initCampusSelector(container) {
         row.addEventListener('click', () => {
           dispatch('CAMPUS_SELECTED', { campusId: campus.id });
           dispatch('SET_FILTERS', { nearBuilding: null });
+          _setLastCampusId(campus.id);
           close();
         });
 
         list.appendChild(row);
       }
 
-      // ── "Add campus" row ───────────────────────────────────────────────
-      const addRow       = document.createElement('button');
-      addRow.type        = 'button';
-      addRow.className   = 'campus-modal__add-row';
-      addRow.innerHTML   = `${iconSvg(Plus, 13)} Add campus`;
-      addRow.addEventListener('click', () => {
-        _showAddForm = true;
-        addFormWrap.hidden = false;
-        addFormWrap.innerHTML = '';
-        _renderAddForm(addFormWrap, searchInput, list, close);
-        list.hidden = true;
-        addRow.hidden = true;
-        const inp = addFormWrap.querySelector('.campus-modal__add-input');
-        if (inp) { /** @type {HTMLInputElement} */ (inp).value = _searchQuery.trim(); inp.focus(); }
-      });
-      list.appendChild(addRow);
+      // ── "Add campus" row (only when add form is not open) ─────────────
+      if (!_showAddForm) {
+        const addRow       = document.createElement('button');
+        addRow.type        = 'button';
+        addRow.className   = 'campus-modal__add-row';
+        addRow.innerHTML   = `${iconSvg(Plus, 13)} Add campus`;
+        addRow.addEventListener('click', () => {
+          _showAddForm = true;
+          addFormWrap.hidden = false;
+          addFormWrap.innerHTML = '';
+          _renderAddForm(addFormWrap, searchInput, list, close);
+          list.hidden = true;
+          addRow.hidden = true;
+          const inp = addFormWrap.querySelector('.campus-modal__add-input');
+          if (inp) { /** @type {HTMLInputElement} */ (inp).value = _searchQuery.trim(); inp.focus(); }
+        });
+        list.appendChild(addRow);
+      }
     };
 
     // Expose so GPS refresh can re-render
@@ -360,6 +450,51 @@ function _renderAddForm(wrap, searchInput, list, close) {
   });
 
   requestAnimationFrame(() => nameInput.focus());
+}
+
+// ─── localStorage helpers ─────────────────────────────────────────────────────
+
+/**
+ * Persist the last-selected campus id in localStorage.
+ *
+ * @param {string} campusId
+ * @returns {void}
+ */
+function _setLastCampusId(campusId) {
+  try {
+    localStorage.setItem(LAST_CAMPUS_KEY, campusId);
+  } catch (err) {
+    console.warn('[campusSelector] Could not write last campus to localStorage:', err);
+  }
+}
+
+/**
+ * Read the last-selected campus id from localStorage, or null if absent.
+ *
+ * @returns {string | null}
+ */
+function _getLastCampusId() {
+  try {
+    return localStorage.getItem(LAST_CAMPUS_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Return a new array with the campus matching `campusId` moved to index 0.
+ * If not found, returns `arr` unchanged.
+ *
+ * @param {object[]} arr
+ * @param {string}   campusId
+ * @returns {object[]}
+ */
+function _floatToTop(arr, campusId) {
+  const idx = arr.findIndex(c => c.id === campusId);
+  if (idx <= 0) return arr;
+  const result = arr.slice();
+  result.unshift(...result.splice(idx, 1));
+  return result;
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────────
