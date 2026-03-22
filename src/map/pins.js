@@ -2,206 +2,213 @@
  * src/map/pins.js
  *
  * Owns every marker on the map.
- * Listens to store events and keeps the marker layer in sync with state.
  *
- * Pin state → visual mapping (mirrors the wireframe):
- *   free     → green  (#22c55e)  pulses
- *   maybe    → yellow (#eab308)  static
- *   claimed  → blue   (#3b82f6)  ripple animation
- *   full     → red    (#ef4444)  fades / dim
- *
- * On-campus spots use a pointed teardrop SVG icon.
- * Off-campus spots use a circular SVG icon.
- *
- * Group live pins are rendered as a separate layer on top of spot pins.
- * Each group pin uses a coloured teardrop with member initials and a
- * joiner count badge; transit "on the way" joiners appear as small dots
- * orbiting the pin.
- *
- * This module never touches the sidebar or bottom sheet.
- * It only emits MAP_PIN_CLICKED — the UI layer decides what to render.
+ * Campus mode renders building markers; room details live inside the building
+ * modal. Group live pins always render as an overlay above both.
  */
 
-import { L }                    from './mapLoader.js';
-import { on, emit, EVENTS }     from '../core/events.js';
-import { getState }              from '../core/store.js';
-import { getMap }                from './mapInit.js';
-import { deriveSpotStatus }      from '../state/spotState.js';
-import { formatConfidence }      from '../utils/confidence.js';
+import { L } from './mapLoader.js';
 
-/** @type {Map<string, import('leaflet').Marker>}  spotId → Marker */
-const _markers = new Map();
+import { on, emit, EVENTS } from '../core/events.js';
+import { getState } from '../core/store.js';
+import { getMap } from './mapInit.js';
+import { deriveSpotStatus } from '../state/spotState.js';
+import { deriveBuildingStatus, getRoomsForBuilding } from '../state/buildingState.js';
+import { formatConfidence } from '../utils/confidence.js';
 
-/** @type {Map<string, import('leaflet').Marker>}  pinId → Marker for group live pins */
+/** @type {Map<string, import('leaflet').Marker>} */
+const _spotMarkers = new Map();
+
+/** @type {Map<string, import('leaflet').Marker>} */
+const _buildingMarkers = new Map();
+
+/** @type {Map<string, import('leaflet').Marker>} */
 const _groupMarkers = new Map();
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-/** Maps status string → hex color. Must stay in sync with CSS variables. */
+/** Maps status string to hex color. Must stay in sync with CSS variables. */
 export const PIN_COLORS = {
-  free:    '#22c55e',
-  maybe:   '#eab308',
+  free: '#22c55e',
+  maybe: '#eab308',
   claimed: '#3b82f6',
-  full:    '#ef4444',
+  full: '#ef4444',
 };
-
-// ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
  * Wire up all store event listeners.
- * Called once from main.js after initMap().
+ *
+ * @returns {void}
  */
 export function initPins() {
-  on(EVENTS.SPOTS_LOADED,       _onSpotsLoaded);
-  on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
-  on(EVENTS.SPOT_SELECTED,      _onSpotSelected);
-  on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
-  on(EVENTS.VIEW_MODE_CHANGED,  _onViewModeChanged);
+  on(EVENTS.SPOTS_LOADED, _syncMarkers);
+  on(EVENTS.BUILDINGS_LOADED, _syncMarkers);
+  on(EVENTS.CLAIM_UPDATED, _syncMarkers);
+  on(EVENTS.CORRECTION_FILED, _syncMarkers);
+  on(EVENTS.SPOT_SELECTED, _onSpotSelected);
+  on(EVENTS.SPOT_DESELECTED, _onSpotDeselected);
+  on(EVENTS.VIEW_MODE_CHANGED, _syncMarkers);
+  on(EVENTS.CAMPUS_SELECTED, _syncMarkers);
 }
 
-// ─── Event handlers ───────────────────────────────────────────────────────────
+function _syncMarkers() {
+  const { viewMode } = getState();
+  if (viewMode === 'campus') {
+    _syncBuildingMarkers();
+    _clearSpotMarkers();
+    return;
+  }
 
-function _onSpotsLoaded() {
-  const { spots, viewMode } = getState();
-  const isCampus = viewMode === 'campus';
-  const visibleSpots = isCampus ? spots.filter(s => s.on_campus) : spots;
+  _syncSpotMarkers();
+  _clearBuildingMarkers();
+}
 
-  // Remove stale markers not in the visible list.
-  const incomingIds = new Set(visibleSpots.map(s => s.id));
-  for (const [id, marker] of _markers) {
+function _syncSpotMarkers() {
+  const { spots } = getState();
+  const incomingIds = new Set(spots.map((spot) => spot.id));
+
+  for (const [id, marker] of _spotMarkers) {
     if (!incomingIds.has(id)) {
       marker.remove();
-      _markers.delete(id);
+      _spotMarkers.delete(id);
     }
   }
-  // Add or update.
-  visibleSpots.forEach(_upsertMarker);
+
+  spots.forEach(_upsertSpotMarker);
 }
 
-function _onViewModeChanged(e) {
-  const { viewMode } = e.detail;
+function _syncBuildingMarkers() {
+  const { buildings, selectedCampusId } = getState();
+  const visibleBuildings = (buildings ?? []).filter((building) => building.campus_id === selectedCampusId);
+  const incomingIds = new Set(visibleBuildings.map((building) => building.id));
+
+  for (const [id, marker] of _buildingMarkers) {
+    if (!incomingIds.has(id)) {
+      marker.remove();
+      _buildingMarkers.delete(id);
+    }
+  }
+
+  visibleBuildings.forEach(_upsertBuildingMarker);
+}
+
+// ─── Marker upsert ────────────────────────────────────────────────────────────
+
+/**
+ * Create or update a Leaflet marker for a given spot.
+ *
+ * @param {object} spot
+ * @returns {void}
+ */
+function _upsertSpotMarker(spot) {
   const map = getMap();
-  
-  if (viewMode === 'campus') {
-    // Coords wrapping CTU Main Campus
-    const campusBounds = L.latLngBounds([
-      [10.2916, 123.8789],
-      [10.2956, 123.8829]
-    ]);
-    
-    map.flyToBounds(campusBounds, { duration: 1.5 });
-    
-    // Apply bounds / zoom restrictions after the fly completes
-    map.once('moveend', () => {
-      if (getState().viewMode === 'campus') {
-        map.setMinZoom(16);
-        map.setMaxBounds(campusBounds.pad(0.3)); // Allow a tiny bit of panning edge
-      }
-    });
-  } else {
-    // 'city' mode: unlock bounds and zoom
-    map.setMinZoom(0);
-    map.setMaxBounds(null);
+  const icon = _buildSpotIcon(spot, spot.id === getState().selectedSpotId);
+
+  if (_spotMarkers.has(spot.id)) {
+    const marker = _spotMarkers.get(spot.id);
+    marker.setIcon(icon);
+    marker.setTooltipContent(_buildSpotTooltipHtml(spot));
+    return;
   }
-  
-  // Re-run the pin setup to toggle the visible spots layer.
-  _onSpotsLoaded();
+
+  const marker = L.marker([spot.lat, spot.lng], { icon, title: spot.name }).addTo(map);
+  marker.on('click', () => emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id }));
+  marker.bindTooltip(_buildSpotTooltipHtml(spot), {
+    direction: 'top',
+    permanent: false,
+    opacity: 1,
+    className: 'map-spot-tooltip-wrapper',
+    offset: [0, -32],
+  });
+  _spotMarkers.set(spot.id, marker);
 }
 
-function _onClaimUpdated(e) {
-  const { spotId } = e.detail;
-  if (spotId === null) {
-    // Repaint all pins (bulk claim load on startup).
-    getState().spots.forEach(s => _upsertMarker(s));
-  } else {
-    const spot = getState().spots.find(s => s.id === spotId);
-    if (spot) _upsertMarker(spot);
+/**
+ * Create or update a Leaflet marker for a campus building.
+ *
+ * @param {object} building
+ * @returns {void}
+ */
+function _upsertBuildingMarker(building) {
+  if (building.lat == null || building.lng == null) return;
+
+  const map = getMap();
+  const rooms = getRoomsForBuilding(getState().spots, building);
+  const status = deriveBuildingStatus(rooms, getState().claims, getState().confidence);
+  const icon = _buildBuildingIcon(building, status, rooms.length);
+
+  if (_buildingMarkers.has(building.id)) {
+    const marker = _buildingMarkers.get(building.id);
+    marker.setIcon(icon);
+    marker.setTooltipContent(_buildBuildingTooltipHtml(building, status, rooms.length));
+    return;
   }
+
+  const marker = L.marker([building.lat, building.lng], {
+    icon,
+    title: building.name,
+    zIndexOffset: 250,
+  }).addTo(map);
+
+  marker.on('click', () => emit(EVENTS.MAP_BUILDING_CLICKED, { buildingId: building.id }));
+  marker.bindTooltip(_buildBuildingTooltipHtml(building, status, rooms.length), {
+    direction: 'top',
+    permanent: false,
+    opacity: 1,
+    className: 'map-spot-tooltip-wrapper',
+    offset: [0, -28],
+  });
+
+  _buildingMarkers.set(building.id, marker);
 }
 
-function _onCorrectionFiled(e) {
-  const { spotId } = e.detail;
-  const spot = getState().spots.find(s => s.id === spotId);
-  if (spot) _upsertMarker(spot);
+function _clearSpotMarkers() {
+  for (const marker of _spotMarkers.values()) {
+    marker.remove();
+  }
+  _spotMarkers.clear();
+}
+
+function _clearBuildingMarkers() {
+  for (const marker of _buildingMarkers.values()) {
+    marker.remove();
+  }
+  _buildingMarkers.clear();
 }
 
 function _onSpotSelected(e) {
+  if (getState().viewMode === 'campus') return;
+
   const { spotId } = e.detail;
-  // Scale up the selected marker slightly via zIndexOffset.
-  for (const [id, marker] of _markers) {
+  for (const [id, marker] of _spotMarkers) {
     const isSelected = id === spotId;
     marker.setZIndexOffset(isSelected ? 999 : 0);
-    marker.setIcon(_buildIcon(
-      getState().spots.find(s => s.id === id),
-      isSelected
+    marker.setIcon(_buildSpotIcon(
+      getState().spots.find((spot) => spot.id === id),
+      isSelected,
     ));
   }
 }
 
 function _onSpotDeselected() {
-  // Reset all markers to normal scale.
-  getState().spots.forEach(spot => {
-    const marker = _markers.get(spot.id);
-    if (marker) {
-      marker.setZIndexOffset(0);
-      marker.setIcon(_buildIcon(spot, false));
-    }
+  if (getState().viewMode === 'campus') return;
+
+  getState().spots.forEach((spot) => {
+    const marker = _spotMarkers.get(spot.id);
+    if (!marker) return;
+    marker.setZIndexOffset(0);
+    marker.setIcon(_buildSpotIcon(spot, false));
   });
 }
 
-// ─── Marker CRUD ──────────────────────────────────────────────────────────────
-
-/**
- * Create or update a Leaflet marker for a given spot.
- *
- * @param {object} spot - Row from the spots table.
- */
-function _upsertMarker(spot) {
-  const map  = getMap();
-  const icon = _buildIcon(spot, spot.id === getState().selectedSpotId);
-
-  if (_markers.has(spot.id)) {
-    const marker = _markers.get(spot.id);
-    marker.setIcon(icon);
-    // Refresh tooltip content so status badge stays current.
-    marker.setTooltipContent(_buildTooltipHtml(spot));
-  } else {
-    const marker = L.marker([spot.lat, spot.lng], { icon, title: spot.name })
-      .addTo(map);
-
-    marker.on('click', () => {
-      emit(EVENTS.MAP_PIN_CLICKED, { spotId: spot.id });
-    });
-
-    marker.bindTooltip(_buildTooltipHtml(spot), {
-      direction:  'top',
-      permanent:  false,
-      opacity:    1,
-      className:  'map-spot-tooltip-wrapper',
-      offset:     [0, -32],
-    });
-
-    _markers.set(spot.id, marker);
-  }
-}
-
-// ─── Tooltip HTML factory ─────────────────────────────────────────────────────
-
 /**
  * Build the HTML string injected into a Leaflet tooltip for a spot marker.
- * Leaflet wraps this in `.leaflet-tooltip.map-spot-tooltip-wrapper`; our CSS
- * resets that wrapper and styles the inner `.map-spot-popup` card.
  *
  * @param {object} spot
  * @returns {string}
  */
-function _buildTooltipHtml(spot) {
-  const status    = deriveSpotStatus(spot.id);
-  const conf      = getState().confidence[spot.id];
+function _buildSpotTooltipHtml(spot) {
+  const status = deriveSpotStatus(spot.id);
+  const conf = getState().confidence[spot.id];
   const confLabel = formatConfidence(conf?.score).label;
-
-  const amenities = _amenityIcons(spot);
 
   return /* html */`
     <div class="map-spot-popup">
@@ -212,44 +219,112 @@ function _buildTooltipHtml(spot) {
       <div class="map-spot-popup__photo-placeholder" aria-hidden="true"></div>
       <div class="map-spot-popup__meta">
         <span class="map-spot-popup__capacity">👤 ${_capacityNum(spot.rough_capacity)}</span>
-        <span class="map-spot-popup__amenities">${amenities}</span>
+        <span class="map-spot-popup__amenities">${_amenityIcons(spot)}</span>
       </div>
     </div>
   `;
 }
 
 /**
- * Approximate head-count for a rough_capacity tier.
+ * Build tooltip HTML for a building marker.
  *
- * @param {string} rough
- * @returns {number|string}
+ * @param {object} building
+ * @param {string} status
+ * @param {number} roomCount
+ * @returns {string}
  */
-function _capacityNum(rough) {
-  const sizes = { small: 8, medium: 20, large: 40 };
-  return sizes[rough] ?? '—';
+function _buildBuildingTooltipHtml(building, status, roomCount) {
+  const verification = building.verification_status === 'pending'
+    ? 'Pending verification'
+    : 'Verified building';
+
+  return /* html */`
+    <div class="map-spot-popup">
+      <div class="map-spot-popup__header">
+        <span class="map-spot-popup__name">${_escapeHtml(building.name)}</span>
+        <span class="map-spot-popup__badge map-spot-popup__badge--${status}">${verification}</span>
+      </div>
+      <div class="map-spot-popup__meta">
+        <span class="map-spot-popup__capacity">🏢 ${roomCount} mapped room${roomCount === 1 ? '' : 's'}</span>
+      </div>
+    </div>
+  `;
 }
 
 /**
- * Render amenity emoji for a spot.
+ * Build a Leaflet DivIcon with an inline SVG for a city spot.
  *
  * @param {object} spot
- * @returns {string}
+ * @param {boolean} selected
+ * @returns {import('leaflet').DivIcon}
  */
+function _buildSpotIcon(spot, selected) {
+  const status = deriveSpotStatus(spot.id);
+  const color = PIN_COLORS[status] ?? PIN_COLORS.maybe;
+  const opacity = status === 'full' ? 0.5 : 1;
+  const scale = selected ? 1.35 : 1;
+
+  if (spot.on_campus) {
+    const width = Math.round(24 * scale);
+    const height = Math.round(36 * scale);
+    return L.divIcon({
+      html: _teardropSvg(color, opacity, width, height),
+      className: '',
+      iconSize: [width, height],
+      iconAnchor: [width / 2, height],
+    });
+  }
+
+  const diameter = Math.round(24 * scale);
+  return L.divIcon({
+    html: _circleSvg(color, opacity, diameter),
+    className: '',
+    iconSize: [diameter, diameter],
+    iconAnchor: [diameter / 2, diameter / 2],
+  });
+}
+
+/**
+ * Build a compact building marker icon for campus mode.
+ *
+ * @param {object} building
+ * @param {string} status
+ * @param {number} roomCount
+ * @returns {import('leaflet').DivIcon}
+ */
+function _buildBuildingIcon(building, status, roomCount) {
+  const color = PIN_COLORS[status] ?? PIN_COLORS.maybe;
+  const verificationClass = building.verification_status === 'pending'
+    ? 'campus-building-marker--pending'
+    : 'campus-building-marker--verified';
+
+  return L.divIcon({
+    className: '',
+    iconSize: [56, 42],
+    iconAnchor: [28, 36],
+    html: /* html */`
+      <div class="campus-building-marker ${verificationClass}" style="--building-color:${color}">
+        <span class="campus-building-marker__glyph">🏢</span>
+        <span class="campus-building-marker__count">${roomCount > 0 ? roomCount : '+'}</span>
+      </div>
+    `,
+  });
+}
+
+function _capacityNum(rough) {
+  const sizes = { small: 8, medium: 20, large: 40 };
+  return sizes[rough] ?? '-';
+}
+
 function _amenityIcons(spot) {
   const icons = [];
-  if (spot.noise_baseline === 'quiet')                      icons.push('🔇');
-  if (spot.has_outlets)                                     icons.push('⚡');
-  if (spot.wifi_strength && spot.wifi_strength !== 'none')  icons.push('📶');
-  if (spot.has_food)                                        icons.push('🍔');
+  if (spot.noise_baseline === 'quiet') icons.push('🔇');
+  if (spot.has_outlets) icons.push('⚡');
+  if (spot.wifi_strength && spot.wifi_strength !== 'none') icons.push('📶');
+  if (spot.has_food) icons.push('🍔');
   return icons.join(' ');
 }
 
-/**
- * Escape HTML special characters to prevent XSS.
- *
- * @param {string} str
- * @returns {string}
- */
 function _escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -258,142 +333,62 @@ function _escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-// ─── Icon factory ─────────────────────────────────────────────────────────────
-
-/**
- * Build a Leaflet DivIcon with an inline SVG for the given spot + selection state.
- *
- * @param {object}  spot
- * @param {boolean} selected
- * @returns {import('leaflet').DivIcon}
- */
-function _buildIcon(spot, selected) {
-  const status  = deriveSpotStatus(spot.id);
-  const color   = PIN_COLORS[status] ?? PIN_COLORS.maybe;
-  const opacity = status === 'full' ? 0.5 : 1;
-  const scale   = selected ? 1.35 : 1;
-
-  if (spot.on_campus) {
-    // Teardrop: 24×36 natural size, tip at bottom-centre.
-    const w = Math.round(24 * scale);
-    const h = Math.round(36 * scale);
-    return L.divIcon({
-      html:        _teardropSvg(color, opacity, w, h),
-      className:   '',              // suppress Leaflet's default white square
-      iconSize:    [w, h],
-      iconAnchor:  [w / 2, h],     // tip of the teardrop
-    });
-  }
-
-  // Circle: 24×24 natural size, anchor at centre.
-  const d = Math.round(24 * scale);
-  return L.divIcon({
-    html:       _circleSvg(color, opacity, d),
-    className:  '',
-    iconSize:   [d, d],
-    iconAnchor: [d / 2, d / 2],
-  });
-}
-
-/**
- * Inline SVG string for an on-campus (teardrop) pin with a clipboard icon.
- *
- * @param {string} color   - Hex fill color.
- * @param {number} opacity - Fill opacity (0–1).
- * @param {number} w       - Rendered width in pixels.
- * @param {number} h       - Rendered height in pixels.
- * @returns {string}
- */
-function _teardropSvg(color, opacity, w, h) {
-  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 24 36">
+function _teardropSvg(color, opacity, width, height) {
+  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 24 36">
     <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 24 12 24S24 21 24 12C24 5.373 18.627 0 12 0z"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
     ${_clipboardPath()}
   </svg>`;
 }
 
-/**
- * Inline SVG string for an off-campus (circle) pin with a clipboard icon.
- *
- * @param {string} color   - Hex fill color.
- * @param {number} opacity - Fill opacity (0–1).
- * @param {number} d       - Rendered diameter in pixels.
- * @returns {string}
- */
-function _circleSvg(color, opacity, d) {
-  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${d}" height="${d}" viewBox="0 0 24 24">
+function _circleSvg(color, opacity, diameter) {
+  return /* html */`<svg xmlns="http://www.w3.org/2000/svg" width="${diameter}" height="${diameter}" viewBox="0 0 24 24">
     <circle cx="12" cy="12" r="11"
       fill="${color}" fill-opacity="${opacity}" stroke="#ffffff" stroke-width="2"/>
     ${_clipboardPathCircle()}
   </svg>`;
 }
 
-/**
- * White clipboard icon path centred in a 24×36 teardrop viewBox (upper circle portion).
- * Rendered at approx 10×13px centred at (12, 11).
- *
- * @returns {string}
- */
 function _clipboardPath() {
   return /* html */`<g transform="translate(7, 4)" fill="#ffffff">
-    <!-- clipboard body -->
     <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
-    <!-- clipboard clip at top -->
-    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" fill="${'#ffffff'}" opacity="0.9"/>
-    <!-- lines on clipboard -->
+    <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" fill="#ffffff" opacity="0.9"/>
     <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
     <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
     <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
   </g>`;
 }
 
-/**
- * White clipboard icon path centred in a 24×24 circle viewBox.
- * Rendered at approx 10×12px centred at (12, 12).
- *
- * @returns {string}
- */
 function _clipboardPathCircle() {
   return /* html */`<g transform="translate(7, 5)" fill="#ffffff">
-    <!-- clipboard body -->
     <rect x="1" y="2" width="8" height="10" rx="1" ry="1"/>
-    <!-- clipboard clip at top -->
     <rect x="3.5" y="0.5" width="3" height="2.5" rx="0.75" ry="0.75" opacity="0.9"/>
-    <!-- lines on clipboard -->
     <rect x="2.5" y="5" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
     <rect x="2.5" y="7" width="5" height="0.8" rx="0.4" fill="#88ddbb"/>
     <rect x="2.5" y="9" width="3.5" height="0.8" rx="0.4" fill="#88ddbb"/>
   </g>`;
 }
-
-// ─── Group pin layer ──────────────────────────────────────────────────────────
 
 /**
  * Wire up group pin layer listeners.
- * Call once from main.js after initMap(), after initPins().
+ *
+ * @returns {void}
  */
 export function initGroupPinLayer() {
-  on(EVENTS.GROUP_PINS_UPDATED,       _onGroupPinsUpdated);
-  on(EVENTS.GROUP_PIN_JOINS_UPDATED,  _onGroupPinsUpdated);
-  on(EVENTS.GROUP_LEFT,               _clearGroupPinLayer);
+  on(EVENTS.GROUP_PINS_UPDATED, _onGroupPinsUpdated);
+  on(EVENTS.GROUP_PIN_JOINS_UPDATED, _onGroupPinsUpdated);
+  on(EVENTS.GROUP_LEFT, _clearGroupPinLayer);
 }
 
-/**
- * Rebuild the group pin markers from current state.
- * Triggered when group pins or joins change.
- */
 function _onGroupPinsUpdated() {
-  const { groupPins, groupPinJoins, group } = getState();
-  if (!group) {
+  const { groupPins, groupPinJoins, group, groupPinsVisible } = getState();
+  if (!group || !groupPinsVisible) {
     _clearGroupPinLayer();
     return;
   }
   updateGroupPinLayer(groupPins, groupPinJoins, group.color);
 }
 
-/**
- * Remove all group pin markers from the map.
- */
 function _clearGroupPinLayer() {
   for (const marker of _groupMarkers.values()) {
     marker.remove();
@@ -403,18 +398,17 @@ function _clearGroupPinLayer() {
 
 /**
  * Sync the group pin marker layer with the provided pins + joins.
- * Called by feature module after a realtime update.
  *
- * @param {object}   pins       - Record<pinId, group_pin row>.
- * @param {object}   joins      - Record<pinId, group_pin_join rows>.
- * @param {string}   color      - Hex colour for the group.
+ * @param {object} pins
+ * @param {object} joins
+ * @param {string} color
+ * @returns {void}
  */
 export function updateGroupPinLayer(pins, joins, color) {
   const map = getMap();
   const pinsList = Object.values(pins);
+  const incomingIds = new Set(pinsList.map((pin) => pin.id));
 
-  // Remove stale markers for pins no longer in the list.
-  const incomingIds = new Set(pinsList.map(p => p.id));
   for (const [id, marker] of _groupMarkers) {
     if (!incomingIds.has(id)) {
       marker.remove();
@@ -422,10 +416,8 @@ export function updateGroupPinLayer(pins, joins, color) {
     }
   }
 
-  // Upsert markers for each active pin.
   for (const pin of pinsList) {
     if (pin.status === 'ended' || pin.ended_at) {
-      // Remove ended pins from the map.
       if (_groupMarkers.has(pin.id)) {
         _groupMarkers.get(pin.id).remove();
         _groupMarkers.delete(pin.id);
@@ -433,9 +425,9 @@ export function updateGroupPinLayer(pins, joins, color) {
       continue;
     }
 
-    const pinJoins     = joins[pin.id] || [];
-    const transitCount = pinJoins.filter(j => j.status === 'heading').length;
-    const icon         = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
+    const pinJoins = joins[pin.id] || [];
+    const transitCount = pinJoins.filter((join) => join.status === 'heading').length;
+    const icon = _buildGroupPinIcon(pin, pinJoins, color, transitCount);
 
     if (_groupMarkers.has(pin.id)) {
       _groupMarkers.get(pin.id).setIcon(icon);
@@ -443,33 +435,21 @@ export function updateGroupPinLayer(pins, joins, color) {
       const marker = L.marker([pin.lat, pin.lng], {
         icon,
         title: `Group pin (${pin.status})`,
-        zIndexOffset: 500, // render above spot pins
+        zIndexOffset: 500,
       }).addTo(map);
       _groupMarkers.set(pin.id, marker);
     }
   }
 }
 
-/**
- * Build a Leaflet DivIcon for a group pin.
- * Renders a coloured teardrop with member initials, a joiner badge,
- * and small transit dots for members heading to the pin.
- *
- * @param {object}   pin          - group_pin row (must have lat, lng, status, display_name).
- * @param {object[]} joins        - group_pin_join rows for this pin.
- * @param {string}   color        - Group hex color.
- * @param {number}   transitCount - Number of members currently in transit.
- * @returns {import('leaflet').DivIcon}
- */
 function _buildGroupPinIcon(pin, joins, color, transitCount) {
   const initials = _initials(pin.display_name ?? '?');
-  const badge    = transitCount > 0
+  const badge = transitCount > 0
     ? /* html */`<span class="group-pin-badge">${transitCount}</span>`
     : '';
 
-  // Transit dots: one small dot per member heading there (max 5).
   const dots = joins
-    .filter(j => j.status === 'heading')
+    .filter((join) => join.status === 'heading')
     .slice(0, 5)
     .map(() => /* html */`<span class="group-transit-dot" style="background:${color}"></span>`)
     .join('');
@@ -493,18 +473,12 @@ function _buildGroupPinIcon(pin, joins, color, transitCount) {
 
   return L.divIcon({
     html,
-    className:  '',
-    iconSize:   [40, 52],
+    className: '',
+    iconSize: [40, 52],
     iconAnchor: [16, 44],
   });
 }
 
-/**
- * Extract up to 2 initials from a display name.
- *
- * @param {string} name
- * @returns {string}
- */
 function _initials(name) {
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
