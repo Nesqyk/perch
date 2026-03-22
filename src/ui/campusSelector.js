@@ -25,7 +25,7 @@
  * @module campusSelector
  */
 
-import { Navigation, Plus, Check, ChevronDown } from 'lucide';
+import { Navigation, Plus, Check, ChevronRight, X } from 'lucide';
 
 import { on, emit, EVENTS }              from '../core/events.js';
 import { getState, dispatch }            from '../core/store.js';
@@ -80,10 +80,10 @@ export function initCampusSelector(container) {
       <span class="campus-trigger__label">
         ${selected
           ? `<span class="campus-trigger__name">${_escHtml(selected.name)}</span>${isNearest ? '<span class="campus-trigger__near-dot" title="Nearest campus"></span>' : ''}`
-          : `<span class="campus-trigger__placeholder">Select campus</span>`
+          : `<span class="campus-trigger__placeholder">Select campus…</span>`
         }
       </span>
-      <span class="campus-trigger__chevron">${iconSvg(ChevronDown, 14)}</span>
+      <span class="campus-trigger__chevron">${iconSvg(ChevronRight, 14)}</span>
     `;
   };
 
@@ -91,9 +91,45 @@ export function initCampusSelector(container) {
     const wrap = document.createElement('div');
     wrap.className = 'campus-modal';
 
-    const { userLocation } = getState();
+    // ── Header: title + X close button ───────────────────────────────────
+    const header     = document.createElement('div');
+    header.className = 'campus-modal__header';
 
-    // ── GPS prompt ────────────────────────────────────────────────────────
+    const title     = document.createElement('span');
+    title.className = 'campus-modal__title';
+    title.textContent = 'Choose campus';
+    header.appendChild(title);
+
+    const closeBtn     = document.createElement('button');
+    closeBtn.type      = 'button';
+    closeBtn.className = 'campus-modal__close';
+    closeBtn.setAttribute('aria-label', 'Close campus picker');
+    closeBtn.innerHTML = iconSvg(X, 16);
+    closeBtn.addEventListener('click', close);
+    header.appendChild(closeBtn);
+
+    wrap.appendChild(header);
+
+    // ── Search input ──────────────────────────────────────────────────────
+    const searchWrap = document.createElement('div');
+    searchWrap.className = 'campus-modal__search-wrap';
+
+    const searchInput       = document.createElement('input');
+    searchInput.type        = 'search';
+    searchInput.className   = 'campus-modal__search';
+    searchInput.placeholder = 'Search universities…';
+    searchInput.value       = _searchQuery;
+    searchInput.setAttribute('aria-label', 'Search campuses');
+    searchInput.addEventListener('input', () => {
+      _searchQuery = searchInput.value;
+      _showAddForm = false;
+      renderList();
+    });
+    searchWrap.appendChild(searchInput);
+    wrap.appendChild(searchWrap);
+
+    // ── GPS prompt (below search — optional sugar) ────────────────────────
+    const { userLocation } = getState();
     if (!userLocation) {
       const gpsRow = document.createElement('div');
       gpsRow.className = 'campus-modal__gps';
@@ -119,24 +155,6 @@ export function initCampusSelector(container) {
       }
       wrap.appendChild(gpsRow);
     }
-
-    // ── Search input ──────────────────────────────────────────────────────
-    const searchWrap = document.createElement('div');
-    searchWrap.className = 'campus-modal__search-wrap';
-
-    const searchInput       = document.createElement('input');
-    searchInput.type        = 'search';
-    searchInput.className   = 'campus-modal__search';
-    searchInput.placeholder = 'Search universities…';
-    searchInput.value       = _searchQuery;
-    searchInput.setAttribute('aria-label', 'Search campuses');
-    searchInput.addEventListener('input', () => {
-      _searchQuery = searchInput.value;
-      _showAddForm = false;
-      renderList();
-    });
-    searchWrap.appendChild(searchInput);
-    wrap.appendChild(searchWrap);
 
     // ── List ──────────────────────────────────────────────────────────────
     const list = document.createElement('div');
@@ -249,7 +267,6 @@ export function initCampusSelector(container) {
     _showAddForm = false;
     trigger.setAttribute('aria-expanded', 'true');
     openModalWithElement(buildModalContent(), {
-      title:    'Choose campus',
       boxClass: 'modal-box--campus',
       onClose:  close,
     });

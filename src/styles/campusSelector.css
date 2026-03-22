@@ -132,11 +132,6 @@
   flex-shrink: 0;
   margin-left: var(--space-2);
   color: var(--color-text-dim);
-  transition: transform var(--transition-fast);
-}
-
-.campus-trigger[aria-expanded="true"] .campus-trigger__chevron {
-  transform: rotate(180deg);
 }
 
 /* ─── Modal content wrapper ──────────────────────────────────────────────────── */
@@ -144,6 +139,48 @@
 .campus-modal {
   display: flex;
   flex-direction: column;
+}
+
+/* ─── Modal header (title + close button) ────────────────────────────────────── */
+
+.campus-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.campus-modal__title {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.campus-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.campus-modal__close:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.campus-modal__close svg {
+  flex-shrink: 0;
 }
 
 /* ─── GPS prompt row ─────────────────────────────────────────────────────────── */
@@ -219,7 +256,7 @@
 
 .campus-modal__list {
   overflow-y: auto;
-  max-height: 50vh;
+  max-height: 300px;
   display: flex;
   flex-direction: column;
 }

@@ -227,9 +227,27 @@ function _buildViewModeToggle() {
 // ─── Campus selector ─────────────────────────────────────────────────────────
 
 function _buildCampusSelectorBox() {
+  const wrapper     = document.createElement('div');
+  wrapper.id        = 'campus-selector-wrapper';
+
+  const label       = document.createElement('p');
+  label.className   = 'filter-accordion__label';
+  label.textContent = 'Campus';
+  wrapper.appendChild(label);
+
   const container = document.createElement('div');
   initCampusSelector(container);
-  return container;
+  wrapper.appendChild(container);
+
+  // Hide the entire row in city mode — campus picker is irrelevant there.
+  const syncVisibility = () => {
+    const { viewMode } = getState();
+    wrapper.hidden = viewMode === 'city';
+  };
+  syncVisibility();
+  on(EVENTS.VIEW_MODE_CHANGED, syncVisibility);
+
+  return wrapper;
 }
 
 // ─── Filters section ─────────────────────────────────────────────────────────
