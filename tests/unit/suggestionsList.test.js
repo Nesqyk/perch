@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { formatSuggestions } from '../../src/ui/suggestionsList.js';
 
 describe('formatSuggestions', () => {
-  it('returns exactly 5 suggestions if more are provided', () => {
+  it('returns all suggestions when more than 5 are provided (slicing is done by the renderer)', () => {
     const spots = [
       { id: '1', name: 'Spot 1', _distance: 100 },
       { id: '2', name: 'Spot 2', _distance: 200 },
@@ -18,7 +18,7 @@ describe('formatSuggestions', () => {
       { id: '6', name: 'Spot 6', _distance: 600 },
     ];
     const result = formatSuggestions(spots);
-    expect(result).toHaveLength(5);
+    expect(result).toHaveLength(6);
     expect(result[0].id).toBe('1');
   });
 

@@ -407,6 +407,11 @@ a {
   padding: var(--space-4);
 }
 
+/* Spot card modal sits below generic confirmation / report modals so that
+   confirmations triggered from within the card (e.g. "Cancel claim?") always
+   render on top. */
+#spot-modal-overlay { z-index: 490; }
+
 .modal-overlay[hidden] {
   display: none;
 }

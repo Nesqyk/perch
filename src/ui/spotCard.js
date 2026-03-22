@@ -450,7 +450,7 @@ function _buildClaimSection(spot, activeClaims, ownClaim) {
 
       row.innerHTML = /* html */`
         <span class="spot-card__claim-group-icon">${iconSvg(Users, 14)}</span>
-        <span class="spot-card__claim-group-size"><strong>${name}</strong> • ${_groupLabel(claim.group_size_key)}</span>
+        <span class="spot-card__claim-group-size"><strong>${name}</strong><span class="spot-card__claim-group-sep"></span>${_groupLabel(claim.group_size_key)}</span>
         <span class="spot-card__claim-group-time">${timeAgo(claim.claimed_at)}</span>
       `;
       table.appendChild(row);

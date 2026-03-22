@@ -2,62 +2,84 @@
  * src/styles/suggestionsList.css
  *
  * Styles for the ranked suggestions list shown after "Find My Spot".
- * Replaces the .suggestions-list / .suggestion-item blocks that were
- * previously in main.css.
  *
- * All values reference CSS custom properties defined in main.css.
+ * Layout:
+ *   .suggestions-list          — column flex wrapper (border-top separator)
+ *     .suggestions-list__items — horizontal scroll track (top 5 cards)
+ *       .suggestion-item       — fixed-width card (200px)
+ *     .suggestions-list__view-all — text button below the track (>5 results only)
+ *
+ * "View All" modal:
+ *   .suggestions-all-overlay   — fixed full-screen backdrop
+ *     .suggestions-all-modal   — white box, max 480px, flex column
+ *       .suggestions-all-modal__header
+ *       .suggestions-all-modal__body  — scrollable
+ *         .suggestions-all-row       — compact horizontal row per result
+ *
+ * All values reference CSS custom properties from main.css.
  * Never hardcode colours, spacing, font sizes, or radii here.
  */
 
 /* ─── Wrapper ────────────────────────────────────────────────────────────────── */
 
 .suggestions-list {
-  padding: var(--space-4);
-  padding-top: var(--space-4);
-  margin-top: var(--space-2);
-  border-top: 1px solid var(--color-border);
-  display: flex;
+  display:        flex;
   flex-direction: column;
+  gap:            var(--space-2);
+  padding-top:    var(--space-4);
+  margin-top:     var(--space-2);
+  border-top:     1px solid var(--color-border);
 }
 
 /* ─── Empty state ────────────────────────────────────────────────────────────── */
 
 .suggestions-list__empty {
-  color: var(--color-text-muted);
-  font-style: italic;
-  text-align: center;
-  padding: var(--space-10) var(--space-6);
-  background: var(--color-gray-50);
+  color:         var(--color-text-muted);
+  font-style:    italic;
+  text-align:    center;
+  padding:       var(--space-10) var(--space-6);
+  background:    var(--color-gray-50);
   border-radius: var(--radius-lg);
-  border: 1px dashed var(--color-border);
+  border:        1px dashed var(--color-border);
 }
 
-/* ─── List ───────────────────────────────────────────────────────────────────── */
+/* ─── Horizontal scroll track ────────────────────────────────────────────────── */
 
 .suggestions-list__items {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  display:    flex;
+  flex-direction: row;
+  gap:        var(--space-3);
+  overflow-x: auto;
+  /* hide scrollbar on all browsers — swipe-to-scroll still works */
+  scrollbar-width: none;
+  padding-bottom: var(--space-1); /* room for shadow not to clip */
 }
+
+.suggestions-list__items::-webkit-scrollbar { display: none; }
 
 /* ─── Card ───────────────────────────────────────────────────────────────────── */
 
 .suggestion-item {
-  display: flex;
+  /* Fixed width so the ghost card matches and overflow is predictable */
+  min-width:    200px;
+  max-width:    200px;
+  flex-shrink:  0;
+
+  display:        flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-white);
-  border: 1px solid var(--color-gray-200);
+  gap:            var(--space-2);
+  padding:        var(--space-3) var(--space-4);
+  background:     var(--color-white);
+  border:         1px solid var(--color-gray-200);
   border-left-width: 3px;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  cursor: pointer;
-  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+  border-radius:  var(--radius-lg);
+  box-shadow:     var(--shadow-sm);
+  cursor:         pointer;
+  transition:     box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
 
 .suggestion-item:hover {
-  box-shadow: var(--shadow-md);
+  box-shadow:   var(--shadow-md);
   border-color: var(--color-gray-300);
 }
 
@@ -69,143 +91,290 @@
 /* ─── Eyebrow ────────────────────────────────────────────────────────────────── */
 
 .suggestion-item__eyebrow {
-  display: flex;
+  display:     flex;
   align-items: center;
-  gap: var(--space-2);
+  gap:         var(--space-2);
 }
 
 .suggestion-item__rank {
-  font-size: var(--text-xs);
+  font-size:   var(--text-xs);
   font-weight: var(--font-normal);
-  color: var(--color-text-dim);
+  color:       var(--color-text-dim);
   line-height: 1;
 }
 
 .suggestion-item__building {
-  font-size: var(--text-xs);
-  color: var(--color-text-dim);
-  font-weight: var(--font-normal);
+  font-size:      var(--text-xs);
+  color:          var(--color-text-dim);
+  font-weight:    var(--font-normal);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space:    nowrap;
+  overflow:       hidden;
+  text-overflow:  ellipsis;
 }
 
 /* ─── Name row ───────────────────────────────────────────────────────────────── */
 
 .suggestion-item__name-row {
-  display: flex;
+  display:     flex;
   align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+  gap:         var(--space-2);
+  flex-wrap:   wrap;
 }
 
 .suggestion-item__name {
-  font-size: var(--text-base);
+  font-size:   var(--text-base);
   font-weight: var(--font-bold);
-  color: var(--color-text);
+  color:       var(--color-text);
   line-height: 1.2;
 }
 
-/* Busy / likely-full badge */
+/* Busy / likely-full badge — shared with compact rows in View All modal */
 .suggestion-item__busy-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px var(--space-2);
+  display:      inline-flex;
+  align-items:  center;
+  padding:      2px var(--space-2);
   border-radius: var(--radius-full);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  background: var(--color-red-100);
-  color: var(--color-red-700);
-  white-space: nowrap;
+  font-size:    var(--text-xs);
+  font-weight:  var(--font-medium);
+  background:   var(--color-red-100);
+  color:        var(--color-red-700);
+  white-space:  nowrap;
 }
 
 /* ─── Footer ─────────────────────────────────────────────────────────────────── */
 
 .suggestion-item__footer {
-  display: flex;
+  display:         flex;
   justify-content: space-between;
-  align-items: center;
-  gap: var(--space-2);
+  align-items:     center;
+  gap:             var(--space-2);
+  margin-top:      auto; /* push footer to bottom of fixed-height card */
 }
 
+/* ─── Meta row (shared: card footer + compact row) ───────────────────────────── */
+
 .suggestion-item__meta {
-  display: flex;
+  display:     flex;
   align-items: center;
-  gap: var(--space-2);
-  flex-wrap: nowrap;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  min-width: 0;
-  overflow: hidden;
+  gap:         var(--space-2);
+  flex-wrap:   nowrap;
+  font-size:   var(--text-xs);
+  color:       var(--color-text-muted);
+  min-width:   0;
+  overflow:    hidden;
 }
 
 .suggestion-item__sep {
-  color: var(--color-text-dim);
+  color:       var(--color-text-dim);
   user-select: none;
 }
 
 .suggestion-item__walk {
   font-weight: var(--font-medium);
-  color: var(--color-text);
+  color:       var(--color-text);
+  white-space: nowrap;
 }
 
 .suggestion-item__cap {
-  color: var(--color-text-muted);
+  color:      var(--color-text-muted);
+  white-space: nowrap;
 }
 
 .suggestion-item__amenities {
-  display: inline-flex;
+  display:     inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  color: var(--color-text-muted);
-}
-
-/* ─── Go button ──────────────────────────────────────────────────────────────── */
-
-/* Structural base — no colour here */
-.suggestion-item__go {
+  gap:         var(--space-1);
+  color:       var(--color-text-muted);
   flex-shrink: 0;
-  padding: var(--space-1) var(--space-2);
-  border-radius: var(--radius-full);
-  border: 1px solid transparent;
-  font-size: var(--text-xs);
-  font-weight: var(--font-bold);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
+}
+
+/* ─── Go button (shared: card + compact row) ─────────────────────────────────── */
+
+.suggestion-item__go {
+  flex-shrink:     0;
+  padding:         var(--space-1) var(--space-2);
+  border-radius:   var(--radius-full);
+  border:          1px solid transparent;
+  font-size:       var(--text-xs);
+  font-weight:     var(--font-bold);
+  cursor:          pointer;
+  display:         inline-flex;
+  align-items:     center;
   justify-content: center;
-  transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
+  transition:      background var(--transition-fast),
+                   border-color var(--transition-fast),
+                   color var(--transition-fast);
 }
 
-/* Colour variants — keyed to the card's availability state */
-.suggestion-item__go--free {
-  background: var(--color-green-100);
-  color: var(--color-green-700);
+.suggestion-item__go--free  { background: var(--color-green-100); color: var(--color-green-700); }
+.suggestion-item__go--maybe { background: var(--color-yellow-100); color: var(--color-yellow-700); }
+.suggestion-item__go--full  { background: var(--color-red-100);   color: var(--color-red-700); }
+
+.suggestion-item__go--free:hover  { background: var(--color-white); border-color: var(--pin-free);  color: var(--color-green-700); }
+.suggestion-item__go--maybe:hover { background: var(--color-white); border-color: var(--pin-maybe); color: var(--color-yellow-700); }
+.suggestion-item__go--full:hover  { background: var(--color-white); border-color: var(--pin-full);  color: var(--color-red-700); }
+
+/* ─── "View all" text button (below scroll track) ────────────────────────────── */
+
+.suggestions-list__view-all {
+  align-self:  flex-start;
+  background:  transparent;
+  border:      none;
+  padding:     var(--space-1) 0;
+  font-size:   var(--text-sm);
+  font-weight: var(--font-medium);
+  color:       var(--color-brand-dark);
+  cursor:      pointer;
+  transition:  color var(--transition-fast);
 }
 
-.suggestion-item__go--free:hover {
-  background: var(--color-white);
-  border-color: var(--pin-free);
-  color: var(--color-green-700);
+.suggestions-list__view-all:hover {
+  color: var(--color-text);
 }
 
-.suggestion-item__go--maybe {
-  background: var(--color-yellow-100);
-  color: var(--color-yellow-700);
+/* ─── View All modal backdrop ────────────────────────────────────────────────── */
+
+.suggestions-all-overlay {
+  position:        fixed;
+  inset:           0;
+  background:      rgba(0, 0, 0, 0.5);
+  z-index:         600; /* above all other modals */
+  display:         flex;
+  align-items:     center;
+  justify-content: center;
+  padding:         var(--space-4);
 }
 
-.suggestion-item__go--maybe:hover {
-  background: var(--color-white);
-  border-color: var(--pin-maybe);
-  color: var(--color-yellow-700);
+.suggestions-all-overlay[hidden] { display: none; }
+
+/* ─── View All modal box ─────────────────────────────────────────────────────── */
+
+.suggestions-all-modal {
+  background:     var(--color-surface);
+  border-radius:  var(--radius-lg);
+  width:          100%;
+  max-width:      480px;
+  max-height:     85vh;
+  display:        flex;
+  flex-direction: column;
+  overflow:       hidden;
+  box-shadow:     var(--shadow-lg);
 }
 
-.suggestion-item__go--full {
-  background: var(--color-red-100);
-  color: var(--color-red-700);
+/* ─── Modal header ───────────────────────────────────────────────────────────── */
+
+.suggestions-all-modal__header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  gap:             var(--space-3);
+  padding:         var(--space-4) var(--space-5);
+  border-bottom:   1px solid var(--color-border);
+  flex-shrink:     0;
 }
 
-.suggestion-item__go--full:hover {
-  background: var(--color-white);
-  border-color: var(--pin-full);
-  color: var(--color-red-700);
+.suggestions-all-modal__title {
+  font-size:   var(--text-lg);
+  font-weight: var(--font-bold);
+  color:       var(--color-text);
+}
+
+.suggestions-all-modal__close {
+  display:         inline-flex;
+  align-items:     center;
+  justify-content: center;
+  width:           32px;
+  height:          32px;
+  flex-shrink:     0;
+  background:      transparent;
+  border:          none;
+  border-radius:   var(--radius-full);
+  color:           var(--color-text-muted);
+  cursor:          pointer;
+  transition:      background var(--transition-fast), color var(--transition-fast);
+}
+
+.suggestions-all-modal__close:hover {
+  background: var(--color-gray-100);
+  color:      var(--color-text);
+}
+
+/* ─── Modal scrollable body ──────────────────────────────────────────────────── */
+
+.suggestions-all-modal__body {
+  flex:            1;
+  min-height:      0;
+  overflow-y:      auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-200) transparent;
+}
+
+.suggestions-all-modal__body::-webkit-scrollbar       { width: 4px; }
+.suggestions-all-modal__body::-webkit-scrollbar-track  { background: transparent; }
+.suggestions-all-modal__body::-webkit-scrollbar-thumb  {
+  background-color: var(--color-gray-200);
+  border-radius:    2px;
+}
+
+/* ─── Compact row ────────────────────────────────────────────────────────────── */
+
+.suggestions-all-row {
+  display:     flex;
+  align-items: center;
+  gap:         var(--space-3);
+  padding:     var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  cursor:      pointer;
+  transition:  background var(--transition-fast);
+}
+
+.suggestions-all-row:last-child { border-bottom: none; }
+
+.suggestions-all-row:hover { background: var(--color-gray-50); }
+
+/* Colored dot keyed to availability */
+.suggestions-all-row__pill {
+  width:         8px;
+  height:        8px;
+  border-radius: var(--radius-full);
+  flex-shrink:   0;
+}
+
+.suggestions-all-row__pill--free  { background: var(--pin-free); }
+.suggestions-all-row__pill--maybe { background: var(--pin-maybe); }
+.suggestions-all-row__pill--full  { background: var(--pin-full); }
+
+/* Left content column */
+.suggestions-all-row__left {
+  flex:           1;
+  min-width:      0;
+  display:        flex;
+  flex-direction: column;
+  gap:            var(--space-1);
+}
+
+/* Name line: rank chip + name + busy badge */
+.suggestions-all-row__name-wrap {
+  display:     flex;
+  align-items: center;
+  gap:         var(--space-2);
+  flex-wrap:   wrap;
+}
+
+.suggestions-all-row__rank {
+  font-size:   var(--text-xs);
+  font-weight: var(--font-normal);
+  color:       var(--color-text-dim);
+  flex-shrink: 0;
+}
+
+.suggestions-all-row__name {
+  font-size:     var(--text-sm);
+  font-weight:   var(--font-bold);
+  color:         var(--color-text);
+  white-space:   nowrap;
+  overflow:      hidden;
+  text-overflow: ellipsis;
 }
