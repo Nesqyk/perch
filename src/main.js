@@ -29,6 +29,10 @@
  * 22. Wire geolocation (request permission, update store on change)
  * 23. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
  * 24. Handle ?join= URL param → pre-fill inline join form
+ *
+ * Page routes (wired early so views render before async data arrives):
+ *  3.7 initProfilePage() — mount /profile route view
+ *  3.8 initGroupPage()   — mount /group route view
  */
 
 // ─── CSS side-effects (Vite bundles these) ────────────────────────────────────
@@ -42,6 +46,7 @@ import './styles/spotCard.css';
 import './styles/filters.css';
 import './styles/campusSelector.css';
 import './styles/navMenu.css';
+import './styles/pages.css';
 import './styles/submitSpotPanel.css';
 import './styles/buildingPanel.css';
 
@@ -87,6 +92,8 @@ import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
 import { initBuildingPanel, openBuildingPanel } from './ui/buildingPanel.js';
 import { initNavMenu }     from './ui/navMenu.js';
 import { initAuthModal }   from './ui/authModal.js';
+import { initProfilePage } from './ui/profilePage.js';
+import { initGroupPage }   from './ui/groupPage.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -107,6 +114,11 @@ async function boot() {
     dispatch('ROUTE_CHANGED', { route });
   });
   initNavMenu();
+
+  // ── 3.7 & 3.8 Route-level page views ────────────────────────────────────────
+  // Mounted early — before async data — so views render immediately on navigation.
+  initProfilePage();
+  initGroupPage();
 
   // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────
   // getProfile() must run AFTER onAuthStateChange fires (which is async), so
