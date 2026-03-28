@@ -51,6 +51,10 @@
   --color-text: var(--color-gray-900);
   --color-text-muted: var(--color-gray-600);
   --color-text-dim: var(--color-gray-400);
+  --color-danger: var(--color-red-500);
+
+  /* Typography — display alias (no separate display font yet; aliases sans) */
+  --font-display: var(--font-sans);
 
   /* Spacing scale (multiples of 4px) */
   --space-1: 4px;
