@@ -22,6 +22,7 @@
  * Hash shape:   #/          → Dashboard (map)
  *               #/profile   → Profile & Settings
  *               #/group     → Group page
+ *               #/settings  → Settings page
  *
  * Routing is initialised once from main.js via initRouter(callback).
  * URL params and hash coexist: /?spot=<id>#/  is a valid URL.
@@ -145,7 +146,7 @@ export function readGroupCode() {
  *
  * @type {readonly string[]}
  */
-export const ROUTES = Object.freeze(['/', '/profile', '/group']);
+export const ROUTES = Object.freeze(['/', '/profile', '/group', '/settings']);
 
 /**
  * Parse the current `window.location.hash` into a normalised route string.
@@ -169,7 +170,7 @@ export function getCurrentRoute() {
  * Setting `window.location.hash` fires the native `hashchange` event,
  * which `initRouter()` already listens to — no manual callback needed here.
  *
- * @param {string} route  One of ROUTES: '/', '/profile', '/group'.
+ * @param {string} route  One of ROUTES: '/', '/profile', '/group', '/settings'.
  */
 export function navigateTo(route) {
   window.location.hash = ROUTES.includes(route) ? route : '/';

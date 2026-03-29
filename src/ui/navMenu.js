@@ -208,6 +208,7 @@ function _syncPageViews(route) {
   const panel        = document.getElementById('panel');
   const viewProfile  = document.getElementById('view-profile');
   const viewGroup    = document.getElementById('view-group');
+  const viewSettings = document.getElementById('view-settings');
 
   const isDashboard = route === '/';
 
@@ -218,6 +219,7 @@ function _syncPageViews(route) {
   // Page views: toggle by route.
   viewProfile?.classList.toggle('view--active', route === '/profile');
   viewGroup?.classList.toggle('view--active',   route === '/group');
+  viewSettings?.classList.toggle('view--active', route === '/settings');
 }
 
 // ─── Click handler ────────────────────────────────────────────────────────────

@@ -141,6 +141,12 @@ const _state = {
   myGroupPinId: null,           // string (uuid) | null
 
   /**
+   * Controls whether group member pins are rendered on the map.
+   * Toggled by the Eye/EyeOff button in the Group tab header.
+   */
+  groupPinsVisible: true,       // boolean
+
+  /**
    * All members of the current group, fetched on join and refreshed on demand.
    * Keyed by member id for fast lookup.
    */
@@ -149,9 +155,9 @@ const _state = {
   /**
    * The currently active client-side route.
    * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
-   * '/' is the Dashboard (map). '/profile' and '/group' are page views.
+   * '/' is the Dashboard (map). '/profile', '/group', and '/settings' are page views.
    */
-  currentRoute: '/',            // '/' | '/profile' | '/group'
+  currentRoute: '/',            // '/' | '/profile' | '/group' | '/settings'
 
   /**
    * The authenticated Supabase user object, or null when signed out.
@@ -371,6 +377,12 @@ export function dispatch(action, payload) {
       _state.myGroupPinId  = null;
       _state.groupMembers  = [];
       emit(EVENTS.GROUP_LEFT, {});
+      break;
+    }
+
+    case 'SET_GROUP_PINS_VISIBLE': {
+      _state.groupPinsVisible = !!payload; // boolean
+      emit(EVENTS.GROUP_PINS_UPDATED, { groupPins: getState().groupPins });
       break;
     }
 
