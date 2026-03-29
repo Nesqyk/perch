@@ -38,15 +38,26 @@ body[data-nav="ready"] .app-layout {
   display: none;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: center;
+  gap: var(--space-3);
   width: var(--nav-rail-width);
   height: calc(100vh - var(--header-height));
   position: sticky;
   top: var(--header-height);
-  padding: var(--space-4) 0;
-  background: var(--nav-bg);
+  padding: var(--space-4) var(--space-2);
+  background: color-mix(in srgb, var(--color-white) 82%, transparent);
+  backdrop-filter: blur(18px);
   border-right: 1px solid var(--nav-border);
-  z-index: 150;
+  box-shadow: 8px 0 30px rgb(17 24 39 / 0.06);
+  z-index: 1100;
+}
+
+.nav-rail__list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
 }
 
 .nav-rail[hidden],
@@ -63,15 +74,14 @@ body[data-nav="ready"] .app-layout {
 .nav-rail__item {
   display: flex;
   position: relative;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  width: 64px;
-  min-height: 64px;
-  padding: var(--space-2);
+  width: 52px;
+  height: 52px;
+  min-height: 52px;
+  padding: 0;
   border: 1px solid transparent;
-  border-radius: var(--radius-full);
+  border-radius: 18px;
   background: transparent;
   color: var(--nav-tab-inactive);
   cursor: pointer;
@@ -85,14 +95,15 @@ body[data-nav="ready"] .app-layout {
 
 .nav-rail__item:hover {
   color: var(--color-text);
-  background: var(--color-surface-alt);
+  background: color-mix(in srgb, var(--color-white) 78%, var(--color-brand-light));
   border-color: var(--nav-border);
 }
 
 .nav-rail__item--active {
   color: var(--color-brand-dark);
-  background: var(--color-brand-light);
-  border-color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand-light) 88%, var(--color-white));
+  border-color: color-mix(in srgb, var(--color-brand) 68%, var(--color-white));
+  box-shadow: 0 10px 20px rgb(85 207 160 / 0.16);
 }
 
 .nav-rail__icon {
@@ -103,7 +114,6 @@ body[data-nav="ready"] .app-layout {
   height: 24px;
 }
 
-.nav-rail__label,
 .nav-bottom__label {
   font-size: 11px;
   font-weight: var(--font-medium);
@@ -122,6 +132,12 @@ body[data-nav="ready"] .app-layout {
   box-shadow: 0 -6px 18px rgb(17 24 39 / 0.06);
   z-index: 400;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@media (min-width: 768px) {
+  .nav-bottom__item::after {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {

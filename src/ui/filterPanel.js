@@ -135,7 +135,7 @@ function _buildTabRow(form) {
   row.className = 'filter-tabs';
   row.id        = 'filter-tab-row';
 
-  [{ key: 'find', label: 'Find' }, { key: 'group', label: 'Group' }].forEach(({ key, label }) => {
+  [{ key: 'find', label: 'Find' }, { key: 'group', label: 'Squad' }].forEach(({ key, label }) => {
     const btn       = document.createElement('button');
     btn.type        = 'button';
     btn.className   = `filter-tab${_activeTab === key ? ' filter-tab--active' : ''}`;

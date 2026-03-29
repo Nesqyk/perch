@@ -147,7 +147,7 @@ export function readGroupCode() {
  *
  * @type {readonly string[]}
  */
-export const ROUTES = Object.freeze(['/', '/profile', '/group', '/settings', '/contributions']);
+export const ROUTES = Object.freeze(['/', '/profile', '/group', '/settings', '/contributions', '/notifications']);
 
 /**
  * Parse the current `window.location.hash` into a normalised route string.
@@ -171,7 +171,7 @@ export function getCurrentRoute() {
  * Setting `window.location.hash` fires the native `hashchange` event,
  * which `initRouter()` already listens to — no manual callback needed here.
  *
- * @param {string} route  One of ROUTES: '/', '/profile', '/group', '/settings', '/contributions'.
+ * @param {string} route  One of ROUTES: '/', '/profile', '/group', '/settings', '/contributions', '/notifications'.
  */
 export function navigateTo(route) {
   window.location.hash = ROUTES.includes(route) ? route : '/';

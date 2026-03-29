@@ -24,7 +24,7 @@
  * @module navMenu
  */
 
-import { Map, Settings, User, Users } from 'lucide';
+import { Bell, Map, Settings, User, Users } from 'lucide';
 
 import { on, EVENTS } from '../core/events.js';
 import { getState } from '../core/store.js';
@@ -52,6 +52,12 @@ const _NAV_ITEMS = [
     label: 'Profile',
     id:    'nav-profile',
     icon:  iconSvg(User, 22),
+  },
+  {
+    route: '/notifications',
+    label: 'Notifications',
+    id:    'nav-notifications',
+    icon:  iconSvg(Bell, 22),
   },
   {
     route: '/settings',
@@ -98,7 +104,9 @@ function _injectRail() {
   rail.className = 'nav-rail';
   rail.setAttribute('aria-label', 'Main navigation');
 
-  rail.innerHTML = _NAV_ITEMS.map(({ route, label, icon, id }) => /* html */`
+  rail.innerHTML = /* html */`
+    <div class="nav-rail__list">
+      ${_NAV_ITEMS.map(({ route, label, icon, id }) => /* html */`
     <button
       id="${id}-rail"
       class="nav-rail__item"
@@ -108,9 +116,10 @@ function _injectRail() {
       type="button"
     >
       <span class="nav-rail__icon">${icon}</span>
-      <span class="nav-rail__label">${label}</span>
     </button>
-  `).join('');
+      `).join('')}
+    </div>
+  `;
 
   // Insert as first child of #app-layout so it occupies the leftmost grid column.
   const layout = document.getElementById('app-layout');
@@ -218,6 +227,7 @@ function _syncPageViews(route) {
   const viewGroup    = document.getElementById('view-group');
   const viewSettings = document.getElementById('view-settings');
   const viewContributions = document.getElementById('view-contributions');
+  const viewNotifications = document.getElementById('view-notifications');
 
   const isDashboard = route === '/';
 
@@ -230,6 +240,7 @@ function _syncPageViews(route) {
   viewGroup?.classList.toggle('view--active',   route === '/group');
   viewSettings?.classList.toggle('view--active', route === '/settings');
   viewContributions?.classList.toggle('view--active', route === '/contributions');
+  viewNotifications?.classList.toggle('view--active', route === '/notifications');
 }
 
 // ─── Click handler ────────────────────────────────────────────────────────────

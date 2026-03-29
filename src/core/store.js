@@ -155,10 +155,10 @@ const _state = {
   /**
    * The currently active client-side route.
    * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
-   * '/' is the Dashboard (map). '/profile', '/group', '/settings', and
-   * '/contributions' are page views.
+   * '/' is the Dashboard (map). '/profile', '/group', '/settings',
+   * '/contributions', and '/notifications' are page views.
    */
-  currentRoute: '/',            // '/' | '/profile' | '/group' | '/settings' | '/contributions'
+  currentRoute: '/',            // '/' | '/profile' | '/group' | '/settings' | '/contributions' | '/notifications'
 
   /**
    * The authenticated Supabase user object, or null when signed out.

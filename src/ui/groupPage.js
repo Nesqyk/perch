@@ -66,7 +66,7 @@ function _buildSignedOutState() {
   empty.className = 'page-card page-card--empty';
   empty.innerHTML = /* html */`
     <div class="page-empty__icon">${iconSvg(Users, 28)}</div>
-    <h2 class="page-empty__title">Your group tools live here.</h2>
+    <h2 class="page-empty__title">Your squad tools live here.</h2>
     <p class="page-empty__copy">Perch keeps map browsing open for everyone, but squad coordination needs an account.</p>
     <button type="button" class="btn btn-primary" id="group-page-signin">Sign in with Google</button>
   `;
@@ -92,7 +92,7 @@ function _buildJoinCreateState() {
       <span class="page-field__label">Crew name</span>
       <input class="input" id="group-page-create-name" maxlength="40" placeholder="e.g. Library Sprinters">
     </label>
-    <button type="button" class="btn btn-primary" id="group-page-create-btn">Create group</button>
+      <button type="button" class="btn btn-primary" id="group-page-create-btn">Create squad</button>
   `;
   createCard.querySelector('#group-page-create-btn')?.addEventListener('click', () => {
     const input = createCard.querySelector('#group-page-create-name');
@@ -118,7 +118,7 @@ function _buildJoinCreateState() {
       <span class="page-field__label">Display name</span>
       <input class="input" id="group-page-join-name" maxlength="30" placeholder="How your group sees you">
     </label>
-    <button type="button" class="btn btn-outline" id="group-page-join-btn">Join group</button>
+      <button type="button" class="btn btn-outline" id="group-page-join-btn">Join squad</button>
   `;
   joinCard.querySelector('#group-page-join-btn')?.addEventListener('click', () => {
     const codeInput = joinCard.querySelector('#group-page-join-code');

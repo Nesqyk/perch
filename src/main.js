@@ -95,6 +95,7 @@ import { initAuthModal }   from './ui/authModal.js';
 import { initProfilePage } from './ui/profilePage.js';
 import { initGroupPage }   from './ui/groupPage.js';
 import { initContributionsPage } from './ui/contributionsPage.js';
+import { initNotificationsPage } from './ui/notificationsPage.js';
 import { initSettingsPage } from './ui/settingsPage.js';
 import { loadUserPreferences } from './utils/preferences.js';
 
@@ -127,6 +128,7 @@ async function boot() {
   initProfilePage();
   initGroupPage();
   initContributionsPage();
+  initNotificationsPage();
   initSettingsPage();
 
   // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────
