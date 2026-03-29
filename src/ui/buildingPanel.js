@@ -31,9 +31,10 @@ import { buildBuildingShareUrl } from '../core/router.js';
 import { iconSvg } from './icons.js';
 import { showToast } from './toast.js';
 
-import { Link } from 'lucide';
+import { ArrowLeft, Expand, Link } from 'lucide';
 
 const OVERLAY_ID = 'submit-modal-overlay';
+const BOX_ID = 'submit-modal-box';
 const CONTENT_ID = 'submit-modal-content';
 
 /**
@@ -52,6 +53,12 @@ export function initBuildingPanel() {
   on(EVENTS.MAP_BUILDING_CLICKED, _onBuildingClicked);
 }
 
+/**
+ * Handle a building marker click in campus mode.
+ *
+ * @param {CustomEvent<{ buildingId: string }>} e
+ * @returns {void}
+ */
 async function _onBuildingClicked(e) {
   const buildingId = e.detail.buildingId;
   if (!buildingId || getState().viewMode !== 'campus') return;
@@ -71,13 +78,11 @@ export async function openBuildingPanel(buildingId) {
   if (!building) return;
 
   _selectedFloor = null;
+  _setSubmitModalState({ building: true, expanded: false });
 
-  const pendingSubmissions = await fetchPendingSpotSubmissions({
-    campusId: building.campus_id,
-    buildingName: building.name,
-  });
+  const pendingSubmissions = await _loadPendingSubmissions(building);
 
-  _renderIntoModal(_buildBuildingPanel(building, pendingSubmissions));
+  _renderIntoModal(_buildBuildingDetailView(building, pendingSubmissions, { surface: 'modal' }));
   _openModal();
 }
 
@@ -102,6 +107,7 @@ function _closeModal() {
   if (!overlay) return;
 
   overlay.hidden = true;
+  _setSubmitModalState({ building: false, expanded: false });
   overlay.removeEventListener('click', _handleOverlayClick);
   document.removeEventListener('keydown', _handleKeyDown);
   emit(EVENTS.UI_PANEL_CLOSED, {});
@@ -199,7 +205,14 @@ function _buildAddBuildingForm(lat, lng) {
   return wrap;
 }
 
-function _buildBuildingPanel(building, pendingSubmissions) {
+/**
+ * Build the building detail modal content.
+ *
+ * @param {object} building
+ * @param {object[]} pendingSubmissions
+ * @returns {HTMLDivElement}
+ */
+function _buildBuildingDetailView(building, pendingSubmissions) {
   const wrap = document.createElement('div');
   wrap.className = 'campus-building-panel';
 
@@ -226,6 +239,7 @@ function _buildBuildingPanel(building, pendingSubmissions) {
         <p class="campus-building-panel__meta">${inventory.rooms} mapped room${inventory.rooms === 1 ? '' : 's'} • ${inventory.pending} pending</p>
       </div>
       <div class="campus-building-panel__hero-actions">
+        <button type="button" class="btn btn-ghost campus-building-panel__nav-btn" data-building-expand>${iconSvg(Expand, 16)} Full screen</button>
         <button type="button" class="btn btn-icon campus-building-panel__copy-link" aria-label="Copy building link">${iconSvg(Link, 16)}</button>
         <button type="button" class="spot-card__close" aria-label="Close building panel">×</button>
       </div>
@@ -240,6 +254,16 @@ function _buildBuildingPanel(building, pendingSubmissions) {
       showToast('Building link copied!', 'success');
     } catch {
       showToast(`Share this link: ${shareUrl}`, 'success');
+    }
+  });
+
+  scrollable.querySelector('[data-building-expand]')?.addEventListener('click', (e) => {
+    const button = /** @type {HTMLButtonElement | null} */ (e.currentTarget);
+    const expanded = _toggleSubmitModalExpanded();
+    if (button) {
+      button.innerHTML = expanded
+        ? `${iconSvg(ArrowLeft, 16)} Compact view`
+        : `${iconSvg(Expand, 16)} Full screen`;
     }
   });
 
@@ -482,6 +506,41 @@ async function _refreshCampusCatalogue(campusId) {
   await _refreshBuildings(campusId);
   const { spots, confidence } = await fetchSpots();
   dispatch('SPOTS_LOADED', { spots, confidence });
+}
+
+async function _loadPendingSubmissions(building) {
+  return fetchPendingSpotSubmissions({
+    campusId: building.campus_id,
+    buildingName: building.name,
+  });
+}
+
+/**
+ * Update building modal sizing state.
+ *
+ * @param {{ building: boolean, expanded: boolean }} param0
+ * @returns {void}
+ */
+function _setSubmitModalState({ building, expanded }) {
+  const box = document.getElementById(BOX_ID);
+  if (!box) return;
+
+  box.classList.toggle('modal-box--submit-building', building);
+  box.classList.toggle('modal-box--submit-expanded', building && expanded);
+}
+
+/**
+ * Toggle expanded building modal sizing.
+ *
+ * @returns {boolean}
+ */
+function _toggleSubmitModalExpanded() {
+  const box = document.getElementById(BOX_ID);
+  if (!box) return false;
+
+  const expanded = !box.classList.contains('modal-box--submit-expanded');
+  _setSubmitModalState({ building: true, expanded });
+  return expanded;
 }
 
 function _escapeHtml(value) {

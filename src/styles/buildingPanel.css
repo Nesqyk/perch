@@ -19,27 +19,11 @@
 
 .campus-building-panel__scrollable {
   flex: 1 1 0;
-  overflow-y: auto;
+  overflow: visible;
   padding: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  /* Hide scrollbar track but keep scrollability */
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-gray-200) transparent;
-}
-
-.campus-building-panel__scrollable::-webkit-scrollbar {
-  width: 4px;
-}
-
-.campus-building-panel__scrollable::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.campus-building-panel__scrollable::-webkit-scrollbar-thumb {
-  background: var(--color-gray-200);
-  border-radius: var(--radius-full);
 }
 
 /* ------------------------------------------------------------------
@@ -59,7 +43,14 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  flex-wrap: wrap;
   flex-shrink: 0;
+}
+
+.campus-building-panel__nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .campus-building-panel__eyebrow {
@@ -331,4 +322,13 @@
   padding: var(--space-3) var(--space-6);
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
+}
+
+.modal-box--submit-building {
+  max-width: 520px;
+}
+
+.modal-box--submit-expanded {
+  max-width: min(1000px, calc(100vw - var(--space-8)));
+  max-height: calc(100vh - var(--space-8));
 }

@@ -15,7 +15,7 @@
  *   /?spot=<uuid>                        → opens spot detail directly
  *   /?size=small&needs=outlet,wifi       → pre-fills filters
  *   /?join=CODE                          → auto-open group join modal
- *   /?campus=<uuid>&building=<uuid>      → deep-link into a building panel
+ *   /?campus=<uuid>&building=<uuid>      → deep-link into a building modal
  *
  * ── 2. Hash Router (new) ───────────────────────────────────────────────────
  * Hash-based routing drives the multi-page layout with zero server config.
