@@ -29,6 +29,8 @@ export async function fetchSpots() {
       id,
       name,
       type,
+      campus_id,
+      building_id,
       on_campus,
       building,
       floor,

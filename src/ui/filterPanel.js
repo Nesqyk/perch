@@ -22,14 +22,15 @@ import { getState, dispatch }    from '../core/store.js';
 import { renderSuggestionsList } from './suggestionsList.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
 import { timeAgo }               from '../utils/time.js';
-import { LogOut, Copy, Link,
-         Search, MapPin, Star,
-         Eye, EyeOff }           from 'lucide';
+import { ArrowRight, LogOut, Copy, Link,
+          Search, MapPin, Star,
+          Eye, EyeOff }           from 'lucide';
 import { openModal }             from './modal.js';
 import { showToast }             from './toast.js';
 import { iconSvg }               from './icons.js';
+import { navigateToCampus }      from '../core/router.js';
 import { leaveGroup,
-         buildGroupJoinUrl }     from '../features/groups.js';
+          buildGroupJoinUrl }     from '../features/groups.js';
 import { initCampusSelector }    from './campusSelector.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -254,6 +255,17 @@ function _buildCampusSelectorBox() {
   const container = document.createElement('div');
   initCampusSelector(container);
   wrapper.appendChild(container);
+
+  const exploreBtn = document.createElement('button');
+  exploreBtn.type = 'button';
+  exploreBtn.className = 'filter-campus-link';
+  exploreBtn.innerHTML = /* html */`${iconSvg(ArrowRight, 14)} Explore this campus`;
+  exploreBtn.addEventListener('click', () => {
+    const { selectedCampusId } = getState();
+    if (!selectedCampusId) return;
+    navigateToCampus(selectedCampusId);
+  });
+  wrapper.appendChild(exploreBtn);
 
   return wrapper;
 }

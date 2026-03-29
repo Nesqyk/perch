@@ -94,6 +94,7 @@ import { initNavMenu }     from './ui/navMenu.js';
 import { initAuthModal }   from './ui/authModal.js';
 import { initProfilePage } from './ui/profilePage.js';
 import { initGroupPage }   from './ui/groupPage.js';
+import { initCampusPage } from './ui/campusPage.js';
 import { initContributionsPage } from './ui/contributionsPage.js';
 import { initNotificationsPage } from './ui/notificationsPage.js';
 import { initSettingsPage } from './ui/settingsPage.js';
@@ -127,6 +128,7 @@ async function boot() {
   // Mounted early — before async data — so views render immediately on navigation.
   initProfilePage();
   initGroupPage();
+  initCampusPage();
   initContributionsPage();
   initNotificationsPage();
   initSettingsPage();

@@ -22,6 +22,7 @@
  * Hash shape:   #/          → Dashboard (map)
  *               #/profile   → Profile & Settings
  *               #/group     → Group page
+ *               #/campus    → Campus detail page
  *               #/settings  → Settings page
  *               #/contributions → Contributions page
  *
@@ -128,6 +129,21 @@ export function buildBuildingShareUrl(campusId, buildingId) {
 }
 
 /**
+ * Navigate in-app to a campus detail route while keeping the campus param.
+ *
+ * @param {string} campusId
+ * @returns {void}
+ */
+export function navigateToCampus(campusId) {
+  const params = new URLSearchParams(window.location.search);
+  params.set('campus', campusId);
+
+  const search = params.toString() ? `?${params.toString()}` : '';
+  history.replaceState(null, '', `${window.location.pathname}${search}${window.location.hash}`);
+  navigateTo('/campus');
+}
+
+/**
  * Read the ?join= param from the current URL.
  * Returns the 4-character group code if present, or null.
  *
@@ -147,7 +163,7 @@ export function readGroupCode() {
  *
  * @type {readonly string[]}
  */
-export const ROUTES = Object.freeze(['/', '/profile', '/group', '/settings', '/contributions', '/notifications']);
+export const ROUTES = Object.freeze(['/', '/profile', '/group', '/campus', '/settings', '/contributions', '/notifications']);
 
 /**
  * Parse the current `window.location.hash` into a normalised route string.
@@ -171,7 +187,7 @@ export function getCurrentRoute() {
  * Setting `window.location.hash` fires the native `hashchange` event,
  * which `initRouter()` already listens to — no manual callback needed here.
  *
- * @param {string} route  One of ROUTES: '/', '/profile', '/group', '/settings', '/contributions', '/notifications'.
+ * @param {string} route  One of ROUTES: '/', '/profile', '/group', '/campus', '/settings', '/contributions', '/notifications'.
  */
 export function navigateTo(route) {
   window.location.hash = ROUTES.includes(route) ? route : '/';
