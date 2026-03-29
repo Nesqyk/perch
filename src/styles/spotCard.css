@@ -46,6 +46,23 @@
   color:     var(--color-text-muted);
 }
 
+.spot-card__share-page-link {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-top: var(--space-1);
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--color-green-700);
+}
+
+.spot-card__share-page-link:hover {
+  color: var(--color-text);
+}
+
 .spot-card__close {
   display:         inline-flex;
   align-items:     center;

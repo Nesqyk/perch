@@ -226,6 +226,7 @@ function _syncPageViews(route) {
   const viewProfile  = document.getElementById('view-profile');
   const viewGroup    = document.getElementById('view-group');
   const viewCampus   = document.getElementById('view-campus');
+  const viewSpot     = document.getElementById('view-spot');
   const viewSettings = document.getElementById('view-settings');
   const viewContributions = document.getElementById('view-contributions');
   const viewNotifications = document.getElementById('view-notifications');
@@ -240,6 +241,7 @@ function _syncPageViews(route) {
   viewProfile?.classList.toggle('view--active', route === '/profile');
   viewGroup?.classList.toggle('view--active',   route === '/group');
   viewCampus?.classList.toggle('view--active', route === '/campus');
+  viewSpot?.classList.toggle('view--active', route === '/spot');
   viewSettings?.classList.toggle('view--active', route === '/settings');
   viewContributions?.classList.toggle('view--active', route === '/contributions');
   viewNotifications?.classList.toggle('view--active', route === '/notifications');

@@ -645,6 +645,86 @@
   background: color-mix(in srgb, var(--color-brand-light) 82%, var(--color-white));
 }
 
+.shared-spot-page__hero-head,
+.shared-spot-page__stats,
+.shared-spot-page__fact-list,
+.shared-spot-page__amenity-grid {
+  display: flex;
+}
+
+.shared-spot-page__hero-head,
+.shared-spot-page__fact-list {
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.shared-spot-page__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.shared-spot-page__fact-list {
+  gap: var(--space-3);
+}
+
+.shared-spot-page__amenity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.shared-spot-page__amenity-card,
+.shared-spot-page__status-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: 22px;
+  border: 1px solid var(--color-border);
+  background: rgb(248 251 249 / .95);
+}
+
+.shared-spot-page__amenity-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-brand) 14%, var(--color-white));
+  color: var(--color-green-700);
+}
+
+.shared-spot-page__amenity-label,
+.shared-spot-page__status-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.shared-spot-page__amenity-value,
+.shared-spot-page__status-copy {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.shared-spot-page__status-panel--free {
+  background: color-mix(in srgb, var(--pin-free) 16%, var(--color-white));
+}
+
+.shared-spot-page__status-panel--claimed {
+  background: color-mix(in srgb, var(--pin-claimed) 14%, var(--color-white));
+}
+
+.shared-spot-page__status-panel--maybe {
+  background: color-mix(in srgb, var(--pin-maybe) 16%, var(--color-white));
+}
+
+.shared-spot-page__status-panel--full {
+  background: color-mix(in srgb, var(--pin-full) 14%, var(--color-white));
+}
+
 @media (max-width: 767px) {
   .page-shell {
     padding: var(--space-5) var(--space-4) calc(var(--space-8) + env(safe-area-inset-bottom));
@@ -697,6 +777,11 @@
   .campus-page__building-row,
   .campus-page__switcher-row {
     align-items: flex-start;
+  }
+
+  .shared-spot-page__stats,
+  .shared-spot-page__amenity-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

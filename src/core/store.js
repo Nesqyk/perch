@@ -17,6 +17,7 @@
  */
 
 import { emit, EVENTS } from './events.js';
+import { buildSpotShareUrl } from './router.js';
 
 // ─── Initial state shape ─────────────────────────────────────────────────────
 
@@ -156,9 +157,9 @@ const _state = {
    * The currently active client-side route.
    * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
    * '/' is the Dashboard (map). '/profile', '/group', '/campus',
-   * '/settings', '/contributions', and '/notifications' are page views.
+   * '/spot', '/settings', '/contributions', and '/notifications' are page views.
    */
-  currentRoute: '/',            // '/' | '/profile' | '/group' | '/campus' | '/settings' | '/contributions' | '/notifications'
+  currentRoute: '/',            // '/' | '/profile' | '/group' | '/campus' | '/spot' | '/settings' | '/contributions' | '/notifications'
 
   /**
    * The authenticated Supabase user object, or null when signed out.
@@ -482,7 +483,5 @@ export function initStore() {
  * @returns {string}
  */
 function _buildShareLink(spotId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('spot', spotId);
-  return url.toString();
+  return buildSpotShareUrl(spotId);
 }

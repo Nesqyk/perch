@@ -95,6 +95,7 @@ import { initAuthModal }   from './ui/authModal.js';
 import { initProfilePage } from './ui/profilePage.js';
 import { initGroupPage }   from './ui/groupPage.js';
 import { initCampusPage } from './ui/campusPage.js';
+import { initSharedSpotPage } from './ui/sharedSpotPage.js';
 import { initContributionsPage } from './ui/contributionsPage.js';
 import { initNotificationsPage } from './ui/notificationsPage.js';
 import { initSettingsPage } from './ui/settingsPage.js';
@@ -129,6 +130,7 @@ async function boot() {
   initProfilePage();
   initGroupPage();
   initCampusPage();
+  initSharedSpotPage();
   initContributionsPage();
   initNotificationsPage();
   initSettingsPage();
@@ -221,7 +223,9 @@ async function boot() {
   if (urlState.selectedSpotId) {
     const exists = getState().spots.find(s => s.id === urlState.selectedSpotId);
     if (exists) {
-      dispatch('SELECT_SPOT', { spotId: urlState.selectedSpotId });
+      if (getState().currentRoute !== '/spot') {
+        dispatch('SELECT_SPOT', { spotId: urlState.selectedSpotId });
+      }
     } else {
       // Spot may have been removed; silently clear the param
       clearUrlParams();

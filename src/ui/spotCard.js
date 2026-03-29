@@ -34,6 +34,7 @@ import {
 
 import { emit, EVENTS }       from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
+import { navigateToSpot } from '../core/router.js';
 import { formatConfidence }   from '../utils/confidence.js';
 import { timeAgo, claimExpiresIn } from '../utils/time.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
@@ -205,6 +206,13 @@ function _buildHeader(spot) {
     meta.textContent = `Discovered by ${spot.discoverer_display_name}`;
     text.appendChild(meta);
   }
+
+  const openPageBtn = document.createElement('button');
+  openPageBtn.type = 'button';
+  openPageBtn.className = 'spot-card__share-page-link';
+  openPageBtn.textContent = 'Open shared page';
+  openPageBtn.addEventListener('click', () => navigateToSpot(spot.id));
+  text.appendChild(openPageBtn);
 
   header.appendChild(text);
 
