@@ -24,7 +24,7 @@
  * @module navMenu
  */
 
-import { Map, Users, User } from 'lucide';
+import { Map, Settings, User, Users } from 'lucide';
 
 import { on, EVENTS } from '../core/events.js';
 import { getState } from '../core/store.js';
@@ -52,6 +52,12 @@ const _NAV_ITEMS = [
     label: 'Profile',
     id:    'nav-profile',
     icon:  iconSvg(User, 22),
+  },
+  {
+    route: '/settings',
+    label: 'Settings',
+    id:    'nav-settings',
+    icon:  iconSvg(Settings, 22),
   },
 ];
 
@@ -102,6 +108,7 @@ function _injectRail() {
       type="button"
     >
       <span class="nav-rail__icon">${icon}</span>
+      <span class="nav-rail__label">${label}</span>
     </button>
   `).join('');
 
@@ -136,6 +143,7 @@ function _injectBottomBar() {
       type="button"
     >
       <span class="nav-bottom__icon">${icon}</span>
+      <span class="nav-bottom__label">${label}</span>
     </button>
   `).join('');
 
@@ -209,6 +217,7 @@ function _syncPageViews(route) {
   const viewProfile  = document.getElementById('view-profile');
   const viewGroup    = document.getElementById('view-group');
   const viewSettings = document.getElementById('view-settings');
+  const viewContributions = document.getElementById('view-contributions');
 
   const isDashboard = route === '/';
 
@@ -220,6 +229,7 @@ function _syncPageViews(route) {
   viewProfile?.classList.toggle('view--active', route === '/profile');
   viewGroup?.classList.toggle('view--active',   route === '/group');
   viewSettings?.classList.toggle('view--active', route === '/settings');
+  viewContributions?.classList.toggle('view--active', route === '/contributions');
 }
 
 // ─── Click handler ────────────────────────────────────────────────────────────

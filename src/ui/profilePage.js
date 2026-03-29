@@ -13,7 +13,7 @@
  *                GROUP_LEFT, ROUTE_CHANGED.
  */
 
-import { UserRound, LogIn, PencilLine, ShieldCheck, Users, Settings, History, MapPin, ChevronLeft, ChevronRight, Eye, Map } from 'lucide';
+import { UserRound, LogIn, PencilLine, ShieldCheck, Users, Settings, History, MapPin, ChevronLeft, ChevronRight, Eye, Map, FolderClock } from 'lucide';
 
 import { emit, on, EVENTS } from '../core/events.js';
 import { getState } from '../core/store.js';
@@ -134,6 +134,7 @@ function _renderProfilePage() {
   _loadHistoryPage(historyCard, 0);
 
   shell.appendChild(_buildSettingsCard({ preferences, preferredCampus }));
+  shell.appendChild(_buildContributionsCard());
 
   view.appendChild(shell);
 }
@@ -326,6 +327,29 @@ function _buildSettingsCard({ preferences, preferredCampus }) {
     </div>
   `;
   card.querySelector('#profile-page-settings-open')?.addEventListener('click', () => navigateTo('/settings'));
+  return card;
+}
+
+function _buildContributionsCard() {
+  const card = document.createElement('section');
+  card.className = 'page-card page-card--subtle profile-page__settings';
+  card.innerHTML = /* html */`
+    <div class="page-card__eyebrow">Community</div>
+    <h3 class="page-card__title page-card__title--sm">Your map contributions</h3>
+    <div class="profile-page__meta-list">
+      <div class="profile-meta">
+        <span class="profile-meta__icon">${iconSvg(FolderClock, 14)}</span>
+        <div>
+          <span class="profile-meta__title">Contribution hub</span>
+          <span class="profile-meta__copy">See pending submissions, verified buildings, and confirmation progress in one place.</span>
+        </div>
+      </div>
+    </div>
+    <div class="profile-page__actions">
+      <button type="button" class="btn btn-primary" id="profile-page-contributions-open">Open contributions</button>
+    </div>
+  `;
+  card.querySelector('#profile-page-contributions-open')?.addEventListener('click', () => navigateTo('/contributions'));
   return card;
 }
 

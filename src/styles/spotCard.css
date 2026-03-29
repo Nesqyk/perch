@@ -281,8 +281,8 @@
 .spot-card__claim-groups {
   display:        flex;
   flex-direction: column;
-  max-height:     120px;
-  overflow-y:     auto;
+  max-height:     none;
+  overflow:       visible;
   border:         var(--border);
   border-radius:  var(--radius-md);
   background:     var(--color-surface-alt);
@@ -413,8 +413,8 @@
 .spot-card__gm-table {
   display:        flex;
   flex-direction: column;
-  max-height:     220px;
-  overflow-y:     auto;
+  max-height:     none;
+  overflow:       visible;
   border:         var(--border);
   border-radius:  var(--radius-md);
   background:     var(--color-surface-alt);
@@ -787,7 +787,7 @@
 .modal-box--spot {
   width:            100%;
   max-width:        480px;
-  max-height:       90vh;
+  max-height:       92vh;
   padding:          0;
   overflow:         hidden;
   display:          flex;

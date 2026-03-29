@@ -94,6 +94,7 @@ import { initNavMenu }     from './ui/navMenu.js';
 import { initAuthModal }   from './ui/authModal.js';
 import { initProfilePage } from './ui/profilePage.js';
 import { initGroupPage }   from './ui/groupPage.js';
+import { initContributionsPage } from './ui/contributionsPage.js';
 import { initSettingsPage } from './ui/settingsPage.js';
 import { loadUserPreferences } from './utils/preferences.js';
 
@@ -125,6 +126,7 @@ async function boot() {
   // Mounted early — before async data — so views render immediately on navigation.
   initProfilePage();
   initGroupPage();
+  initContributionsPage();
   initSettingsPage();
 
   // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────

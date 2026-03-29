@@ -63,10 +63,12 @@ body[data-nav="ready"] .app-layout {
 .nav-rail__item {
   display: flex;
   position: relative;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
+  gap: 6px;
+  width: 64px;
+  min-height: 64px;
   padding: var(--space-2);
   border: 1px solid transparent;
   border-radius: var(--radius-full);
@@ -101,6 +103,13 @@ body[data-nav="ready"] .app-layout {
   height: 24px;
 }
 
+.nav-rail__label,
+.nav-bottom__label {
+  font-size: 11px;
+  font-weight: var(--font-medium);
+  line-height: 1;
+}
+
 .nav-bottom {
   display: none;
   position: fixed;
@@ -126,8 +135,10 @@ body[data-nav="ready"] .app-layout {
   position: relative;
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   border: none;
   background: transparent;
   color: var(--nav-tab-inactive);

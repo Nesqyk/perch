@@ -390,6 +390,76 @@ export async function fetchPendingSpotSubmissions({ campusId, buildingName = '' 
 }
 
 /**
+ * Fetch the authenticated user's room and spot submissions.
+ *
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchMySpotSubmissions(userId) {
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('spot_submissions')
+    .select(`
+      id,
+      campus_id,
+      building_name,
+      floor,
+      spot_name,
+      description,
+      discoverer_display_name,
+      created_at,
+      status,
+      confirmation_count,
+      discovered_spot_id,
+      user_id,
+      campuses(name, short_name)
+    `)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[campuses] fetchMySpotSubmissions error:', error.message);
+    return [];
+  }
+
+  return data ?? [];
+}
+
+/**
+ * Fetch community buildings created by the authenticated user.
+ *
+ * @param {string} userId
+ * @returns {Promise<object[]>}
+ */
+export async function fetchMyBuildings(userId) {
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('buildings')
+    .select(`
+      id,
+      campus_id,
+      name,
+      source,
+      verification_status,
+      confirmation_count,
+      created_at,
+      created_by,
+      campuses(name, short_name)
+    `)
+    .eq('created_by', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('[campuses] fetchMyBuildings error:', error.message);
+    return [];
+  }
+
+  return data ?? [];
+}
+
+/**
  * Register a community confirmation for a building.
  *
  * @param {string} buildingId
