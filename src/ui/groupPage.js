@@ -575,7 +575,7 @@ function _openMeetupEditor({ group, meetup, groupCurrentSpot }) {
   form.querySelector('[data-cancel]')?.addEventListener('click', closeModal);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const data = new FormData(form);
+    const data = new window.FormData(form);
     const title = String(data.get('title') ?? '').trim();
     const startsAtValue = String(data.get('startsAt') ?? '');
     if (!title || !startsAtValue) return;
@@ -614,7 +614,7 @@ function _openPerkEditor({ group, perk }) {
   form.querySelector('[data-cancel]')?.addEventListener('click', closeModal);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
-    const data = new FormData(form);
+    const data = new window.FormData(form);
     const title = String(data.get('title') ?? '').trim();
     const code = String(data.get('code') ?? '').trim();
     if (!title || !code) return;

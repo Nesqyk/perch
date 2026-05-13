@@ -12,6 +12,7 @@
   background-color: white;
   border-radius: 16px;
   flex: 1;
+  height: 100%;
   min-height: 0;
 }
 
@@ -1086,16 +1087,25 @@
 .modal-box--spot {
   width:            100%;
   max-width:        480px;
-  max-height:       92vh;
+  height:           min(92vh, 860px);
+  max-height:       min(92vh, 860px);
   padding:          0;
   overflow:         hidden;
   display:          flex;
   flex-direction:   column;
-  align-self:       stretch;
+  align-self:       center;
 }
 
 .modal-box--spot-featured {
+  height: min(92vh, 860px);
   max-width: 860px;
+}
+
+.modal-box--spot #spot-modal-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ------------------------------------------------------------------

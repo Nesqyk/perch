@@ -378,6 +378,16 @@ export async function upsertGroupMeetup({ groupId, meetupId = null, title, start
 }
 
 /**
+ * Create or update the group's meetup.
+ *
+ * @param {{ groupId: string, meetupId?: string | null, title: string, startsAt: string, locationLabel?: string | null }} params
+ * @returns {Promise<{ meetup: object | null, error: string | null }>}
+ */
+export function createOrUpdateGroupMeetup(params) {
+  return upsertGroupMeetup(params);
+}
+
+/**
  * Create or update the group's active perk.
  *
  * @param {{ groupId: string, perkId?: string | null, title: string, code: string, isRedeemed?: boolean }} params
@@ -405,6 +415,16 @@ export async function upsertGroupPerk({ groupId, perkId = null, title, code, isR
   }
 
   return { perk: data, error: null };
+}
+
+/**
+ * Create or update the group's active perk.
+ *
+ * @param {{ groupId: string, perkId?: string | null, title: string, code: string, isRedeemed?: boolean }} params
+ * @returns {Promise<{ perk: object | null, error: string | null }>}
+ */
+export function createOrUpdateGroupPerk(params) {
+  return upsertGroupPerk(params);
 }
 
 /**

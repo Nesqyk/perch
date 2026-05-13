@@ -17,8 +17,8 @@ import { createGroup, joinGroup,
          fetchGroupDashboard,
          updateMyGroupPresence,
          updateGroupCurrentSpot,
-         upsertGroupMeetup,
-         upsertGroupPerk,
+         createOrUpdateGroupMeetup,
+         createOrUpdateGroupPerk,
          markGroupPerkRedeemed,
          uploadGroupCover,
          uploadMyGroupAvatar }                  from '../api/groups.js';
@@ -134,7 +134,7 @@ async function _onCurrentSpotUpdateRequested(e) {
  * @param {CustomEvent<{ groupId: string, meetupId?: string | null, title: string, startsAt: string, locationLabel?: string | null }>} e
  */
 async function _onMeetupUpdateRequested(e) {
-  const { meetup, error } = await upsertGroupMeetup(e.detail);
+  const { meetup, error } = await createOrUpdateGroupMeetup(e.detail);
 
   if (error || !meetup) {
     showToast(error ?? 'Could not save the meetup.', 'error');
@@ -151,7 +151,7 @@ async function _onMeetupUpdateRequested(e) {
  * @param {CustomEvent<{ groupId: string, perkId?: string | null, title: string, code: string, isRedeemed?: boolean }>} e
  */
 async function _onPerkUpdateRequested(e) {
-  const { perk, error } = await upsertGroupPerk(e.detail);
+  const { perk, error } = await createOrUpdateGroupPerk(e.detail);
 
   if (error || !perk) {
     showToast(error ?? 'Could not save the squad perk.', 'error');

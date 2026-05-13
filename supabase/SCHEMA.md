@@ -52,6 +52,7 @@ erDiagram
         uuid current_spot_id FK
         integer progress_current
         integer progress_target
+        text cover_image_path
         timestamptz created_at
     }
 
@@ -65,6 +66,7 @@ erDiagram
         text focus_mode
         text availability_status
         text avatar_url
+        text avatar_image_path
         timestamptz joined_at
     }
 

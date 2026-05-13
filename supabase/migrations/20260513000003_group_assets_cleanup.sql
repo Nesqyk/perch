@@ -39,7 +39,11 @@ returns uuid
 language sql
 stable
 as $$
-  select nullif((storage.foldername(p_name))[1], '')::uuid;
+  select case
+    when (storage.foldername(p_name))[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      then (storage.foldername(p_name))[1]::uuid
+    else null
+  end;
 $$;
 
 create or replace function public.storage_group_asset_owner_id(p_name text)
@@ -49,6 +53,7 @@ stable
 as $$
   select case
     when (storage.foldername(p_name))[2] = 'members'
+      and (storage.foldername(p_name))[3] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       then nullif((storage.foldername(p_name))[3], '')::uuid
     else null
   end;
