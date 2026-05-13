@@ -705,7 +705,6 @@
 
 .squad-icon-action,
 .squad-action-button,
-.squad-row-actions button,
 .squad-meetup-card button,
 .squad-perk-card button {
   border: 0;
@@ -1211,7 +1210,7 @@
 
   .squad-roster-table,
   .squad-roster-footer {
-    min-width: 760px;
+    min-width: 660px;
   }
 
   .squad-venue-metric {
