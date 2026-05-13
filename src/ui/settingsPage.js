@@ -1,35 +1,42 @@
 /**
  * src/ui/settingsPage.js
  *
- * Route-level settings destination for #/settings.
- *
- * This page manages lightweight local preferences while preserving Perch's
- * current map-first flow. Preferences are stored in localStorage and, where
- * relevant, reflected immediately into the central store.
+ * Route-level settings dashboard for #/settings. The page renders persisted
+ * account/settings data from the store and emits UI events for all writes.
  */
 
 import {
-  BellRing,
+  Bell,
+  Check,
+  ChevronDown,
+  CircleHelp,
+  Cloud,
+  FileText,
+  Laptop,
+  Link,
   LogIn,
   LogOut,
-  Map,
+  Moon,
+  Search,
   Settings,
-  ShieldCheck,
+  Shield,
   SlidersHorizontal,
+  Smartphone,
   UserRound,
-  Users,
+  Video,
 } from 'lucide';
 
 import { emit, on, EVENTS } from '../core/events.js';
-import { getState, dispatch } from '../core/store.js';
+import { getState } from '../core/store.js';
 import { navigateTo } from '../core/router.js';
 import { signOut } from '../api/auth.js';
-import { loadUserPreferences, saveUserPreferences } from '../utils/preferences.js';
-import { openProfileModal } from './profileModal.js';
+import { normalizeSettings } from '../state/settingsState.js';
+import { loadUserPreferences } from '../utils/preferences.js';
 import { iconSvg } from './icons.js';
 import { showToast } from './toast.js';
 
 const VIEW_ID = 'view-settings';
+const DEFAULT_COVER = '/settings-library-cover.svg';
 
 /**
  * Initialise the settings page renderer.
@@ -43,9 +50,10 @@ export function initSettingsPage() {
   on(EVENTS.ROUTE_CHANGED, rerender);
   on(EVENTS.CAMPUSES_LOADED, rerender);
   on(EVENTS.CAMPUS_SELECTED, rerender);
-  on(EVENTS.VIEW_MODE_CHANGED, rerender);
-  on(EVENTS.GROUP_PINS_UPDATED, rerender);
   on(EVENTS.NICKNAME_UPDATED, rerender);
+  on(EVENTS.SETTINGS_DASHBOARD_UPDATED, rerender);
+  on(EVENTS.USER_SETTINGS_UPDATED, rerender);
+  on(EVENTS.USER_DEVICE_UPDATED, rerender);
 
   _renderSettingsPage();
 }
@@ -54,293 +62,337 @@ function _renderSettingsPage() {
   const view = document.getElementById(VIEW_ID);
   if (!view) return;
 
-  const { currentUser, campuses, selectedCampusId, nickname, viewMode, groupPinsVisible } = getState();
-  const preferences = loadUserPreferences();
-
+  const state = getState();
   view.innerHTML = '';
 
-  const shell = document.createElement('div');
-  shell.className = 'page-shell';
-  shell.innerHTML = /* html */`
-    <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch</p>
-      <h1 class="page-shell__title">Settings</h1>
-      <p class="page-shell__subtitle">Tune how Perch opens, which campus feels like home, and which updates matter most.</p>
-    </div>
-  `;
-
-  if (!currentUser) {
-    shell.appendChild(_buildSignedOutCard());
-    view.appendChild(shell);
+  if (!state.currentUser) {
+    view.appendChild(_buildSignedOutState());
     return;
   }
 
-  const preferredCampus = campuses.find((campus) => campus.id === preferences.preferredCampusId) ?? null;
-  const activeCampus = campuses.find((campus) => campus.id === selectedCampusId) ?? null;
-
-  shell.appendChild(_buildHeroCard({
-    nickname,
-    currentUser,
-    preferredCampus,
-    activeCampus,
-    viewMode,
-    groupPinsVisible,
-  }));
-
-  const grid = document.createElement('div');
-  grid.className = 'page-grid page-grid--two settings-page__grid';
-  grid.appendChild(_buildExperienceCard(preferences, campuses));
-  grid.appendChild(_buildNotificationsCard(preferences));
-  shell.appendChild(grid);
-
-  shell.appendChild(_buildPrivacyCard(preferences));
-  shell.appendChild(_buildAccountCard(currentUser));
-
-  view.appendChild(shell);
+  view.appendChild(_buildDashboard(state));
 }
 
-function _buildSignedOutCard() {
-  const empty = document.createElement('section');
-  empty.className = 'page-card page-card--empty';
-  empty.innerHTML = /* html */`
-    <div class="page-empty__icon">${iconSvg(Settings, 28)}</div>
-    <h2 class="page-empty__title">Sign in to manage your Perch setup.</h2>
-    <p class="page-empty__copy">Preferences follow this browser, but account actions and squad-related settings need your Google session.</p>
-    <div class="settings-page__cta-row">
-      <button type="button" class="btn btn-primary" id="settings-page-login">${iconSvg(LogIn, 16)} Sign in</button>
-      <button type="button" class="btn btn-ghost" id="settings-page-map">Back to map</button>
-    </div>
+function _buildSignedOutState() {
+  const shell = document.createElement('div');
+  shell.className = 'settings-dashboard settings-dashboard--signed-out';
+  shell.innerHTML = /* html */`
+    <section class="settings-auth-card">
+      <div class="page-empty__icon">${iconSvg(Settings, 28)}</div>
+      <h1>Sign in to manage your Perch setup.</h1>
+      <p>Account preferences, synced devices, and workspace cards need your Google session.</p>
+      <button type="button" class="btn btn-primary" id="settings-login">${iconSvg(LogIn, 16)} Sign in</button>
+    </section>
   `;
-
-  empty.querySelector('#settings-page-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
-  empty.querySelector('#settings-page-map')?.addEventListener('click', () => navigateTo('/'));
-  return empty;
+  shell.querySelector('#settings-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
+  return shell;
 }
 
-function _buildHeroCard({ nickname, currentUser, preferredCampus, activeCampus, viewMode, groupPinsVisible }) {
-  const card = document.createElement('section');
-  card.className = 'page-card page-card--hero settings-hero';
-  card.innerHTML = /* html */`
-    <div class="settings-hero__head">
-      <div class="profile-page__identity">
-        <span class="profile-page__avatar">${_initials(nickname || currentUser.email || 'P')}</span>
-        <div>
-          <div class="page-card__eyebrow">Your setup</div>
-          <h2 class="page-card__title">${_escapeHtml(nickname || currentUser.user_metadata?.full_name || 'Perch member')}</h2>
-          <p class="page-card__copy">${_escapeHtml(currentUser.email ?? 'No email available')}</p>
-        </div>
-      </div>
-      <div class="settings-page__cta-row">
-        <button type="button" class="btn btn-primary" id="settings-hero-edit">Edit nickname</button>
-        <button type="button" class="btn btn-ghost" id="settings-hero-profile">Back to profile</button>
-      </div>
-    </div>
-    <div class="settings-hero__stats">
-      <div class="group-stat">
-        <span class="group-stat__value">${viewMode === 'city' ? 'City' : 'Campus'}</span>
-        <span class="group-stat__label">Default View</span>
-      </div>
-      <div class="group-stat">
-        <span class="group-stat__value">${_escapeHtml((preferredCampus ?? activeCampus)?.short_name || (preferredCampus ?? activeCampus)?.name || 'Auto')}</span>
-        <span class="group-stat__label">Preferred Campus</span>
-      </div>
-      <div class="group-stat">
-        <span class="group-stat__value">${groupPinsVisible ? 'On' : 'Off'}</span>
-        <span class="group-stat__label">Squad Pins</span>
-      </div>
-    </div>
-  `;
+function _buildDashboard(state) {
+  const shell = document.createElement('div');
+  shell.className = 'settings-dashboard';
 
-  card.querySelector('#settings-hero-edit')?.addEventListener('click', () => openProfileModal());
-  card.querySelector('#settings-hero-profile')?.addEventListener('click', () => navigateTo('/profile'));
-  return card;
+  const main = document.createElement('main');
+  main.className = 'settings-dashboard__main';
+  main.appendChild(_buildSearchBar());
+  main.appendChild(_sectionTitle(UserRound, 'Account Settings'));
+  main.appendChild(_buildAccountCard(state));
+  main.appendChild(_sectionTitle(SlidersHorizontal, 'App Preferences'));
+  main.appendChild(_buildPreferencesCard(state));
+  main.appendChild(_sectionTitle(Bell, 'Notification Settings'));
+  main.appendChild(_buildNotificationCard(state));
+  main.appendChild(_sectionTitle(Shield, 'Privacy'));
+  main.appendChild(_buildPrivacyCard());
+  shell.appendChild(main);
+
+  const aside = document.createElement('aside');
+  aside.className = 'settings-dashboard__aside';
+  aside.appendChild(_buildProfileCover(state));
+  aside.appendChild(_buildGoogleCard(state));
+  aside.appendChild(_buildSessionCard(state));
+  aside.appendChild(_buildNoteCard(state));
+  aside.appendChild(_buildWorkspaceFooter());
+  shell.appendChild(aside);
+
+  shell.appendChild(_scrollMarker());
+  return shell;
 }
 
-function _buildExperienceCard(preferences, campuses) {
-  const card = document.createElement('section');
-  card.className = 'page-card';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Experience</div>
-    <h2 class="page-card__title page-card__title--sm">How Perch should feel when it opens</h2>
-    <p class="page-card__copy">These controls change how the app starts on this browser and how much of your crew context stays visible on the map.</p>
-
-    <div class="settings-stack">
-      <div class="settings-field">
-        <span class="page-field__label">Default View On Load</span>
-        <div class="chip-row" id="settings-default-view-toggle">
-          <button type="button" class="chip${preferences.defaultView === 'campus' ? ' chip-active' : ''}" data-view="campus" aria-pressed="${String(preferences.defaultView === 'campus')}">Campus</button>
-          <button type="button" class="chip${preferences.defaultView === 'city' ? ' chip-active' : ''}" data-view="city" aria-pressed="${String(preferences.defaultView === 'city')}">City</button>
-        </div>
-      </div>
-
-      <label class="page-field">
-        <span class="page-field__label">Preferred Campus</span>
-        <select class="select" id="settings-preferred-campus">
-          <option value="">Use current selection</option>
-          ${campuses.map((campus) => `<option value="${_escapeHtml(campus.id)}" ${preferences.preferredCampusId === campus.id ? 'selected' : ''}>${_escapeHtml(campus.name)}</option>`).join('')}
-        </select>
-      </label>
-
-      <label class="settings-toggle-row" for="settings-show-group-pins">
-        <span class="settings-toggle-row__body">
-          <span class="settings-toggle-row__title">Show squad pins on the map</span>
-          <span class="settings-toggle-row__copy">Keep your crew's live pins visible when you switch back to map discovery.</span>
-        </span>
-        <input type="checkbox" class="settings-checkbox" id="settings-show-group-pins" ${preferences.showGroupPins ? 'checked' : ''}>
-      </label>
-    </div>
-
-    <div class="settings-page__cta-row">
-      <button type="button" class="btn btn-primary" id="settings-save-experience">Save experience settings</button>
-      <button type="button" class="btn btn-ghost" id="settings-open-map">Back to map</button>
-    </div>
-  `;
-
-  const toggle = card.querySelector('#settings-default-view-toggle');
-  toggle?.querySelectorAll('[data-view]').forEach((button) => {
-    button.addEventListener('click', () => {
-      toggle.querySelectorAll('[data-view]').forEach((chip) => {
-        const active = chip.dataset.view === button.dataset.view;
-        chip.classList.toggle('chip-active', active);
-        chip.setAttribute('aria-pressed', String(active));
-      });
-    });
-  });
-
-  card.querySelector('#settings-save-experience')?.addEventListener('click', () => {
-    const selectedView = toggle?.querySelector('.chip-active')?.dataset.view === 'city' ? 'city' : 'campus';
-    const preferredCampusId = card.querySelector('#settings-preferred-campus')?.value ?? '';
-    const showGroupPins = !!card.querySelector('#settings-show-group-pins')?.checked;
-
-    const next = saveUserPreferences({
-      defaultView: selectedView,
-      preferredCampusId,
-      showGroupPins,
-    });
-
-    dispatch('SET_VIEW_MODE', next.defaultView);
-    dispatch('SET_GROUP_PINS_VISIBLE', next.showGroupPins);
-
-    if (next.preferredCampusId) {
-      dispatch('CAMPUS_SELECTED', { campusId: next.preferredCampusId });
-    }
-
-    showToast('Experience settings saved.', 'success');
-    _renderSettingsPage();
-  });
-
-  card.querySelector('#settings-open-map')?.addEventListener('click', () => navigateTo('/'));
-  return card;
-}
-
-function _buildNotificationsCard(preferences) {
-  const card = document.createElement('section');
-  card.className = 'page-card';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Notifications</div>
-    <h2 class="page-card__title page-card__title--sm">Choose the updates worth your attention</h2>
-    <p class="page-card__copy">These are local preferences for the inbox and notification surfaces we are rolling out next.</p>
-
-    <div class="settings-stack">
-      ${_toggleRowMarkup('settings-notify-group', 'Squad activity', 'Pins, join activity, and movement from your study crew.', preferences.notifyGroupActivity)}
-      ${_toggleRowMarkup('settings-notify-claims', 'Claim reminders', 'Heads-up when your active claim is close to expiring.', preferences.notifyClaimExpiry)}
-      ${_toggleRowMarkup('settings-notify-contributions', 'Contribution updates', 'Confirmation and review changes for spots, rooms, and buildings you submit.', preferences.notifyContributionStatus)}
-    </div>
-
-    <button type="button" class="btn btn-primary" id="settings-save-notifications">Save notification settings</button>
-  `;
-
-  card.querySelector('#settings-save-notifications')?.addEventListener('click', () => {
-    saveUserPreferences({
-      notifyGroupActivity: !!card.querySelector('#settings-notify-group')?.checked,
-      notifyClaimExpiry: !!card.querySelector('#settings-notify-claims')?.checked,
-      notifyContributionStatus: !!card.querySelector('#settings-notify-contributions')?.checked,
-    });
-
-    showToast('Notification settings saved.', 'success');
-  });
-
-  return card;
-}
-
-function _buildPrivacyCard(preferences) {
-  const card = document.createElement('section');
-  card.className = 'page-card page-card--subtle';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Privacy</div>
-    <h2 class="page-card__title page-card__title--sm">Keep group context comfortable</h2>
-    <label class="settings-toggle-row" for="settings-share-profile">
-      <span class="settings-toggle-row__body">
-        <span class="settings-toggle-row__title">Show my nickname in group context</span>
-        <span class="settings-toggle-row__copy">Keep your profile recognizable in squad tools instead of feeling anonymous.</span>
-      </span>
-      <input type="checkbox" class="settings-checkbox" id="settings-share-profile" ${preferences.shareProfileInGroups ? 'checked' : ''}>
+function _buildSearchBar() {
+  const bar = document.createElement('div');
+  bar.className = 'settings-search';
+  bar.innerHTML = /* html */`
+    <label>
+      ${iconSvg(Search, 22)}
+      <input type="search" placeholder="Search for your next sanctuary..." aria-label="Search settings">
     </label>
-    <div class="settings-page__cta-row">
-      <button type="button" class="btn btn-primary" id="settings-save-privacy">Save privacy setting</button>
-      <button type="button" class="btn btn-ghost" id="settings-back-profile">Back to profile</button>
-    </div>
+    <button type="button" aria-label="Help">${iconSvg(CircleHelp, 22)}</button>
+    <button type="button" aria-label="Theme">${iconSvg(Moon, 22)}</button>
+  `;
+  return bar;
+}
+
+function _sectionTitle(icon, text) {
+  const title = document.createElement('h2');
+  title.className = 'settings-section-title';
+  title.innerHTML = `${iconSvg(icon, 21)} <span>${_escapeHtml(text)}</span>`;
+  return title;
+}
+
+function _buildAccountCard(state) {
+  const { settingsProfile, currentUser, campuses } = state;
+  const settings = normalizeSettings(state.userSettings, loadUserPreferences());
+  const displayName = settingsProfile?.nickname || state.nickname || currentUser.user_metadata?.full_name || 'Perch member';
+  const currentSchool = settings.preferredCampusId || '';
+  const card = document.createElement('section');
+  card.className = 'settings-form-card settings-account-panel';
+  card.innerHTML = /* html */`
+    <label class="settings-field-block">
+      <span>Edit Name</span>
+      <input id="settings-name" value="${_escapeAttr(displayName)}" maxlength="40">
+    </label>
+    <label class="settings-field-block">
+      <span>Change School</span>
+      <div class="settings-select-wrap">
+        <select id="settings-school">
+          <option value="">${_escapeHtml(settingsProfile?.school_label ?? 'CTU Main Campus')}</option>
+          ${campuses.map(campus => `<option value="${_escapeAttr(campus.id)}" ${campus.id === currentSchool ? 'selected' : ''}>${_escapeHtml(campus.name)}</option>`).join('')}
+        </select>
+        ${iconSvg(ChevronDown, 18)}
+      </div>
+    </label>
   `;
 
-  card.querySelector('#settings-save-privacy')?.addEventListener('click', () => {
-    saveUserPreferences({
-      shareProfileInGroups: !!card.querySelector('#settings-share-profile')?.checked,
-    });
-    showToast('Privacy setting saved.', 'success');
+  const nameInput = card.querySelector('#settings-name');
+  nameInput?.addEventListener('blur', () => {
+    const nickname = nameInput.value.trim();
+    if (!nickname || nickname === displayName) return;
+    emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, { nickname });
+  });
+  nameInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') nameInput.blur();
   });
 
-  card.querySelector('#settings-back-profile')?.addEventListener('click', () => navigateTo('/profile'));
+  card.querySelector('#settings-school')?.addEventListener('change', (event) => {
+    const campusId = event.target.value;
+    const campus = campuses.find(item => item.id === campusId);
+    emit(EVENTS.UI_SETTINGS_UPDATE, { preferredCampusId: campusId });
+    if (campus) {
+      emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, { schoolLabel: campus.name });
+    }
+  });
+
   return card;
 }
 
-function _buildAccountCard(currentUser) {
+function _buildPreferencesCard(state) {
+  const settings = normalizeSettings(state.userSettings, loadUserPreferences());
   const card = document.createElement('section');
-  card.className = 'page-card';
+  card.className = 'settings-form-card settings-preferences-panel';
   card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Account</div>
-    <h2 class="page-card__title page-card__title--sm">Identity and session controls</h2>
-    <div class="settings-account-list">
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(UserRound, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Signed in account</span>
-          <span class="profile-meta__copy">${_escapeHtml(currentUser.email ?? 'No email available')}</span>
-        </div>
+    <div class="settings-preference-row">
+      <div>
+        <strong>Default Map View</strong>
+        <span>What you see first when opening the map.</span>
       </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(ShieldCheck, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Authentication</span>
-          <span class="profile-meta__copy">Google sign-in through Supabase keeps account access lightweight.</span>
-        </div>
-      </div>
+      ${_segmentedControl('map-view', [
+        ['campus', 'Campus'],
+        ['cafes', 'Cafes'],
+      ], settings.defaultMapView)}
     </div>
-    <div class="settings-page__cta-row">
-      <button type="button" class="btn btn-primary" id="settings-account-edit">${iconSvg(SlidersHorizontal, 16)} Edit nickname</button>
-      <button type="button" class="btn btn-ghost" id="settings-account-signout">${iconSvg(LogOut, 16)} Sign out</button>
+    <div class="settings-preference-row">
+      <div>
+        <strong>Preferred Study Environment</strong>
+        <span>Match your focus style with noise levels.</span>
+      </div>
+      ${_segmentedControl('study-env', [
+        ['quiet', 'Quiet'],
+        ['moderate', 'Moderate'],
+      ], settings.preferredStudyEnvironment)}
     </div>
   `;
 
-  card.querySelector('#settings-account-edit')?.addEventListener('click', () => openProfileModal());
-  card.querySelector('#settings-account-signout')?.addEventListener('click', async () => {
+  card.querySelectorAll('[data-segment-group="map-view"]').forEach((button) => {
+    button.addEventListener('click', () => emit(EVENTS.UI_SETTINGS_UPDATE, { defaultMapView: button.dataset.value }));
+  });
+  card.querySelectorAll('[data-segment-group="study-env"]').forEach((button) => {
+    button.addEventListener('click', () => emit(EVENTS.UI_SETTINGS_UPDATE, { preferredStudyEnvironment: button.dataset.value }));
+  });
+  return card;
+}
+
+function _buildNotificationCard(state) {
+  const settings = normalizeSettings(state.userSettings, loadUserPreferences());
+  const card = document.createElement('section');
+  card.className = 'settings-form-card settings-notifications-panel';
+  card.innerHTML = /* html */`
+    ${_toggleRow('spot-alerts', 'Spot Availability Alerts', 'Get notified when your favorite spot opens up.', settings.spotAvailabilityAlerts)}
+    ${_toggleRow('squad-updates', 'Squad Updates', "Stay updated on your study group's activity.", settings.squadUpdates)}
+  `;
+
+  card.querySelector('#spot-alerts')?.addEventListener('change', (event) => {
+    emit(EVENTS.UI_SETTINGS_UPDATE, { spotAvailabilityAlerts: event.target.checked });
+  });
+  card.querySelector('#squad-updates')?.addEventListener('change', (event) => {
+    emit(EVENTS.UI_SETTINGS_UPDATE, { squadUpdates: event.target.checked });
+  });
+  return card;
+}
+
+function _buildPrivacyCard() {
+  const card = document.createElement('section');
+  card.className = 'settings-privacy-card';
+  card.innerHTML = /* html */`
+    <button type="button" id="settings-signout">${iconSvg(LogOut, 16)} Sign out</button>
+  `;
+  card.querySelector('#settings-signout')?.addEventListener('click', async () => {
     await signOut();
     showToast('Signed out.', 'success');
     navigateTo('/');
   });
-
   return card;
 }
 
-function _toggleRowMarkup(id, title, copy, checked) {
+function _buildProfileCover(state) {
+  const { settingsProfile, currentUser } = state;
+  const name = settingsProfile?.nickname || state.nickname || currentUser.user_metadata?.full_name || 'Perch member';
+  const avatar = settingsProfile?.avatar_url || currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || '';
+  const cover = settingsProfile?.cover_image_url || DEFAULT_COVER;
+  const card = document.createElement('section');
+  card.className = 'settings-cover-card';
+  card.innerHTML = /* html */`
+    <img class="settings-cover-card__image" src="${_escapeAttr(cover)}" alt="">
+    <div class="settings-cover-card__identity">
+      ${avatar ? `<img src="${_escapeAttr(avatar)}" alt="">` : `<span>${_initials(name)}</span>`}
+      <div>
+        <strong>${_escapeHtml(name)}</strong>
+        <small>${_escapeHtml(settingsProfile?.scholar_label ?? 'Senior Scholar')}</small>
+      </div>
+    </div>
+  `;
+  return card;
+}
+
+function _buildGoogleCard(state) {
+  const settings = normalizeSettings(state.userSettings, loadUserPreferences());
+  const devices = state.userDevices ?? [];
+  const card = document.createElement('section');
+  card.className = 'settings-google-card';
+  card.innerHTML = /* html */`
+    <div class="settings-google-card__title"><span class="settings-google-mark">G</span> Stitched with Google</div>
+    <button type="button" class="settings-link-pill" id="settings-calendar-link">${iconSvg(Link, 16)} ${settings.googleCalendarLinked ? 'Unlink Google Calendar' : 'Link Google Calendar'}</button>
+    <div class="settings-device-list">
+      <span>Synced Devices</span>
+      ${(devices.length ? devices : _fallbackDevices()).map(device => _deviceRow(device)).join('')}
+    </div>
+  `;
+
+  card.querySelector('#settings-calendar-link')?.addEventListener('click', () => {
+    emit(EVENTS.UI_SETTINGS_GOOGLE_CALENDAR_TOGGLE, { linked: !settings.googleCalendarLinked });
+  });
+  return card;
+}
+
+function _buildSessionCard(state) {
+  const session = state.nextSession;
+  const card = document.createElement('section');
+  card.className = 'settings-session-card';
+  card.innerHTML = /* html */`
+    <span>Next Session</span>
+    <h3>${_escapeHtml(session?.title ?? 'Physics Final Prep')}</h3>
+    <p>${_escapeHtml(_formatSessionTime(session?.starts_at))}</p>
+    <button type="button" id="settings-meet">${iconSvg(Video, 16)} Connect to Meet</button>
+  `;
+  card.querySelector('#settings-meet')?.addEventListener('click', () => {
+    if (session?.meet_url) {
+      window.open(session.meet_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    showToast('No Meet link has been attached yet.', 'info');
+  });
+  return card;
+}
+
+function _buildNoteCard(state) {
+  const note = state.sharedNote;
+  const card = document.createElement('section');
+  card.className = 'settings-note-card';
+  card.innerHTML = /* html */`
+    <div>${iconSvg(FileText, 22)} <span>Shared Note</span></div>
+    <p>${_escapeHtml(note?.title ?? 'Thermodynamics formulas for midterm')}</p>
+    <button type="button" id="settings-docs">${iconSvg(FileText, 16)} Open in Docs</button>
+  `;
+  card.querySelector('#settings-docs')?.addEventListener('click', () => {
+    if (note?.document_url) {
+      window.open(note.document_url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    showToast('No document link has been attached yet.', 'info');
+  });
+  return card;
+}
+
+function _buildWorkspaceFooter() {
+  const footer = document.createElement('div');
+  footer.className = 'settings-workspace-footer';
+  footer.innerHTML = `${iconSvg(Cloud, 14)} <span>Connected to Google Workspace</span>`;
+  return footer;
+}
+
+function _scrollMarker() {
+  const marker = document.createElement('span');
+  marker.className = 'settings-scroll-marker';
+  marker.setAttribute('aria-hidden', 'true');
+  return marker;
+}
+
+function _segmentedControl(group, options, selected) {
   return /* html */`
-    <label class="settings-toggle-row" for="${id}">
-      <span class="settings-toggle-row__body">
-        <span class="settings-toggle-row__title">${_escapeHtml(title)}</span>
-        <span class="settings-toggle-row__copy">${_escapeHtml(copy)}</span>
+    <div class="settings-segmented" role="group">
+      ${options.map(([value, label]) => `
+        <button type="button" data-segment-group="${group}" data-value="${value}" class="${value === selected ? 'is-active' : ''}" aria-pressed="${String(value === selected)}">${_escapeHtml(label)}</button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function _toggleRow(id, title, copy, checked) {
+  return /* html */`
+    <label class="settings-switch-row" for="${id}">
+      <span>
+        <strong>${_escapeHtml(title)}</strong>
+        <small>${_escapeHtml(copy)}</small>
       </span>
-      <input type="checkbox" class="settings-checkbox" id="${id}" ${checked ? 'checked' : ''}>
+      <input type="checkbox" id="${id}" ${checked ? 'checked' : ''}>
+      <i aria-hidden="true">${iconSvg(Check, 14)}</i>
     </label>
   `;
+}
+
+function _deviceRow(device) {
+  const icon = device.device_type === 'phone' ? Smartphone : Laptop;
+  return /* html */`
+    <div class="settings-device-row">
+      ${iconSvg(icon, 16)}
+      <span>${_escapeHtml(device.device_name ?? device.deviceName ?? 'Web Browser')}</span>
+      <i aria-hidden="true"></i>
+    </div>
+  `;
+}
+
+function _fallbackDevices() {
+  return [
+    { device_name: 'This browser', device_type: 'laptop' },
+  ];
+}
+
+function _formatSessionTime(value) {
+  if (!value) return 'Today at 4:30 PM';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Today at 4:30 PM';
+  const today = new Date().toDateString() === date.toDateString();
+  const day = today ? 'Today' : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${day} at ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
 function _initials(value) {
@@ -348,7 +400,7 @@ function _initials(value) {
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
+    .map(part => part[0]?.toUpperCase() ?? '')
     .join('');
 }
 
@@ -358,4 +410,8 @@ function _escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function _escapeAttr(value) {
+  return _escapeHtml(value).replace(/'/g, '&#39;');
 }
