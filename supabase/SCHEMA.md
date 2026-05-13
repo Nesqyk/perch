@@ -39,6 +39,137 @@ erDiagram
         timestamptz updated_at
     }
 
+    groups {
+        uuid id PK
+        text name
+        text code
+        text color
+        text context
+        uuid campus_id FK
+        uuid created_by
+        text purpose
+        timestamptz started_at
+        uuid current_spot_id FK
+        integer progress_current
+        integer progress_target
+        timestamptz created_at
+    }
+
+    group_members {
+        uuid id PK
+        uuid group_id FK
+        uuid user_id
+        text display_name
+        integer scout_points
+        text role
+        text focus_mode
+        text availability_status
+        text avatar_url
+        timestamptz joined_at
+    }
+
+    group_pins {
+        uuid id PK
+        uuid group_id FK
+        uuid spot_id FK
+        uuid user_id
+        text display_name
+        text pin_type
+        text vibe
+        text note
+        text custom_name
+        timestamptz pinned_at
+        timestamptz expires_at
+        timestamptz ended_at
+    }
+
+    group_pin_joins {
+        uuid id PK
+        uuid group_pin_id FK
+        uuid user_id
+        text status
+        timestamptz joined_at
+    }
+
+    group_meetups {
+        uuid id PK
+        uuid group_id FK
+        text title
+        timestamptz starts_at
+        text location_label
+        uuid created_by
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    group_perks {
+        uuid id PK
+        uuid group_id FK
+        text title
+        text code
+        boolean is_redeemed
+        uuid created_by
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_profiles {
+        uuid user_id UK
+        text nickname
+        text avatar_url
+        text cover_image_url
+        text school_label
+        text scholar_label
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_settings {
+        uuid user_id PK
+        text default_map_view
+        text preferred_study_environment
+        boolean spot_availability_alerts
+        boolean squad_updates
+        uuid preferred_campus_id FK
+        boolean google_calendar_linked
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_devices {
+        uuid id PK
+        uuid user_id
+        text device_key
+        text device_name
+        text device_type
+        timestamptz last_seen_at
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_sessions {
+        uuid id PK
+        uuid user_id
+        text title
+        timestamptz starts_at
+        text meet_url
+        boolean is_next
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    user_shared_notes {
+        uuid id PK
+        uuid user_id
+        text title
+        text document_url
+        text provider
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     spot_confidence {
         uuid spot_id PK, FK
         numeric score
@@ -98,6 +229,14 @@ erDiagram
     spots ||--o{ claims : "claimed at"
     spots ||--o{ corrections : "reported at"
     spots ||--o{ schedule_entries : "has schedule"
+    spots ||--o{ group_pins : "pinned by squads"
+    spots ||--o{ groups : "current venue"
+    groups ||--o{ group_members : "has members"
+    groups ||--o{ group_pins : "has pins"
+    groups ||--o{ group_meetups : "plans"
+    groups ||--o{ group_perks : "offers"
+    group_pins ||--o{ group_pin_joins : "joined by members"
+    campuses ||--o{ user_settings : "preferred by users"
 ```
 
 ## Notes
@@ -113,3 +252,11 @@ erDiagram
 - `corrections.reason`: `locked` | `occupied` | `overcrowded` | `event`
 - `spot_submissions.status`: `pending` | `approved` | `rejected`
 - `campuses`: Each row holds map center + bounding box. Used by `mapInit.js` for `flyToBounds`/`maxBounds`.
+- `group_members.role`: `mayor` | `member`
+- `group_members.availability_status`: `available` | `busy`
+- `group_meetups`: one or more persisted squad meetups; the dashboard reads the next upcoming row.
+- `group_perks`: persisted squad offer rows; the dashboard reads the first unredeemed row.
+- `user_settings.default_map_view`: `campus` | `cafes`; `cafes` maps to app `city` view mode.
+- `user_settings.preferred_study_environment`: `quiet` | `moderate`.
+- `user_devices`: v1 browser/session heartbeat rows, not push-notification registrations.
+- `user_sessions` and `user_shared_notes`: persisted right-column Settings cards.
