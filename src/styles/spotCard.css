@@ -110,11 +110,27 @@
   --spot-feature-accent-strong: var(--color-green-700);
   --spot-feature-accent-soft: var(--color-brand-light);
   --spot-feature-accent-contrast: var(--color-white);
+  flex: 1;
+  min-height: 0;
 }
 
 .spot-card__scrollable--featured {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 0 var(--space-6) var(--space-6);
   gap: var(--space-5);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gray-200) transparent;
+}
+
+.spot-card__sticky-actions {
+  flex-shrink: 0;
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: 0 0 16px 16px;
+  z-index: 1;
 }
 
 .spot-card__featured-shell {
@@ -1129,6 +1145,10 @@
 
   .spot-card__scrollable--featured {
     padding: 0 var(--space-5) var(--space-5);
+  }
+
+  .spot-card__sticky-actions {
+    padding: var(--space-3) var(--space-5);
   }
 
   .spot-card__featured-visual {

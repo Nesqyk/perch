@@ -227,7 +227,7 @@ function _buildFeaturedCard(
   const shell = document.createElement('section');
   shell.className = 'spot-card__featured-shell';
   shell.appendChild(_buildFeaturedVisual(spot, featuredDetail, confDisplay));
-  shell.appendChild(_buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity, ownClaim));
+  shell.appendChild(_buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity));
   scrollable.appendChild(shell);
 
   scrollable.appendChild(_buildDivider());
@@ -240,6 +240,12 @@ function _buildFeaturedCard(
   }
 
   card.appendChild(scrollable);
+
+  const sticky = document.createElement('div');
+  sticky.className = 'spot-card__sticky-actions';
+  sticky.appendChild(ownClaim ? _buildClaimSection(spot, activeClaims, ownClaim) : _buildActions(spot.id, status));
+  card.appendChild(sticky);
+
   return card;
 }
 
@@ -370,14 +376,13 @@ function _buildFeaturedVisual(spot, featuredDetail, confDisplay) {
  * @param {object|null} ownClaim
  * @returns {HTMLElement}
  */
-function _buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity, ownClaim) {
+function _buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity) {
   const main = document.createElement('div');
   main.className = 'spot-card__featured-main';
 
   main.appendChild(_buildStatusRow(confDisplay, status));
   main.appendChild(_buildFeaturedAmenityRail(spot));
   main.appendChild(_buildFeaturedPanels(spot, featuredDetail, confDisplay, activeClaims, capacity));
-  main.appendChild(ownClaim ? _buildClaimSection(spot, activeClaims, ownClaim) : _buildActions(spot.id, status));
 
   return main;
 }
