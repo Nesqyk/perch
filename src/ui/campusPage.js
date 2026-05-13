@@ -70,7 +70,6 @@ function _renderCampusPage() {
 
   shell.innerHTML = /* html */`
     <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch</p>
       <h1 class="page-shell__title">${_escapeHtml(campus.short_name || campus.name)}</h1>
       <p class="page-shell__subtitle">${_escapeHtml(_buildCampusSubtitle(campus, overview))}</p>
     </div>

@@ -59,7 +59,6 @@ function _renderProfilePage() {
 
   shell.innerHTML = /* html */`
     <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch</p>
       <h1 class="page-shell__title">Profile</h1>
       <p class="page-shell__subtitle">Account settings, identity, and your current place in the crew.</p>
     </div>

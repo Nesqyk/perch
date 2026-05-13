@@ -51,7 +51,6 @@ function _renderContributionsPage() {
   shell.className = 'page-shell';
   shell.innerHTML = /* html */`
     <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch</p>
       <h1 class="page-shell__title">My Contributions</h1>
       <p class="page-shell__subtitle">Track the rooms, spots, and buildings you helped add to the map so community review never feels invisible.</p>
     </div>

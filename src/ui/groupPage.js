@@ -270,8 +270,8 @@ function _buildSquadHeader(state, canManage) {
     </div>
     <div class="squad-header-card__copy">
       <h1>${_escapeHtml(group.name)}</h1>
-      <p><span aria-hidden="true">○</span> ${_escapeHtml(group.purpose ?? 'Studying for Finals')} • Since ${startedAt}</p>
-      <span class="squad-progress-pill">${progressCurrent}/${progressTarget}</span>
+      <p><span aria-hidden="true">○</span> ${_escapeHtml(group.purpose || 'Study crew')} • Since ${startedAt}</p>
+      ${progressTarget ? `<span class="squad-progress-pill">${progressCurrent}/${progressTarget}</span>` : ''}
     </div>
     <div class="squad-header-card__actions">
       <button type="button" class="squad-icon-action squad-icon-action--danger" id="squad-leave" aria-label="Leave squad">${iconSvg(LogOut, 24)}</button>
@@ -280,6 +280,12 @@ function _buildSquadHeader(state, canManage) {
     </div>
   `;
 
+  card.querySelector('[data-cover-upload]')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    emit(EVENTS.UI_GROUP_COVER_UPLOAD, { groupId: group.id, file });
+    event.target.value = '';
+  });
   card.querySelector('#squad-share')?.addEventListener('click', () => _copyShareLink(group.code));
   card.querySelector('#squad-change')?.addEventListener('click', () => {
     if (!canManage) {
@@ -311,24 +317,15 @@ function _buildRosterCard({ members, groupMember, currentUser }) {
         <span>Role</span>
         <span>Focus Mode</span>
         <span>Status</span>
-        <span>Actions</span>
       </div>
     </div>
     <div class="squad-roster-footer">
-      <strong>${Math.min(members.length, 8)} of ${Math.max(members.length, 14)} shown</strong>
-      <div class="squad-pagination" aria-hidden="true">
-        <span class="squad-page-dot squad-page-dot--muted">‹</span>
-        <span class="squad-page-dot squad-page-dot--active">1</span>
-        <span class="squad-page-number">2</span>
-        <span class="squad-page-number">3</span>
-        <span class="squad-page-number">...</span>
-        <span class="squad-page-number">→</span>
-      </div>
+      <strong>${members.length} ${members.length === 1 ? 'member' : 'members'}</strong>
     </div>
   `;
 
   const table = card.querySelector('.squad-roster-table');
-  members.slice(0, 8).forEach((member) => {
+  members.forEach((member) => {
     const isMe = member.id === groupMember?.id || member.user_id === currentUser?.id;
     table?.appendChild(_buildRosterRow(member, isMe));
   });
@@ -343,7 +340,15 @@ function _buildRosterRow(member, isMe) {
   row.className = 'squad-roster-row';
   row.innerHTML = /* html */`
     <div class="squad-member-cell">
-      ${_avatarMarkup(member, 'squad-member-cell__avatar')}
+      <span class="squad-member-cell__avatar-wrap">
+        ${_avatarMarkup(member, 'squad-member-cell__avatar')}
+        ${isMe ? `
+          <label class="squad-member-avatar-upload" aria-label="Upload your avatar">
+            ${iconSvg(Camera, 13)}
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-avatar-upload>
+          </label>
+        ` : ''}
+      </span>
       <div>
         <strong>${_escapeHtml(member.display_name ?? 'Member')}</strong>
         <span>${_escapeHtml(_memberHandle(member.display_name))}</span>
@@ -356,17 +361,17 @@ function _buildRosterRow(member, isMe) {
     <div class="squad-status-cell">
       ${isMe ? _statusSelectMarkup(member.availability_status) : `<span class="squad-pill squad-pill--${member.availability_status === 'busy' ? 'busy' : 'available'}">${getAvailabilityLabel(member.availability_status)}</span>`}
     </div>
-    <div class="squad-row-actions">
-      <button type="button" aria-label="Message member" data-message>${iconSvg(MessageSquare, 21)}</button>
-      <button type="button" aria-label="More actions" data-more>${iconSvg(MoreVertical, 21)}</button>
-    </div>
   `;
 
-  row.querySelector('[data-message]')?.addEventListener('click', () => {
-    showToast('Direct squad messages are coming soon.', 'info');
-  });
-  row.querySelector('[data-more]')?.addEventListener('click', () => {
-    showToast('Roster actions will open here in the next pass.', 'info');
+  row.querySelector('[data-avatar-upload]')?.addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    emit(EVENTS.UI_GROUP_AVATAR_UPLOAD, {
+      groupId: member.group_id,
+      memberId: member.id,
+      file,
+    });
+    event.target.value = '';
   });
   row.querySelector('[data-focus-select]')?.addEventListener('change', (event) => {
     emit(EVENTS.UI_GROUP_PRESENCE_UPDATE, {
@@ -392,11 +397,15 @@ function _buildVenueCard(state, canManage) {
   card.innerHTML = /* html */`
     <div class="squad-side-card__eyebrow">Current Venue <span>${iconSvg(Coffee, 19)}</span></div>
     <div class="squad-venue-image">
-      ${groupCurrentSpot ? `<img src="${VENUE_IMAGE}" alt="${_escapeHtml(groupCurrentSpot.name)}">` : '<div class="squad-venue-placeholder">No venue yet</div>'}
-      <div class="squad-venue-badges">
-        <span>${iconSvg(Wifi, 13)} High Speed</span>
-        <span>${iconSvg(Volume2, 13)} Quiet</span>
-      </div>
+      ${groupCurrentSpot
+        ? `<div class="squad-venue-placeholder squad-venue-placeholder--active">${iconSvg(Image, 24)} <span>${_escapeHtml(groupCurrentSpot.name)}</span></div>`
+        : `<div class="squad-venue-placeholder">${canManage ? 'Choose a current venue for your squad.' : 'No current venue yet.'}</div>`}
+      ${groupCurrentSpot ? `
+        <div class="squad-venue-badges">
+          <span>${iconSvg(Wifi, 13)} ${_escapeHtml(groupCurrentSpot.wifi_strength ?? 'WiFi')}</span>
+          <span>${iconSvg(Volume2, 13)} ${_escapeHtml(groupCurrentSpot.noise_baseline ?? 'Noise')}</span>
+        </div>
+      ` : ''}
     </div>
     <div class="squad-venue-metric">
       <span>Occupancy</span>
@@ -421,84 +430,68 @@ function _buildVenueCard(state, canManage) {
 
 function _buildMeetupCard(state, canManage) {
   const { group, groupMeetup, groupCurrentSpot } = state;
-  const title = groupMeetup?.title ?? 'Finals Sprint Session';
-  const startsAt = groupMeetup?.starts_at ?? _tomorrowIso();
   const card = document.createElement('section');
-  card.className = 'squad-meetup-card';
+  card.className = `squad-meetup-card${groupMeetup ? '' : ' squad-meetup-card--empty'}`;
   card.innerHTML = /* html */`
     <div class="squad-meetup-card__content">
       <span>Next Meetup</span>
-      <h2>${_escapeHtml(title)}</h2>
-      <p>${iconSvg(Calendar, 15)} ${_escapeHtml(_formatMeetupTime(startsAt))}</p>
-      <button type="button" id="squad-calendar">Add to Calendar</button>
-      ${canManage ? '<button type="button" class="squad-link-button" id="squad-edit-meetup">Edit meetup</button>' : ''}
+      ${groupMeetup ? `
+        <h2>${_escapeHtml(groupMeetup.title)}</h2>
+        <p>${iconSvg(Calendar, 15)} ${_escapeHtml(_formatMeetupTime(groupMeetup.starts_at))}</p>
+        <button type="button" id="squad-calendar">Add to Calendar</button>
+        ${canManage ? `<button type="button" class="squad-link-button" id="squad-edit-meetup">${iconSvg(Pencil, 14)} Edit meetup</button>` : ''}
+      ` : `
+        <h2>No meetup planned</h2>
+        <p>${canManage ? 'Create the next squad session when your plan is ready.' : 'The mayor has not planned the next squad session yet.'}</p>
+        ${canManage ? `<button type="button" id="squad-edit-meetup">${iconSvg(Plus, 16)} Create meetup</button>` : ''}
+      `}
     </div>
   `;
 
   card.querySelector('#squad-calendar')?.addEventListener('click', () => {
     _downloadMeetupIcs({
-      title,
-      starts_at: startsAt,
+      title: groupMeetup.title,
+      starts_at: groupMeetup.starts_at,
       location_label: groupMeetup?.location_label ?? groupCurrentSpot?.name ?? group.name,
     });
   });
   card.querySelector('#squad-edit-meetup')?.addEventListener('click', () => {
-    const nextTitle = window.prompt('Meetup title', title);
-    if (!nextTitle) return;
-    const nextTime = window.prompt('Meetup time', startsAt.slice(0, 16));
-    if (!nextTime) return;
-    emit(EVENTS.UI_GROUP_MEETUP_UPDATE, {
-      groupId: group.id,
-      meetupId: groupMeetup?.id ?? null,
-      title: nextTitle.trim(),
-      startsAt: new Date(nextTime).toISOString(),
-      locationLabel: groupCurrentSpot?.name ?? group.name,
-    });
+    _openMeetupEditor({ group, meetup: groupMeetup, groupCurrentSpot });
   });
   return card;
 }
 
 function _buildPerkCard(state, canManage) {
   const { group, groupPerk } = state;
-  const title = groupPerk?.title ?? '15% Discount on Brews';
-  const code = groupPerk?.code ?? 'PERCH-BARKADA-15';
   const card = document.createElement('section');
-  card.className = 'squad-perk-card';
+  card.className = `squad-perk-card${groupPerk ? '' : ' squad-perk-card--empty'}`;
   card.innerHTML = /* html */`
     <div class="squad-perk-card__head">
       <div>${iconSvg(Tag, 22)} <span>Squad Perks</span></div>
-      <button type="button" id="squad-redeem" aria-label="Mark perk redeemed">${iconSvg(Check, 14)}</button>
+      ${groupPerk ? `<button type="button" id="squad-redeem" aria-label="Mark perk redeemed">${iconSvg(Check, 14)}</button>` : ''}
     </div>
-    <h3>${_escapeHtml(title)}</h3>
-    <button type="button" class="squad-code-copy" id="squad-copy-perk">
-      <span>${_escapeHtml(code)}</span>
-      ${iconSvg(Copy, 15)}
-    </button>
-    ${canManage ? '<button type="button" class="squad-link-button" id="squad-edit-perk">Edit perk</button>' : ''}
+    ${groupPerk ? `
+      <h3>${_escapeHtml(groupPerk.title)}</h3>
+      <button type="button" class="squad-code-copy" id="squad-copy-perk">
+        <span>${_escapeHtml(groupPerk.code)}</span>
+        ${iconSvg(Copy, 15)}
+      </button>
+      ${canManage ? `<button type="button" class="squad-link-button" id="squad-edit-perk">${iconSvg(Pencil, 14)} Edit perk</button>` : ''}
+    ` : `
+      <h3>No squad perk yet</h3>
+      <p>${canManage ? 'Add a real code or discount when one is available.' : 'No active squad perk has been added.'}</p>
+      ${canManage ? `<button type="button" class="squad-code-copy" id="squad-edit-perk">${iconSvg(Plus, 15)} Create perk</button>` : ''}
+    `}
   `;
 
   card.querySelector('#squad-copy-perk')?.addEventListener('click', async () => {
-    await _copyText(code, 'Perk code copied.');
+    await _copyText(groupPerk.code, 'Perk code copied.');
   });
   card.querySelector('#squad-redeem')?.addEventListener('click', () => {
-    if (!groupPerk?.id) {
-      showToast('No saved perk to redeem yet.', 'info');
-      return;
-    }
     emit(EVENTS.UI_GROUP_PERK_REDEEM, { perkId: groupPerk.id });
   });
   card.querySelector('#squad-edit-perk')?.addEventListener('click', () => {
-    const nextTitle = window.prompt('Perk title', title);
-    if (!nextTitle) return;
-    const nextCode = window.prompt('Perk code', code);
-    if (!nextCode) return;
-    emit(EVENTS.UI_GROUP_PERK_UPDATE, {
-      groupId: group.id,
-      perkId: groupPerk?.id ?? null,
-      title: nextTitle.trim(),
-      code: nextCode.trim(),
-      isRedeemed: false,
-    });
+    _openPerkEditor({ group, perk: groupPerk });
   });
   return card;
 }
@@ -550,10 +543,93 @@ function _venueSelectMarkup(currentSpot, spots) {
 }
 
 function _avatarMarkup(member, className) {
-  if (member?.avatar_url) {
-    return `<img class="${className}" src="${_escapeHtml(member.avatar_url)}" alt="">`;
+  const avatarUrl = member?.avatar_image_url || member?.avatar_url;
+  if (avatarUrl) {
+    return `<img class="${className}" src="${_escapeAttr(avatarUrl)}" alt="">`;
   }
   return `<span class="${className}">${_initials(member?.display_name)}</span>`;
+}
+
+function _openMeetupEditor({ group, meetup, groupCurrentSpot }) {
+  const form = document.createElement('form');
+  form.className = 'squad-editor-form';
+  form.innerHTML = /* html */`
+    <label class="page-field">
+      <span class="page-field__label">Title</span>
+      <input class="input" name="title" maxlength="80" value="${_escapeAttr(meetup?.title ?? '')}" placeholder="Final review at the library" required>
+    </label>
+    <label class="page-field">
+      <span class="page-field__label">Starts at</span>
+      <input class="input" name="startsAt" type="datetime-local" value="${_escapeAttr(_datetimeLocalValue(meetup?.starts_at))}" required>
+    </label>
+    <label class="page-field">
+      <span class="page-field__label">Location label</span>
+      <input class="input" name="locationLabel" maxlength="80" value="${_escapeAttr(meetup?.location_label ?? groupCurrentSpot?.name ?? '')}" placeholder="Current venue or meeting place">
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-cancel>Cancel</button>
+      <button type="submit" class="btn btn-primary">${meetup ? 'Save meetup' : 'Create meetup'}</button>
+    </div>
+  `;
+
+  form.querySelector('[data-cancel]')?.addEventListener('click', closeModal);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const title = String(data.get('title') ?? '').trim();
+    const startsAtValue = String(data.get('startsAt') ?? '');
+    if (!title || !startsAtValue) return;
+
+    emit(EVENTS.UI_GROUP_MEETUP_UPDATE, {
+      groupId: group.id,
+      meetupId: meetup?.id ?? null,
+      title,
+      startsAt: new Date(startsAtValue).toISOString(),
+      locationLabel: String(data.get('locationLabel') ?? '').trim() || null,
+    });
+    closeModal();
+  });
+
+  openModalWithElement(form, { title: meetup ? 'Edit Meetup' : 'Create Meetup' });
+}
+
+function _openPerkEditor({ group, perk }) {
+  const form = document.createElement('form');
+  form.className = 'squad-editor-form';
+  form.innerHTML = /* html */`
+    <label class="page-field">
+      <span class="page-field__label">Perk title</span>
+      <input class="input" name="title" maxlength="80" value="${_escapeAttr(perk?.title ?? '')}" placeholder="10% off drinks" required>
+    </label>
+    <label class="page-field">
+      <span class="page-field__label">Code</span>
+      <input class="input" name="code" maxlength="40" value="${_escapeAttr(perk?.code ?? '')}" placeholder="SQUAD-10" required>
+    </label>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" data-cancel>Cancel</button>
+      <button type="submit" class="btn btn-primary">${perk ? 'Save perk' : 'Create perk'}</button>
+    </div>
+  `;
+
+  form.querySelector('[data-cancel]')?.addEventListener('click', closeModal);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const title = String(data.get('title') ?? '').trim();
+    const code = String(data.get('code') ?? '').trim();
+    if (!title || !code) return;
+
+    emit(EVENTS.UI_GROUP_PERK_UPDATE, {
+      groupId: group.id,
+      perkId: perk?.id ?? null,
+      title,
+      code,
+      isRedeemed: false,
+    });
+    closeModal();
+  });
+
+  openModalWithElement(form, { title: perk ? 'Edit Perk' : 'Create Perk' });
 }
 
 function _memberHandle(name) {
@@ -608,15 +684,16 @@ function _formatMeetupTime(value) {
   return `${day}, ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-function _tomorrowIso() {
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  tomorrow.setHours(9, 0, 0, 0);
-  return tomorrow.toISOString();
-}
-
 function _isTomorrow(date) {
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
   return date.toDateString() === tomorrow.toDateString();
+}
+
+function _datetimeLocalValue(value) {
+  const date = value ? new Date(value) : new Date(Date.now() + 60 * 60 * 1000);
+  if (Number.isNaN(date.getTime())) return '';
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
 }
 
 function _initials(name) {
@@ -634,4 +711,8 @@ function _escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function _escapeAttr(value) {
+  return _escapeHtml(value).replace(/'/g, '&#039;');
 }

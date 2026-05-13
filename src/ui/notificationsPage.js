@@ -63,7 +63,6 @@ function _renderNotificationsPage() {
   shell.className = 'page-shell';
   shell.innerHTML = /* html */`
     <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch</p>
       <h1 class="page-shell__title">Activity Inbox</h1>
       <p class="page-shell__subtitle">A single feed for squad movement, claim history, and the review state of spots and buildings you contributed.</p>
     </div>
