@@ -11,14 +11,16 @@
 import {
   ArrowRight,
   Calendar,
+  Camera,
   Check,
   CirclePlus,
   Coffee,
   Copy,
+  Image,
   LogIn,
   LogOut,
-  MessageSquare,
-  MoreVertical,
+  Pencil,
+  Plus,
   Share2,
   ShieldCheck,
   Tag,
@@ -42,11 +44,10 @@ import {
 } from '../state/groupDashboardState.js';
 import { buildGroupJoinUrl, leaveGroup } from '../features/groups.js';
 import { iconSvg } from './icons.js';
-import { openModal } from './modal.js';
+import { closeModal, openModal, openModalWithElement } from './modal.js';
 import { showToast } from './toast.js';
 
 const VIEW_ID = 'view-group';
-const VENUE_IMAGE = '/location-nyor-cafe.png';
 const FOCUS_OPTIONS = [
   'Optimizing SQL',
   'Enhancing UX Design',
@@ -249,13 +250,23 @@ function _buildSquadHeader(state, canManage) {
   const card = document.createElement('section');
   card.className = 'squad-header-card';
   const progressCurrent = group.progress_current ?? groupMembers.length;
-  const progressTarget = group.progress_target ?? 50;
+  const progressTarget = group.progress_target;
   const startedAt = _formatTime(group.started_at ?? group.created_at);
   card.innerHTML = /* html */`
-    <div class="squad-avatar-stack" aria-hidden="true">
-      ${_avatarMarkup(groupMembers[0], 'squad-avatar-stack__face squad-avatar-stack__face--one')}
-      ${_avatarMarkup(groupMembers[1], 'squad-avatar-stack__face squad-avatar-stack__face--two')}
-      ${_avatarMarkup(groupMembers[2], 'squad-avatar-stack__face squad-avatar-stack__face--three')}
+    <div class="squad-cover-stack">
+      ${group.cover_image_url
+        ? `<img class="squad-cover-stack__image" src="${_escapeAttr(group.cover_image_url)}" alt="">`
+        : `<div class="squad-avatar-stack" aria-hidden="true">
+            ${_avatarMarkup(groupMembers[0], 'squad-avatar-stack__face squad-avatar-stack__face--one')}
+            ${_avatarMarkup(groupMembers[1], 'squad-avatar-stack__face squad-avatar-stack__face--two')}
+            ${_avatarMarkup(groupMembers[2], 'squad-avatar-stack__face squad-avatar-stack__face--three')}
+          </div>`}
+      ${canManage ? `
+        <label class="squad-image-upload" aria-label="Upload squad image">
+          ${iconSvg(Camera, 16)}
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" data-cover-upload>
+        </label>
+      ` : ''}
     </div>
     <div class="squad-header-card__copy">
       <h1>${_escapeHtml(group.name)}</h1>
