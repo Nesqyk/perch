@@ -14,10 +14,12 @@ vi.mock('../../src/api/supabaseClient.js', () => {
   const mockSingle = vi.fn();
   const mockEq     = vi.fn().mockReturnThis();
   const mockUpdate = vi.fn().mockReturnThis();
+  const mockUpsert = vi.fn();
   const mockSelect = vi.fn().mockReturnThis();
   const mockFrom   = vi.fn(() => ({
     select: mockSelect,
     update: mockUpdate,
+    upsert: mockUpsert,
     eq:     mockEq,
     single: mockSingle,
   }));
@@ -87,24 +89,43 @@ describe('profile API', () => {
       expect(supabase.from).not.toHaveBeenCalled();
     });
 
-    it('calls update with the correct data', async () => {
-      supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'uid-1' } } });
+    it('upserts the authenticated profile with the correct data', async () => {
+      supabase.auth.getUser.mockResolvedValue({
+        data: {
+          user: {
+            id: 'uid-1',
+            email: 'student@example.com',
+            user_metadata: {},
+          },
+        },
+      });
       const fromResult = supabase.from('user_profiles');
-      fromResult.eq.mockResolvedValue({ error: null });
+      fromResult.upsert.mockResolvedValue({ error: null });
 
       const result = await upsertProfile('NewNickname');
 
       expect(supabase.from).toHaveBeenCalledWith('user_profiles');
-      expect(fromResult.update).toHaveBeenCalledWith({ nickname: 'NewNickname' });
-      expect(fromResult.eq).toHaveBeenCalledWith('user_id', 'uid-1');
+      expect(fromResult.upsert).toHaveBeenCalledWith({
+        user_id: 'uid-1',
+        nickname: 'NewNickname',
+        avatar_url: null,
+      }, { onConflict: 'user_id', ignoreDuplicates: false });
       expect(result.error).toBeNull();
     });
 
     it('returns error message on failure', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      supabase.auth.getUser.mockResolvedValue({ data: { user: { id: 'uid-1' } } });
+      supabase.auth.getUser.mockResolvedValue({
+        data: {
+          user: {
+            id: 'uid-1',
+            email: 'fail@example.com',
+            user_metadata: {},
+          },
+        },
+      });
       const fromResult = supabase.from('user_profiles');
-      fromResult.eq.mockResolvedValue({ error: { message: 'Update failed' } });
+      fromResult.upsert.mockResolvedValue({ error: { message: 'Update failed' } });
 
       const result = await upsertProfile('FailName');
 

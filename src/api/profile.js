@@ -9,17 +9,18 @@
  */
 
 import { supabase } from './supabaseClient.js';
+import { fallbackNameFromEmail } from './auth.js';
 
 /**
  * Fetch the authenticated user's profile row.
  * Returns null when unauthenticated or no profile row exists yet.
  *
- * @returns {Promise<{ user_id: string, nickname: string } | null>}
+ * @returns {Promise<{ user_id: string, nickname: string, avatar_url?: string, cover_image_url?: string, school_label?: string, scholar_label?: string } | null>}
  */
 export async function getProfile() {
   const { data, error } = await supabase
     .from('user_profiles')
-    .select('user_id, nickname')
+    .select('user_id, nickname, avatar_url, cover_image_url, school_label, scholar_label')
     .single();
 
   if (error) {
@@ -51,11 +52,14 @@ export async function upsertProfile(nickname) {
     return { error: 'Not authenticated.' };
   }
 
-  // RLS scopes this UPDATE to auth.uid() automatically.
+  // RLS scopes this UPSERT to auth.uid() automatically.
   const { error } = await supabase
     .from('user_profiles')
-    .update({ nickname })
-    .eq('user_id', user.id);
+    .upsert({
+      user_id: user.id,
+      nickname: nickname || user.user_metadata?.full_name || fallbackNameFromEmail(user.email),
+      avatar_url: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
+    }, { onConflict: 'user_id', ignoreDuplicates: false });
 
   if (error) {
     console.error('[profile] upsertProfile error:', error.message);

@@ -1,13 +1,14 @@
 /**
  * src/api/auth.js
  *
- * Supabase Google OAuth authentication for Perch.
+ * Supabase authentication for Perch.
  *
  * Responsibilities:
  *   1. initAuth() — mount the onAuthStateChange listener that syncs Supabase's
  *      session to the store via dispatch('AUTH_STATE_CHANGED').
  *   2. signInWithGoogle() — trigger the Google OAuth redirect flow.
- *   3. signOut() — sign the user out and clear store auth state.
+ *   3. signInWithEmailOtp() — send a passwordless email sign-in link.
+ *   4. signOut() — sign the user out and clear store auth state.
  *
  * Design constraints:
  *   - This module MUST be initialised before the feature modules so that
@@ -20,6 +21,8 @@
 
 import { supabase }         from './supabaseClient.js';
 import { dispatch }          from '../core/store.js';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +75,36 @@ export async function signInWithGoogle() {
 }
 
 /**
+ * Send a passwordless email sign-in link / OTP.
+ *
+ * Supabase handles creating the user when signup is enabled and then fires
+ * AUTH_STATE_CHANGED after the user returns through the email link.
+ *
+ * @param {string} email
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function signInWithEmailOtp(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!isValidEmail(normalizedEmail)) {
+    return { error: 'Enter a valid email address.' };
+  }
+
+  const { error } = await supabase.auth.signInWithOtp({
+    email: normalizedEmail,
+    options: {
+      emailRedirectTo: _currentRedirectUrl(),
+    },
+  });
+
+  if (error) {
+    console.error('[auth] signInWithEmailOtp error:', error.message);
+    return { error: authErrorMessage(error) };
+  }
+
+  return { error: null };
+}
+
+/**
  * Sign the current user out.
  *
  * Clears the Supabase session from localStorage and triggers
@@ -85,4 +118,74 @@ export async function signOut() {
   if (error) {
     console.error('[auth] signOut error:', error.message);
   }
+}
+
+/**
+ * Trim and lower-case an email address for auth calls.
+ *
+ * @param {string} email
+ * @returns {string}
+ */
+export function normalizeEmail(email) {
+  return String(email ?? '').trim().toLowerCase();
+}
+
+/**
+ * Check whether an email address is syntactically valid enough for sign-in.
+ *
+ * @param {string} email
+ * @returns {boolean}
+ */
+export function isValidEmail(email) {
+  return EMAIL_RE.test(String(email ?? ''));
+}
+
+/**
+ * Derive a readable fallback display name from an email address.
+ *
+ * @param {string | null | undefined} email
+ * @returns {string}
+ */
+export function fallbackNameFromEmail(email) {
+  const localPart = normalizeEmail(email).split('@')[0];
+  if (!localPart) return 'Perch member';
+
+  return localPart
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase()) || 'Perch member';
+}
+
+/**
+ * Convert Supabase auth errors into user-facing copy.
+ *
+ * @param {{ message?: string, status?: number, code?: string } | null | undefined} error
+ * @returns {string}
+ */
+export function authErrorMessage(error) {
+  const message = String(error?.message ?? '').toLowerCase();
+  const status = Number(error?.status ?? 0);
+
+  if (status === 429 || message.includes('rate limit') || message.includes('too many')) {
+    return 'Too many attempts. Please wait a bit before trying again.';
+  }
+  if (message.includes('invalid') && message.includes('email')) {
+    return 'Enter a valid email address.';
+  }
+  if (message.includes('signup') && (message.includes('disabled') || message.includes('not allowed'))) {
+    return 'Email sign-in is not enabled for this project yet.';
+  }
+  if (message.includes('already registered') || message.includes('identity')) {
+    return 'That email is already linked to another sign-in method. Try your existing sign-in option.';
+  }
+  if (message.includes('network') || message.includes('fetch')) {
+    return 'Could not reach Perch auth. Check your connection and try again.';
+  }
+
+  return error?.message || 'Could not send the sign-in link. Please try again.';
+}
+
+function _currentRedirectUrl() {
+  return window.location.origin + window.location.pathname + window.location.hash;
 }

@@ -29,7 +29,7 @@ jwt_expiry = 3600
 enable_signup = true
 
 [auth.email]
-enable_signup = false   # no email auth in Phase 1
+enable_signup = true
 
 [realtime]
 enabled = true
