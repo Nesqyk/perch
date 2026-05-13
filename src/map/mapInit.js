@@ -83,7 +83,7 @@ export function initMap() {
     zoom:               DEFAULT_ZOOM,
     zoomControl:        false,
     attributionControl: false,
-    maxBounds:          defaultBounds.pad(0.3),
+    maxBounds:          defaultBounds.pad(1.2),
     minZoom:            14,
   });
 
@@ -143,7 +143,7 @@ function _onCampusSelected(e) {
     [campus.bounds_ne_lat, campus.bounds_ne_lng],
   );
 
-  _map.setMaxBounds(bounds.pad(0.3));
+  _map.setMaxBounds(bounds.pad(1.2));
   _map.flyToBounds(bounds, {
     padding:   [16, 16],
     maxZoom:   campus.default_zoom + 1,

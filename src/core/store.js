@@ -55,6 +55,15 @@ const _state = {
   },
 
   /**
+   * Persisted settings dashboard data, loaded after authentication.
+   */
+  settingsProfile: null,        // User profile row | null
+  userSettings: null,           // User settings row | null
+  userDevices: [],              // UserDevice[]
+  nextSession: null,            // UserSession | null
+  sharedNote: null,             // UserSharedNote | null
+
+  /**
    * All approved spots fetched from Supabase.
    * Each spot object mirrors the `spots` table row plus its current
    * confidence record merged in at fetch time.
@@ -152,6 +161,21 @@ const _state = {
    * Keyed by member id for fast lookup.
    */
   groupMembers: [],             // GroupMember[]
+
+  /**
+   * Hydrated current venue for the active squad dashboard.
+   */
+  groupCurrentSpot: null,       // Spot | null
+
+  /**
+   * Upcoming persisted meetup for the active squad.
+   */
+  groupMeetup: null,            // GroupMeetup | null
+
+  /**
+   * Active persisted perk for the active squad.
+   */
+  groupPerk: null,              // GroupPerk | null
 
   /**
    * The currently active client-side route.
@@ -328,6 +352,58 @@ export function dispatch(action, payload) {
       break;
     }
 
+    case 'SETTINGS_DASHBOARD_LOADED': {
+      const { profile, settings, devices, nextSession, sharedNote } = payload;
+      _state.settingsProfile = profile ?? null;
+      _state.userSettings = settings ?? null;
+      _state.userDevices = devices ?? [];
+      _state.nextSession = nextSession ?? null;
+      _state.sharedNote = sharedNote ?? null;
+      if (profile?.nickname) {
+        _state.nickname = profile.nickname;
+        emit(EVENTS.NICKNAME_UPDATED, { nickname: _state.nickname });
+      }
+      emit(EVENTS.SETTINGS_DASHBOARD_UPDATED, {
+        profile: _state.settingsProfile,
+        settings: _state.userSettings,
+        devices: _state.userDevices,
+        nextSession: _state.nextSession,
+        sharedNote: _state.sharedNote,
+      });
+      break;
+    }
+
+    case 'USER_SETTINGS_UPDATED': {
+      _state.userSettings = payload.settings ?? null;
+      emit(EVENTS.USER_SETTINGS_UPDATED, { settings: _state.userSettings });
+      break;
+    }
+
+    case 'SETTINGS_PROFILE_UPDATED': {
+      _state.settingsProfile = payload.profile ?? null;
+      if (payload.profile?.nickname) {
+        _state.nickname = payload.profile.nickname;
+        emit(EVENTS.NICKNAME_UPDATED, { nickname: _state.nickname });
+      }
+      emit(EVENTS.SETTINGS_DASHBOARD_UPDATED, {
+        profile: _state.settingsProfile,
+        settings: _state.userSettings,
+        devices: _state.userDevices,
+        nextSession: _state.nextSession,
+        sharedNote: _state.sharedNote,
+      });
+      break;
+    }
+
+    case 'USER_DEVICE_UPSERTED': {
+      const { device } = payload;
+      if (!device) break;
+      const existing = _state.userDevices.filter(item => item.id !== device.id && item.device_key !== device.device_key);
+      _state.userDevices = [device, ...existing].slice(0, 4);
+      emit(EVENTS.USER_DEVICE_UPDATED, { device, devices: _state.userDevices });
+      break;
+    }
+
     // ── Status ───────────────────────────────────────────────────────────────
     case 'SET_STATUS': {
       _state.status = { ..._state.status, ...payload };
@@ -367,7 +443,38 @@ export function dispatch(action, payload) {
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
       _state.groupMembers  = [];
+      _state.groupCurrentSpot = null;
+      _state.groupMeetup = null;
+      _state.groupPerk = null;
       emit(EVENTS.GROUP_JOINED, { group, member });
+      break;
+    }
+
+    case 'GROUP_DASHBOARD_LOADED': {
+      const { group, members, currentSpot, meetup, perk } = payload;
+      if (group) _state.group = group;
+      _state.groupMembers = members ?? [];
+      _state.groupCurrentSpot = currentSpot ?? null;
+      _state.groupMeetup = meetup ?? null;
+      _state.groupPerk = perk ?? null;
+      emit(EVENTS.GROUP_DASHBOARD_UPDATED, {
+        group: _state.group,
+        members: _state.groupMembers,
+        currentSpot: _state.groupCurrentSpot,
+        meetup: _state.groupMeetup,
+        perk: _state.groupPerk,
+      });
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_UPDATED': {
+      if (payload.group) _state.group = payload.group;
+      if ('currentSpot' in payload) _state.groupCurrentSpot = payload.currentSpot;
+      emit(EVENTS.GROUP_UPDATED, {
+        group: _state.group,
+        currentSpot: _state.groupCurrentSpot,
+      });
       break;
     }
 
@@ -378,6 +485,9 @@ export function dispatch(action, payload) {
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
       _state.groupMembers  = [];
+      _state.groupCurrentSpot = null;
+      _state.groupMeetup = null;
+      _state.groupPerk = null;
       emit(EVENTS.GROUP_LEFT, {});
       break;
     }
@@ -391,6 +501,30 @@ export function dispatch(action, payload) {
     case 'GROUP_MEMBERS_UPDATED': {
       _state.groupMembers = payload.members ?? [];
       emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_MEMBER_UPDATED': {
+      const { member } = payload;
+      if (!member) break;
+      const existing = _state.groupMembers.filter(item => item.id !== member.id);
+      _state.groupMembers = [...existing, member];
+      if (_state.groupMember?.id === member.id) {
+        _state.groupMember = { ..._state.groupMember, ...member };
+      }
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_MEETUP_UPDATED': {
+      _state.groupMeetup = payload.meetup ?? null;
+      emit(EVENTS.GROUP_MEETUP_UPDATED, { meetup: _state.groupMeetup });
+      break;
+    }
+
+    case 'GROUP_PERK_UPDATED': {
+      _state.groupPerk = payload.perk ?? null;
+      emit(EVENTS.GROUP_PERK_UPDATED, { perk: _state.groupPerk });
       break;
     }
 
@@ -451,6 +585,13 @@ export function dispatch(action, payload) {
     // ── Auth ────────────────────────────────────────────────────────────────
     case 'AUTH_STATE_CHANGED': {
       _state.currentUser = payload.user ?? null;
+      if (!_state.currentUser) {
+        _state.settingsProfile = null;
+        _state.userSettings = null;
+        _state.userDevices = [];
+        _state.nextSession = null;
+        _state.sharedNote = null;
+      }
       emit(EVENTS.AUTH_STATE_CHANGED, { user: _state.currentUser });
       break;
     }

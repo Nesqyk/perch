@@ -326,6 +326,10 @@ export async function submitSpot({
  * @returns {Promise<{ data: object | null, error: string | null }>}
  */
 export async function createBuilding({ campusId, name, lat, lng }) {
+  if (!campusId) {
+    return { data: null, error: 'Select a campus before adding a building.' };
+  }
+
   const { data, error } = await supabase
     .from('buildings')
     .insert({

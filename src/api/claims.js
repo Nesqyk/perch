@@ -3,7 +3,7 @@
  *
  * Read and write operations for the `claims` table.
  *
- * All writes require the user to be authenticated (Google OAuth via Supabase).
+ * All writes require the user to be authenticated through Supabase Auth.
  * The database enforces ownership via auth.uid() in RLS policies — the client
  * never needs to pass a session or user id manually.
  *
