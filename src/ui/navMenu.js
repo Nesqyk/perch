@@ -194,13 +194,15 @@ function _syncActiveState(route) {
 function _syncNavVisibility(isAuthenticated) {
   const rail = document.getElementById('nav-rail');
   const bottom = document.getElementById('nav-bottom');
+  const route = getState().currentRoute;
 
   rail?.toggleAttribute('hidden', !isAuthenticated);
   bottom?.toggleAttribute('hidden', !isAuthenticated);
+  _syncPageViews(route);
 
   if (isAuthenticated) {
     document.body.dataset.nav = 'ready';
-    _syncActiveState(getState().currentRoute);
+    _syncActiveState(route);
     return;
   }
 

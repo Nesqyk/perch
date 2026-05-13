@@ -58,7 +58,7 @@ import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode, initRoute
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-import { initAuth }          from './api/auth.js';
+import { fallbackNameFromEmail, initAuth } from './api/auth.js';
 
 import { loadGoogleMaps }          from './map/mapLoader.js';
 import { initMap, clearClickMarker } from './map/mapInit.js';
@@ -69,7 +69,7 @@ import { initMapControls }             from './map/mapControls.js';
 
 import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
-import { getProfile }        from './api/profile.js';
+import { getProfile, upsertProfile } from './api/profile.js';
 import { fetchCampuses, fetchBuildings } from './api/campuses.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
@@ -81,6 +81,7 @@ import { initReportFull }       from './features/reportFull.js';
 import { initGroups }           from './features/groups.js';
 import { initGroupPins }        from './features/groupPins.js';
 import { initCampus }           from './features/campus.js';
+import { initSettingsFeature }  from './features/settings.js';
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 
@@ -90,7 +91,7 @@ import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
 import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
 import { initBuildingPanel, openBuildingPanel } from './ui/buildingPanel.js';
-import { initNavMenu }     from './ui/navMenu.js';
+import { initDashboardShell } from './ui/dashboardShell.js';
 import { initAuthModal }   from './ui/authModal.js';
 import { initProfilePage } from './ui/profilePage.js';
 import { initGroupPage }   from './ui/groupPage.js';
@@ -114,16 +115,17 @@ async function boot() {
   // ── 3. Mount Auth ────────────────────────────────────────────────────────────
   // initialises onAuthStateChange that syncs currentUser to store.
   initAuth();
+  initSettingsFeature();
 
   // ── 3.5 UI Header + Router + Nav shell + AuthModal ─────────────────────────
   initAuthModal();
 
-  // initRouter MUST come before initNavMenu so the hashchange listener is
-  // active when initNavMenu fires its first syncActiveState call.
+  // initRouter MUST come before initDashboardShell so the route state is ready
+  // when the shell performs its first visibility sync.
   initRouter((route) => {
     dispatch('ROUTE_CHANGED', { route });
   });
-  initNavMenu();
+  initDashboardShell();
 
   // ── 3.7 & 3.8 Route-level page views ────────────────────────────────────────
   // Mounted early — before async data — so views render immediately on navigation.
@@ -143,7 +145,15 @@ async function boot() {
     const profile = await getProfile();
     if (profile?.nickname) {
       dispatch('SET_NICKNAME', profile.nickname);
+      return;
     }
+
+    const fallbackName = e.detail.user.user_metadata?.full_name || fallbackNameFromEmail(e.detail.user.email);
+    const { error } = await upsertProfile(fallbackName);
+    if (error) {
+      console.warn('[main] Could not create profile fallback:', error);
+    }
+    dispatch('SET_NICKNAME', fallbackName);
   });
 
   // ── 4 & 5. URL params → restore filters + selected spot ──────────────────────

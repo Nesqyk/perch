@@ -147,7 +147,7 @@ function _buildBuildingCard(campus, overview) {
       dispatch('CAMPUS_SELECTED', { campusId: campus.id });
       navigateTo('/');
       history.replaceState(null, '', `${window.location.pathname}?campus=${encodeURIComponent(campus.id)}&building=${encodeURIComponent(button.dataset.campusBuilding)}#/`);
-      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      window.dispatchEvent(new window.Event('hashchange'));
     });
   });
 
