@@ -82,6 +82,266 @@
   color:      var(--color-text);
 }
 
+.spot-card__header--featured {
+  padding: var(--space-6) var(--space-6) var(--space-3);
+  border-bottom: none;
+}
+
+.spot-card__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--spot-feature-accent, var(--color-brand)) 14%, transparent);
+  color: var(--spot-feature-accent-strong, var(--color-green-700));
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------
+   Featured full-detail layout
+   ------------------------------------------------------------------ */
+
+.spot-card--featured {
+  --spot-feature-accent: var(--color-brand);
+  --spot-feature-accent-strong: var(--color-green-700);
+  --spot-feature-accent-soft: var(--color-brand-light);
+  --spot-feature-accent-contrast: var(--color-white);
+}
+
+.spot-card__scrollable--featured {
+  padding: 0 var(--space-6) var(--space-6);
+  gap: var(--space-5);
+}
+
+.spot-card__featured-shell {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.spot-card__featured-visual {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 360px;
+  padding: var(--space-6);
+  border-radius: 28px;
+  overflow: hidden;
+  background:
+    linear-gradient(155deg, color-mix(in srgb, var(--spot-feature-accent-soft) 88%, var(--color-white)) 0%, color-mix(in srgb, var(--spot-feature-accent) 18%, var(--color-white)) 100%);
+  border: 1px solid color-mix(in srgb, var(--spot-feature-accent) 18%, var(--color-border));
+  box-shadow: var(--shadow-md);
+}
+
+.spot-card__featured-glow,
+.spot-card__featured-pattern {
+  position: absolute;
+  inset: auto;
+  pointer-events: none;
+}
+
+.spot-card__featured-glow {
+  width: 240px;
+  height: 240px;
+  right: -64px;
+  top: -52px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--spot-feature-accent) 24%, transparent);
+  filter: blur(8px);
+}
+
+.spot-card__featured-pattern {
+  inset: 0;
+  background-image:
+    linear-gradient(135deg, color-mix(in srgb, var(--spot-feature-accent-strong) 6%, transparent) 25%, transparent 25%),
+    linear-gradient(225deg, color-mix(in srgb, var(--spot-feature-accent-strong) 6%, transparent) 25%, transparent 25%);
+  background-size: 28px 28px;
+  opacity: 0.55;
+}
+
+.spot-card__featured-badges,
+.spot-card__featured-title-wrap,
+.spot-card__featured-stat-stack {
+  position: relative;
+  z-index: 1;
+}
+
+.spot-card__featured-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.spot-card__featured-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--spot-feature-accent-contrast) 84%, transparent);
+  color: var(--spot-feature-accent-strong);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.spot-card__featured-title-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 28rem;
+}
+
+.spot-card__featured-title {
+  font-size: clamp(1.8rem, 4vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+
+.spot-card__featured-copy {
+  font-size: var(--text-base);
+  color: color-mix(in srgb, var(--color-text) 80%, var(--color-text-muted));
+}
+
+.spot-card__featured-stat-stack {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.spot-card__featured-stat {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-white) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--spot-feature-accent) 16%, transparent);
+}
+
+.spot-card__featured-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--spot-feature-accent) 16%, transparent);
+  color: var(--spot-feature-accent-strong);
+}
+
+.spot-card__featured-stat-label,
+.spot-card__featured-stat-value {
+  display: block;
+}
+
+.spot-card__featured-stat-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.spot-card__featured-stat-value {
+  margin-top: 2px;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.spot-card__featured-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.spot-card__featured-amenity-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.spot-card__amenity-tile {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0 var(--space-2);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-white) 92%, var(--spot-feature-accent-soft));
+}
+
+.spot-card__amenity-tile--muted {
+  opacity: 0.72;
+}
+
+.spot-card__amenity-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--spot-feature-accent) 12%, transparent);
+  color: var(--spot-feature-accent-strong);
+  grid-row: span 2;
+}
+
+.spot-card__amenity-tile-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.spot-card__amenity-tile-value {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.spot-card__featured-panel-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.spot-card__featured-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: 24px;
+  border: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-white) 94%, var(--spot-feature-accent-soft));
+}
+
+.spot-card__panel-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.spot-card__panel-value {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.spot-card__panel-copy {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
 /* ------------------------------------------------------------------
    Status chips row
    ------------------------------------------------------------------ */
@@ -210,6 +470,10 @@
   display:     flex;
   align-items: stretch;
   gap:         var(--space-2);
+}
+
+.spot-card--featured .spot-card__actions {
+  margin-top: var(--space-1);
 }
 
 .spot-card__action-claim  { flex: 3; }
@@ -811,6 +1075,10 @@
   flex-direction:   column;
 }
 
+.modal-box--spot-featured {
+  max-width: 860px;
+}
+
 /* ------------------------------------------------------------------
    Scrollable inner region — everything below the sticky header
    ------------------------------------------------------------------ */
@@ -833,4 +1101,42 @@
 .spot-card__scrollable::-webkit-scrollbar-thumb  {
   background-color: var(--color-gray-200);
   border-radius:    2px;
+}
+
+@media (min-width: 768px) {
+  .spot-card__featured-shell {
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+    align-items: stretch;
+  }
+
+  .spot-card__featured-visual {
+    min-height: 560px;
+  }
+
+  .spot-card__featured-panel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .spot-card__featured-panel--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .spot-card__header--featured {
+    padding: var(--space-5) var(--space-5) var(--space-3);
+  }
+
+  .spot-card__scrollable--featured {
+    padding: 0 var(--space-5) var(--space-5);
+  }
+
+  .spot-card__featured-visual {
+    min-height: 300px;
+    padding: var(--space-5);
+  }
+
+  .spot-card__featured-amenity-rail {
+    grid-template-columns: 1fr;
+  }
 }
