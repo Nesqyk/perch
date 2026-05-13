@@ -1,22 +1,36 @@
 /**
  * src/ui/sharedSpotPage.js
  *
- * Route-level shared spot destination for #/spot.
+ * Route-level public spot detail page for #/spot.
  *
- * This page is the deep-linkable version of a single Perch spot so a copied
- * share URL can open a focused summary before the user jumps into the live map.
+ * This is the deep-linkable, full-detail presentation of one Perch location.
+ * The route keeps the existing ?spot=<uuid>#/spot shape while curated metadata
+ * fills fields that are not yet stored in Supabase.
  */
 
-import { Clock3, LogIn, MapPinned, Navigation, Share2, Sparkles, Users, Wifi } from 'lucide';
+import {
+  ArrowLeft,
+  Clock,
+  LogIn,
+  MapPin,
+  PlugZap,
+  Share2,
+  TrendingUp,
+  UserRound,
+  Users,
+  Utensils,
+  Volume2,
+  Wifi,
+} from 'lucide';
 
 import { emit, on, EVENTS } from '../core/events.js';
-import { dispatch, getState } from '../core/store.js';
+import { getState } from '../core/store.js';
 import { buildSpotShareUrl, navigateTo, readUrlParams } from '../core/router.js';
-import { formatConfidence } from '../utils/confidence.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
-import { timeAgo } from '../utils/time.js';
+import { formatConfidence } from '../utils/confidence.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 import { iconSvg } from './icons.js';
+import { getSharedSpotDetail } from './sharedSpotDetails.js';
 import { showToast } from './toast.js';
 
 const VIEW_ID = 'view-spot';
@@ -35,6 +49,7 @@ export function initSharedSpotPage() {
   on(EVENTS.CLAIM_REMOVED, rerender);
   on(EVENTS.CAMPUSES_LOADED, rerender);
   on(EVENTS.AUTH_STATE_CHANGED, rerender);
+  on(EVENTS.NICKNAME_UPDATED, rerender);
 
   _renderSharedSpotPage();
 }
@@ -43,14 +58,14 @@ function _renderSharedSpotPage() {
   const view = document.getElementById(VIEW_ID);
   if (!view) return;
 
-  const { currentRoute, spots, campuses, confidence, claims, currentUser, status } = getState();
+  const { currentRoute, spots, campuses, confidence, claims, currentUser, nickname, status } = getState();
   const { selectedSpotId } = readUrlParams();
 
   view.innerHTML = '';
   if (currentRoute !== '/spot') return;
 
   const shell = document.createElement('div');
-  shell.className = 'page-shell';
+  shell.className = 'shared-location-page';
 
   if (!selectedSpotId) {
     shell.appendChild(_buildEmptyState('No shared spot selected yet.', 'Open a Perch share link with a spot id to see the location summary here.'));
@@ -61,7 +76,7 @@ function _renderSharedSpotPage() {
   const spot = spots.find((entry) => entry.id === selectedSpotId) ?? null;
   if (!spot) {
     if (status.spotsLoading) {
-      shell.appendChild(_buildEmptyState('Loading shared spot.', 'Pulling the latest spot availability, walk time, and live claim data.'));
+      shell.appendChild(_buildEmptyState('Loading shared spot.', 'Pulling the latest availability, walk time, and live claim data.'));
     } else {
       shell.appendChild(_buildEmptyState('That shared spot is unavailable.', 'It may have been removed or is not active anymore. Try returning to the map and choosing another spot.'));
     }
@@ -74,141 +89,160 @@ function _renderSharedSpotPage() {
   const confDisplay = formatConfidence(confidence[spot.id]?.score);
   const capacity = calcRemainingCapacity(spot.rough_capacity, spotClaims);
   const campus = campuses.find((entry) => entry.id === spot.campus_id) ?? null;
+  const detail = getSharedSpotDetail(spot);
 
-  shell.innerHTML = /* html */`
-    <div class="page-shell__header">
-      <p class="page-shell__eyebrow">Perch shared spot</p>
-      <h1 class="page-shell__title">${_escapeHtml(spot.name)}</h1>
-      <p class="page-shell__subtitle">${_escapeHtml(_subtitle(spot, campus))}</p>
-    </div>
-  `;
+  shell.appendChild(_buildTopBar(currentUser, nickname));
 
-  shell.appendChild(_buildHeroCard(spot, campus, statusKey, confDisplay, capacity, spotClaims.length, currentUser));
-
-  const grid = document.createElement('div');
-  grid.className = 'page-grid page-grid--two shared-spot-page__grid';
-  grid.appendChild(_buildFactsCard(spot, confDisplay, capacity, spotClaims));
-  grid.appendChild(_buildAmenitiesCard(spot, statusKey, confDisplay, spotClaims));
-  shell.appendChild(grid);
+  const layout = document.createElement('div');
+  layout.className = 'shared-location-page__layout';
+  layout.appendChild(_buildHeroPhoto(spot, detail, capacity));
+  layout.appendChild(_buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClaims, currentUser));
+  shell.appendChild(layout);
 
   view.appendChild(shell);
 }
 
-function _buildHeroCard(spot, campus, statusKey, confDisplay, capacity, claimCount, currentUser) {
-  const card = document.createElement('section');
-  card.className = 'page-card page-card--hero';
-  card.innerHTML = /* html */`
-    <div class="shared-spot-page__hero-head">
-      <div>
-        <div class="page-card__eyebrow">Live status</div>
-        <h2 class="page-card__title">${_escapeHtml(confDisplay.label)}</h2>
-        <p class="page-card__copy">${_escapeHtml(campus?.name || 'Campus location')} • ${claimCount} active claim${claimCount === 1 ? '' : 's'} right now</p>
-      </div>
-      <div class="settings-page__cta-row">
-        <button type="button" class="btn btn-primary" id="shared-spot-open-map">${iconSvg(MapPinned, 16)} Open in live map</button>
-        <button type="button" class="btn btn-ghost" id="shared-spot-copy-link">${iconSvg(Share2, 16)} Copy share link</button>
-      </div>
-    </div>
-    <div class="shared-spot-page__stats">
-      ${_statMarkup('Confidence', `${confDisplay.percent}%`)}
-      ${_statMarkup('Walk time', spot.walk_time_min ? `${spot.walk_time_min} min` : 'Unknown')}
-      ${_statMarkup('Capacity', capacity.remaining === null ? 'Unknown' : `${capacity.remaining} left`)}
-      ${_statMarkup('Status', _capitalize(statusKey))}
-    </div>
-    <div class="settings-page__cta-row">
-      ${currentUser
-        ? `<button type="button" class="btn btn-primary" id="shared-spot-claim">${iconSvg(Sparkles, 16)} I'm going here</button>`
-        : `<button type="button" class="btn btn-primary" id="shared-spot-login">${iconSvg(LogIn, 16)} Sign in to claim</button>`}
-      <button type="button" class="btn btn-ghost" id="shared-spot-back">Back to map</button>
-    </div>
+function _buildTopBar(currentUser, nickname) {
+  const topBar = document.createElement('div');
+  topBar.className = 'shared-location-page__topbar';
+  topBar.innerHTML = /* html */`
+    <button type="button" class="shared-location-page__circle-btn" id="shared-spot-back" aria-label="Back to map">
+      ${iconSvg(ArrowLeft, 24)}
+    </button>
+    <button type="button" class="shared-location-page__avatar-btn" id="shared-spot-profile" aria-label="${currentUser ? 'Open profile' : 'Sign in'}">
+      ${currentUser ? _escapeHtml(_initials(nickname || currentUser.email || 'Me')) : iconSvg(UserRound, 22)}
+    </button>
   `;
 
-  card.querySelector('#shared-spot-open-map')?.addEventListener('click', () => _openInMap(spot.id, spot.campus_id));
-  card.querySelector('#shared-spot-copy-link')?.addEventListener('click', async () => {
-    const url = buildSpotShareUrl(spot.id);
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast('Spot link copied!', 'success');
-    } catch {
-      showToast(`Share this link: ${url}`, 'success');
+  topBar.querySelector('#shared-spot-back')?.addEventListener('click', () => navigateTo('/'));
+  topBar.querySelector('#shared-spot-profile')?.addEventListener('click', () => {
+    if (currentUser) {
+      navigateTo('/profile');
+      return;
     }
+    emit(EVENTS.UI_LOGIN_REQUESTED, {});
   });
-  card.querySelector('#shared-spot-claim')?.addEventListener('click', () => emit(EVENTS.UI_CLAIM_REQUESTED, { spotId: spot.id }));
-  card.querySelector('#shared-spot-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
-  card.querySelector('#shared-spot-back')?.addEventListener('click', () => navigateTo('/'));
+
+  return topBar;
+}
+
+function _buildHeroPhoto(spot, detail, capacity) {
+  const figure = document.createElement('section');
+  figure.className = 'shared-location-hero';
+  figure.setAttribute('aria-label', `${spot.name} photo and quick details`);
+  figure.innerHTML = /* html */`
+    <img class="shared-location-hero__image" src="${_escapeHtml(detail.heroImage)}" alt="${_escapeHtml(spot.name)}" />
+    <div class="shared-location-hero__facts" aria-label="Location quick facts">
+      ${_quickFact('Hours', detail.hoursLabel, iconSvg(Clock, 20))}
+      ${_quickFact('Popularity', detail.popularityLabel, iconSvg(TrendingUp, 20))}
+      ${_quickFact('Capacity', detail.capacityLabel || capacity.label, iconSvg(Users, 20))}
+    </div>
+  `;
+  return figure;
+}
+
+function _buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClaims, currentUser) {
+  const column = document.createElement('section');
+  column.className = 'shared-location-detail';
+  column.appendChild(_buildSummaryCard(spot, detail, statusKey, confDisplay));
+  column.appendChild(_buildMapCard(spot, campus, detail));
+  column.appendChild(_buildActivityCard(detail, spotClaims));
+  column.appendChild(_buildActionRow(spot, currentUser));
+  return column;
+}
+
+function _buildSummaryCard(spot, detail, statusKey, confDisplay) {
+  const card = document.createElement('section');
+  card.className = 'shared-location-card shared-location-card--summary';
+  card.innerHTML = /* html */`
+    <div class="shared-location-card__head">
+      <h1 class="shared-location-card__title">${_escapeHtml(spot.name)}</h1>
+      <div class="shared-location-badges">
+        ${detail.badges.map((badge) => _badgeMarkup(badge, statusKey)).join('')}
+      </div>
+    </div>
+    <div class="shared-location-card__rule"></div>
+    <div class="shared-location-amenities" aria-label="Amenities">
+      ${_amenityMarkup('Free WiFi', _hasWifi(spot), iconSvg(Wifi, 20))}
+      ${_amenityMarkup('Power Outlets', Boolean(spot.has_outlets), iconSvg(PlugZap, 20))}
+      ${_amenityMarkup('Food & Drinks', Boolean(spot.has_food), iconSvg(Utensils, 20))}
+      ${_amenityMarkup(_noiseLabel(spot.noise_baseline), spot.noise_baseline === 'quiet', iconSvg(Volume2, 20))}
+    </div>
+    <p class="shared-location-card__confidence">${_escapeHtml(`${confDisplay.label} with ${confDisplay.percent}% confidence`)}</p>
+  `;
   return card;
 }
 
-function _buildFactsCard(spot, confDisplay, capacity, spotClaims) {
-  const latestClaim = spotClaims.reduce((latest, claim) => {
-    const claimedAt = new Date(claim.claimed_at).getTime();
-    return claimedAt > latest ? claimedAt : latest;
-  }, 0);
-
+function _buildMapCard(spot, campus, detail) {
   const card = document.createElement('section');
-  card.className = 'page-card';
+  card.className = 'shared-location-card shared-location-card--map';
   card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Why this page matters</div>
-    <h2 class="page-card__title page-card__title--sm">Quick decision info</h2>
-    <div class="shared-spot-page__fact-list">
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Clock3, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Latest live signal</span>
-          <span class="profile-meta__copy">${latestClaim ? `Someone reported this free ${timeAgo(new Date(latestClaim).toISOString())}.` : 'No active claim timing signal yet.'}</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Users, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Estimated remaining capacity</span>
-          <span class="profile-meta__copy">${_escapeHtml(capacity.label)}</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Navigation, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Location context</span>
-          <span class="profile-meta__copy">${_escapeHtml([spot.floor || null, spot.building || null].filter(Boolean).join(' • ') || 'Campus spot')}</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Sparkles, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Confidence read</span>
-          <span class="profile-meta__copy">${_escapeHtml(`${confDisplay.label} with ${confDisplay.percent}% confidence.`)}</span>
-        </div>
-      </div>
+    <div class="shared-location-map" aria-label="Map preview">
+      <span class="shared-location-map__street shared-location-map__street--one"></span>
+      <span class="shared-location-map__street shared-location-map__street--two"></span>
+      <span class="shared-location-map__street shared-location-map__street--three"></span>
+      <span class="shared-location-map__block shared-location-map__block--one"></span>
+      <span class="shared-location-map__block shared-location-map__block--two"></span>
+      <span class="shared-location-map__block shared-location-map__block--three"></span>
+      <span class="shared-location-map__label shared-location-map__label--campus">${_escapeHtml(campus?.short_name || campus?.name || 'Campus')}</span>
+      <span class="shared-location-map__label shared-location-map__label--spot">${_escapeHtml(spot.name)}</span>
+      <span class="shared-location-map__pin">${iconSvg(MapPin, 20)}</span>
+    </div>
+    <div class="shared-location-address">
+      <p class="shared-location-address__main">${_escapeHtml(detail.address)}</p>
+      <p class="shared-location-address__sub">${_escapeHtml(detail.walkLabel)}</p>
     </div>
   `;
   return card;
 }
 
-function _buildAmenitiesCard(spot, statusKey, confDisplay, spotClaims) {
+function _buildActivityCard(detail, spotClaims) {
+  const activity = spotClaims.slice(0, 3).map((claim, index) => ({
+    name: `Visitor ${index + 1}`,
+    initials: `V${index + 1}`,
+    meta: 'Checked in just now',
+    tag: _groupSizeLabel(claim.group_size_key),
+  }));
+  const rows = activity.length ? activity : detail.activity;
+
   const card = document.createElement('section');
-  card.className = 'page-card page-card--subtle';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Amenities</div>
-    <h2 class="page-card__title page-card__title--sm">What you can expect here</h2>
-    <div class="shared-spot-page__amenity-grid">
-      ${_amenityCard('WiFi', spot.wifi_strength && spot.wifi_strength !== 'none' ? 'Available' : 'Unknown', iconSvg(Wifi, 16))}
-      ${_amenityCard('Outlets', spot.has_outlets ? 'Likely available' : 'Not confirmed', iconSvg(Sparkles, 16))}
-      ${_amenityCard('Noise', _noiseLabel(spot.noise_baseline), iconSvg(Share2, 16))}
-      ${_amenityCard('Food nearby', spot.has_food ? 'Yes' : 'No signal yet', iconSvg(MapPinned, 16))}
+  card.className = 'shared-location-card shared-location-card--activity';
+  card.innerHTML = rows.map((row) => /* html */`
+    <div class="shared-location-activity-row">
+      <span class="shared-location-activity-row__avatar">${_escapeHtml(row.initials)}</span>
+      <span class="shared-location-activity-row__body">
+        <span class="shared-location-activity-row__name">${_escapeHtml(row.name)}</span>
+        <span class="shared-location-activity-row__meta">${_escapeHtml(row.meta)}</span>
+      </span>
+      <span class="shared-location-activity-row__tag">${_escapeHtml(row.tag)}</span>
     </div>
-    <div class="shared-spot-page__status-panel shared-spot-page__status-panel--${statusKey}">
-      <span class="shared-spot-page__status-title">Current call</span>
-      <span class="shared-spot-page__status-copy">${_escapeHtml(`${confDisplay.label}. ${spotClaims.length} active claim${spotClaims.length === 1 ? '' : 's'} are attached to this space.`)}</span>
-    </div>
-  `;
+  `).join('');
   return card;
+}
+
+function _buildActionRow(spot, currentUser) {
+  const row = document.createElement('div');
+  row.className = 'shared-location-actions';
+  row.innerHTML = /* html */`
+    ${currentUser
+      ? `<button type="button" class="shared-location-actions__claim" id="shared-spot-claim">Claim Spot</button>`
+      : `<button type="button" class="shared-location-actions__claim" id="shared-spot-login">${iconSvg(LogIn, 18)} Sign in to Claim</button>`}
+    <button type="button" class="shared-location-actions__share" id="shared-spot-copy-link">
+      ${iconSvg(Share2, 18)} <span>Share Link to Group Chat</span>
+    </button>
+  `;
+
+  row.querySelector('#shared-spot-claim')?.addEventListener('click', () => emit(EVENTS.UI_CLAIM_REQUESTED, { spotId: spot.id }));
+  row.querySelector('#shared-spot-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
+  row.querySelector('#shared-spot-copy-link')?.addEventListener('click', () => _copySpotLink(spot.id));
+  return row;
 }
 
 function _buildEmptyState(title, copy) {
   const card = document.createElement('section');
-  card.className = 'page-card page-card--empty';
+  card.className = 'page-card page-card--empty shared-location-page__empty';
   card.innerHTML = /* html */`
-    <div class="page-empty__icon">${iconSvg(MapPinned, 28)}</div>
+    <div class="page-empty__icon">${iconSvg(MapPin, 28)}</div>
     <h2 class="page-empty__title">${_escapeHtml(title)}</h2>
     <p class="page-empty__copy">${_escapeHtml(copy)}</p>
     <button type="button" class="btn btn-primary" id="shared-spot-empty-back">Back to map</button>
@@ -217,45 +251,73 @@ function _buildEmptyState(title, copy) {
   return card;
 }
 
-function _amenityCard(label, value, icon) {
+function _quickFact(label, value, icon) {
   return /* html */`
-    <div class="shared-spot-page__amenity-card">
-      <span class="shared-spot-page__amenity-icon">${icon}</span>
-      <span class="shared-spot-page__amenity-label">${_escapeHtml(label)}</span>
-      <span class="shared-spot-page__amenity-value">${_escapeHtml(value)}</span>
+    <div class="shared-location-hero__fact">
+      <span class="shared-location-hero__fact-icon">${icon}</span>
+      <span class="shared-location-hero__fact-body">
+        <span class="shared-location-hero__fact-label">${_escapeHtml(label)}</span>
+        <span class="shared-location-hero__fact-value">${_escapeHtml(value)}</span>
+      </span>
     </div>
   `;
 }
 
-function _subtitle(spot, campus) {
-  return [spot.floor || null, spot.building || null, campus?.name || null].filter(Boolean).join(' • ') || 'Shared Perch location';
+function _badgeMarkup(label, statusKey) {
+  const modifier = statusKey === 'free' && label.toLowerCase() === 'free' ? 'free' : 'warm';
+  return /* html */`<span class="shared-location-badges__pill shared-location-badges__pill--${modifier}">${_escapeHtml(label)}</span>`;
 }
 
-function _statMarkup(label, value) {
+function _amenityMarkup(label, isActive, icon) {
   return /* html */`
-    <div class="group-stat">
-      <span class="group-stat__value">${_escapeHtml(value)}</span>
-      <span class="group-stat__label">${_escapeHtml(label)}</span>
-    </div>
+    <span class="shared-location-amenities__item${isActive ? ' shared-location-amenities__item--active' : ''}">
+      <span class="shared-location-amenities__icon">${icon}</span>
+      <span>${_escapeHtml(label)}</span>
+    </span>
   `;
+}
+
+async function _copySpotLink(spotId) {
+  const url = buildSpotShareUrl(spotId);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Spot link copied!', 'success');
+  } catch {
+    showToast(`Share this link: ${url}`, 'success');
+  }
+}
+
+function _hasWifi(spot) {
+  return Boolean(spot.wifi_strength && spot.wifi_strength !== 'none');
 }
 
 function _noiseLabel(value) {
-  if (!value) return 'Unknown';
-  return _capitalize(String(value));
+  const map = {
+    quiet: 'Semi-Quiet',
+    moderate: 'Moderate',
+    loud: 'Lively',
+  };
+  return map[value] ?? 'Noise Unknown';
 }
 
-function _capitalize(value) {
-  const text = String(value ?? '');
-  return text ? `${text[0].toUpperCase()}${text.slice(1)}` : '';
+function _groupSizeLabel(value) {
+  const map = {
+    solo: 'Solo',
+    small: 'Small group',
+    medium: 'Group',
+    large: 'Large group',
+  };
+  return map[value] ?? 'Studying';
 }
 
-function _openInMap(spotId, campusId) {
-  if (campusId) {
-    dispatch('CAMPUS_SELECTED', { campusId });
-  }
-  navigateTo('/');
-  dispatch('SELECT_SPOT', { spotId, navigate: true });
+function _initials(value) {
+  return String(value)
+    .trim()
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('') || 'ME';
 }
 
 function _escapeHtml(value) {
