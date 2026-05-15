@@ -30,6 +30,7 @@ import { buildSpotShareUrl, navigateTo, readUrlParams } from '../core/router.js'
 import { calcRemainingCapacity } from '../utils/capacity.js';
 import { formatConfidence } from '../utils/confidence.js';
 import { attachSpotImage, fetchSpots, uploadSpotImage } from '../api/spots.js';
+import { deriveSpotActivityRows } from '../state/spotActivityState.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 import { iconSvg } from './icons.js';
 import { getSharedSpotDetail } from './sharedSpotDetails.js';
@@ -172,7 +173,7 @@ function _buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClai
   column.appendChild(_buildAvailabilitySection(spot));
   column.appendChild(_buildActionRow(spot, currentUser));
   column.appendChild(_buildMapCard(spot, campus, detail));
-  column.appendChild(_buildActivityCard(detail, spotClaims));
+  column.appendChild(_buildActivityCard(spotClaims, currentUser));
   return column;
 }
 
@@ -241,15 +242,8 @@ function _buildMapCard(spot, campus, detail) {
   return card;
 }
 
-function _buildActivityCard(detail, spotClaims) {
-  const activity = spotClaims.slice(0, 3).map((claim, index) => ({
-    name: `Visitor ${index + 1}`,
-    initials: `V${index + 1}`,
-    meta: 'Checked in just now',
-    tag: _groupSizeLabel(claim.group_size_key),
-  }));
-  const rows = activity.length ? activity : detail.activity;
-
+function _buildActivityCard(spotClaims, currentUser) {
+  const rows = deriveSpotActivityRows({ claims: spotClaims, currentUserId: currentUser?.id });
   const card = document.createElement('section');
   card.className = 'shared-location-card shared-location-card--activity';
   card.innerHTML = /* html */`
@@ -260,16 +254,18 @@ function _buildActivityCard(detail, spotClaims) {
       </div>
     </div>
     <div class="shared-location-activity-list">
-      ${rows.map((row) => /* html */`
-        <div class="shared-location-activity-row">
-          <span class="shared-location-activity-row__avatar">${_escapeHtml(row.initials)}</span>
-          <span class="shared-location-activity-row__body">
-            <span class="shared-location-activity-row__name">${_escapeHtml(row.name)}</span>
-            <span class="shared-location-activity-row__meta">${_escapeHtml(row.meta)}</span>
-          </span>
-          <span class="shared-location-activity-row__tag">${_escapeHtml(row.tag)}</span>
-        </div>
-      `).join('')}
+      ${rows.length
+        ? rows.map((row) => /* html */`
+          <div class="shared-location-activity-row">
+            <span class="shared-location-activity-row__avatar">${_escapeHtml(row.initials)}</span>
+            <span class="shared-location-activity-row__body">
+              <span class="shared-location-activity-row__name">${_escapeHtml(row.name)}</span>
+              <span class="shared-location-activity-row__meta">${_escapeHtml(row.meta)}</span>
+            </span>
+            <span class="shared-location-activity-row__tag">${_escapeHtml(row.tag)}</span>
+          </div>
+        `).join('')
+        : '<p class="page-empty-inline">No live check-ins yet.</p>'}
     </div>
   `;
   return card;
@@ -416,16 +412,6 @@ function _noiseLabel(value) {
     loud: 'Lively',
   };
   return map[value] ?? 'Noise Unknown';
-}
-
-function _groupSizeLabel(value) {
-  const map = {
-    solo: 'Solo',
-    small: 'Small group',
-    medium: 'Group',
-    large: 'Large group',
-  };
-  return map[value] ?? 'Studying';
 }
 
 function _initials(value) {

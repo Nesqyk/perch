@@ -246,6 +246,7 @@ erDiagram
         uuid id PK
         uuid spot_id FK
         uuid user_id FK
+        text nickname
         text session_id
         text group_size_key
         integer group_size_min
@@ -314,6 +315,7 @@ erDiagram
 
 - `spot_confidence.spot_id` is both PK and FK — one row per spot, auto-seeded on `spots` INSERT via a privileged trigger function.
 - `claims.user_id`: authenticated owner of the claim; legacy `session_id` is nullable and only retained for old rows.
+- `claims.nickname`: denormalized safe display name copied from `user_profiles.nickname` by `user_id` for public activity rows.
 - `claims.cancelled_at` nullable — null + future `expires_at` = active claim.
 - `corrections.user_id`: authenticated owner of the report; legacy `session_id` is nullable and unused by new writes.
 - `corrections` is append-only (no update columns) — the `refresh_spot_confidence()` fn aggregates them.

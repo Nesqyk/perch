@@ -4,7 +4,7 @@
  * Curated presentation metadata for the shared spot page.
  *
  * The current spots table does not yet include public detail-page fields such
- * as hero photos, addresses, hours, popularity windows, or recent check-ins.
+ * as hero photos, addresses, hours, or popularity windows.
  * This module keeps those display-only values local until the schema catches up.
  */
 
@@ -16,11 +16,6 @@ const DEFAULT_SHARED_SPOT_DETAIL = Object.freeze({
   popularityLabel: 'Busy during 3-6 PM',
   capacityLabel: 'Good for 4-8 students',
   badges: ['Free', 'Popular'],
-  activity: [
-    { name: 'Marc S.', initials: 'MS', meta: 'Checked in 5 mins ago', tag: 'Studying' },
-    { name: 'Liza R.', initials: 'LR', meta: '15 mins ago', tag: 'Coffee' },
-    { name: 'John K.', initials: 'JK', meta: '45 mins ago', tag: 'Studying' },
-  ],
 });
 
 const SHARED_SPOT_DETAILS = Object.freeze({
@@ -61,8 +56,7 @@ const SHARED_SPOT_DETAILS = Object.freeze({
  *   hoursLabel: string,
  *   popularityLabel: string,
  *   capacityLabel: string,
- *   badges: string[],
- *   activity: Array<{ name: string, initials: string, meta: string, tag: string }>
+ *   badges: string[]
  * }}
  */
 export function getSharedSpotDetail(spot) {
@@ -70,6 +64,5 @@ export function getSharedSpotDetail(spot) {
   return {
     ...DEFAULT_SHARED_SPOT_DETAIL,
     ...override,
-    activity: override.activity ?? DEFAULT_SHARED_SPOT_DETAIL.activity,
   };
 }
