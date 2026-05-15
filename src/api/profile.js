@@ -55,11 +55,19 @@ export async function getProfile() {
 /**
  * Fetch the authenticated user's composed profile dashboard payload.
  *
- * @param {{ activityLimit?: number }} [options]
+ * @param {{ activityLimit?: number, user?: object | null }} [options]
  * @returns {Promise<{ user: object | null, profile: object | null, claims: object[], submissions: object[], buildings: object[], error: string | null }>}
  */
-export async function fetchProfileDashboard({ activityLimit = 12 } = {}) {
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+export async function fetchProfileDashboard({ activityLimit = 12, user: providedUser = null } = {}) {
+  let user = providedUser;
+  let authError = null;
+
+  if (!user) {
+    const authResult = await supabase.auth.getUser();
+    user = authResult.data?.user ?? null;
+    authError = authResult.error;
+  }
+
   if (authError || !user) {
     return {
       user: null,
@@ -71,21 +79,67 @@ export async function fetchProfileDashboard({ activityLimit = 12 } = {}) {
     };
   }
 
-  const [profile, claimResult, submissions, buildings] = await Promise.all([
-    _ensureProfile(user),
-    fetchClaimHistory({ limit: activityLimit, offset: 0 }),
-    fetchMySpotSubmissions(user.id),
-    fetchMyBuildings(user.id),
+  const [profileResult, claimResult, submissionsResult, buildingsResult] = await Promise.allSettled([
+    _retryAuthLockAbort(() => _ensureProfile(user)),
+    _retryAuthLockAbort(() => fetchClaimHistory({ limit: activityLimit, offset: 0 })),
+    _retryAuthLockAbort(() => fetchMySpotSubmissions(user.id)),
+    _retryAuthLockAbort(() => fetchMyBuildings(user.id)),
   ]);
+  const claimsPayload = profileSettledValue(claimResult, { data: [], error: null });
 
   return {
     user,
-    profile,
-    claims: claimResult.data ?? [],
-    submissions,
-    buildings,
-    error: claimResult.error ? 'Could not load all profile activity.' : null,
+    profile: profileSettledValue(profileResult, null),
+    claims: claimsPayload.data ?? [],
+    submissions: profileSettledValue(submissionsResult, []),
+    buildings: profileSettledValue(buildingsResult, []),
+    error: _profileDashboardError([profileResult, claimResult, submissionsResult, buildingsResult], claimsPayload),
   };
+}
+
+/**
+ * @param {PromiseSettledResult<unknown>} result
+ * @param {unknown} fallback
+ * @returns {unknown}
+ */
+function profileSettledValue(result, fallback) {
+  return result.status === 'fulfilled' ? result.value : fallback;
+}
+
+/**
+ * @param {PromiseSettledResult<unknown>[]} results
+ * @param {{ error?: object | null }} claimPayload
+ * @returns {string | null}
+ */
+function _profileDashboardError(results, claimPayload) {
+  if (claimPayload?.error) return 'Could not load all profile activity.';
+  return results.some((result) => result.status === 'rejected')
+    ? 'Could not load all profile activity.'
+    : null;
+}
+
+/**
+ * @template T
+ * @param {() => Promise<T>} task
+ * @returns {Promise<T>}
+ */
+async function _retryAuthLockAbort(task) {
+  try {
+    return await task();
+  } catch (err) {
+    if (!_isAuthLockAbort(err)) throw err;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return task();
+  }
+}
+
+/**
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function _isAuthLockAbort(err) {
+  return err?.name === 'AbortError'
+    && String(err?.message ?? '').includes('Lock broken by another request');
 }
 
 /**

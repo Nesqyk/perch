@@ -15,6 +15,7 @@ import {
   updateSpotAvailability,
   watchSpotForSms,
 } from '../api/availability.js';
+import { sendSpotEmailNotification } from '../api/emailNotifications.js';
 import { fetchSpots } from '../api/spots.js';
 
 import { showToast } from '../ui/toast.js';
@@ -36,7 +37,7 @@ async function _onAuthChanged(e) {
     return;
   }
 
-  const watchers = await fetchMySmsWatchers();
+  const watchers = await _retryAuthLockAbort(() => fetchMySmsWatchers());
   dispatch('SPOT_WATCHERS_LOADED', { watchers });
 }
 
@@ -62,6 +63,55 @@ async function _onAvailabilityUpdate(e) {
   if (smsError) {
     showToast('Status saved, but SMS delivery needs provider setup.', 'error');
   }
+
+  if (status === 'available') {
+    _sendDemoEmailPreview(spotId, getState().currentUser?.email);
+  }
+}
+
+async function _sendDemoEmailPreview(spotId, userEmail) {
+  const { previewUrl, error } = await sendSpotEmailNotification({ spotId, userEmail });
+  if (error) {
+    console.warn('[availability] demo email notification skipped:', error);
+    showToast('Status saved, but demo email preview failed.', 'error');
+    return;
+  }
+
+  if (!previewUrl) {
+    showToast('Demo email sent.', 'success');
+    return;
+  }
+
+  const opened = window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  showToast(opened ? 'Demo email sent. Preview opened.' : 'Demo email sent. Preview link ready.', 'success');
+
+  if (!opened) {
+    window.alert(`Demo email preview:\n${previewUrl}`);
+  }
+}
+
+/**
+ * @template T
+ * @param {() => Promise<T>} task
+ * @returns {Promise<T>}
+ */
+async function _retryAuthLockAbort(task) {
+  try {
+    return await task();
+  } catch (err) {
+    if (!_isAuthLockAbort(err)) throw err;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return task();
+  }
+}
+
+/**
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function _isAuthLockAbort(err) {
+  return err?.name === 'AbortError'
+    && String(err?.message ?? '').includes('Lock broken by another request');
 }
 
 async function _onSmsWatchToggle(e) {

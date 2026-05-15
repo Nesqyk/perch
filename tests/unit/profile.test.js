@@ -36,9 +36,20 @@ vi.mock('../../src/api/supabaseClient.js', () => {
   };
 });
 
+vi.mock('../../src/api/claims.js', () => ({
+  fetchClaimHistory: vi.fn(),
+}));
+
+vi.mock('../../src/api/campuses.js', () => ({
+  fetchMyBuildings: vi.fn(),
+  fetchMySpotSubmissions: vi.fn(),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
-import { getProfile, upsertProfile } from '../../src/api/profile.js';
+import { fetchMyBuildings, fetchMySpotSubmissions } from '../../src/api/campuses.js';
+import { fetchClaimHistory } from '../../src/api/claims.js';
+import { fetchProfileDashboard, getProfile, upsertProfile } from '../../src/api/profile.js';
 
 describe('profile API', () => {
   beforeEach(() => {
@@ -132,6 +143,55 @@ describe('profile API', () => {
       expect(result.error).toBe('Update failed');
       expect(consoleSpy).toHaveBeenCalled();
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('fetchProfileDashboard', () => {
+    it('uses a provided user instead of calling auth.getUser again', async () => {
+      const user = { id: 'uid-1', email: 'student@example.com', user_metadata: {} };
+      const profileQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({ data: { user_id: 'uid-1', nickname: 'Ty' }, error: null }),
+      };
+      supabase.from.mockReturnValueOnce(profileQuery);
+      fetchClaimHistory.mockResolvedValue({ data: [{ id: 'claim-1' }], error: null });
+      fetchMySpotSubmissions.mockResolvedValue([{ id: 'sub-1' }]);
+      fetchMyBuildings.mockResolvedValue([{ id: 'building-1' }]);
+
+      const result = await fetchProfileDashboard({ user });
+
+      expect(supabase.auth.getUser).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        user,
+        profile: { user_id: 'uid-1', nickname: 'Ty' },
+        claims: [{ id: 'claim-1' }],
+        submissions: [{ id: 'sub-1' }],
+        buildings: [{ id: 'building-1' }],
+        error: null,
+      });
+    });
+
+    it('retries once when a profile dashboard task hits a Supabase auth lock abort', async () => {
+      const user = { id: 'uid-1', email: 'student@example.com', user_metadata: {} };
+      const profileQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn(),
+      };
+      profileQuery.maybeSingle
+        .mockRejectedValueOnce(new DOMException("Lock broken by another request with the 'steal' option.", 'AbortError'))
+        .mockResolvedValueOnce({ data: { user_id: 'uid-1', nickname: 'Ty' }, error: null });
+      supabase.from.mockReturnValue(profileQuery);
+      fetchClaimHistory.mockResolvedValue({ data: [], error: null });
+      fetchMySpotSubmissions.mockResolvedValue([]);
+      fetchMyBuildings.mockResolvedValue([]);
+
+      const result = await fetchProfileDashboard({ user });
+
+      expect(profileQuery.maybeSingle).toHaveBeenCalledTimes(2);
+      expect(result.profile).toEqual({ user_id: 'uid-1', nickname: 'Ty' });
+      expect(result.error).toBeNull();
     });
   });
 });

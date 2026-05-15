@@ -13,7 +13,6 @@
 .landing-page {
   position: relative;
   min-height: 100%;
-  overflow: hidden;
   color: var(--color-landing-ink);
   background-image:
     radial-gradient(var(--color-landing-dot) 1.2px, transparent 1.2px),

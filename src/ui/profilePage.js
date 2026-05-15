@@ -169,7 +169,7 @@ async function _loadProfileData(userId) {
   _renderProfilePage();
 
   try {
-    const dashboard = await fetchProfileDashboard({ activityLimit: 12 });
+    const dashboard = await fetchProfileDashboard({ activityLimit: 12, user: getState().currentUser });
     _pageState = {
       userId,
       loading: false,
