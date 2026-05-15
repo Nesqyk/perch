@@ -154,6 +154,7 @@ export const EVENTS = Object.freeze({
   UI_SPOT_SMS_WATCH_TOGGLE:    'ui:spotSmsWatchToggle',
   UI_CAMPUS_CHANGE_REQUESTED:  'ui:campusChangeRequested',
   UI_CAMPUS_ADD_REQUESTED:     'ui:campusAddRequested',
+  UI_PLACE_FOCUS_REQUESTED:    'ui:placeFocusRequested',
   UI_SETTINGS_UPDATE:          'ui:settingsUpdate',
   UI_SETTINGS_PROFILE_UPDATE:  'ui:settingsProfileUpdate',
   UI_SETTINGS_DEVICE_SYNC:     'ui:settingsDeviceSync',

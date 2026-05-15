@@ -381,3 +381,127 @@
 .filter-campus-link:hover {
   color: var(--color-text);
 }
+
+/* ------------------------------------------------------------------
+   Place search
+   ------------------------------------------------------------------ */
+
+.place-search {
+  position: relative;
+  z-index: 20;
+}
+
+.place-search__box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-muted);
+}
+
+.place-search__box:focus-within {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.place-search__box svg {
+  flex-shrink: 0;
+}
+
+.place-search__input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.place-search__input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.place-search__results {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 280px;
+  overflow: auto;
+  padding: var(--space-2);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: var(--shadow-lg);
+}
+
+.place-search__result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-search__result:hover,
+.place-search__result:focus-visible {
+  background: var(--color-surface);
+}
+
+.place-search__kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-light);
+  color: var(--color-green-700);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+}
+
+.place-search__copy {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.place-search__copy strong,
+.place-search__copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.place-search__copy strong {
+  font-size: var(--text-sm);
+}
+
+.place-search__copy small,
+.place-search__status {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
+.place-search__status {
+  padding: var(--space-2);
+}
