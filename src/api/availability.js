@@ -12,7 +12,7 @@ import { supabase } from './supabaseClient.js';
  * Mark a spot available or occupied and queue WhatsApp notifications server-side.
  *
  * @param {{ spotId: string, status: 'available' | 'occupied', note?: string }} params
- * @returns {Promise<{ spot: object | null, error: string | null, smsError: string | null }>}
+ * @returns {Promise<{ spot: object | null, error: string | null, smsError: string | null, smsResult: object | null }>}
  */
 export async function updateSpotAvailability({ spotId, status, note = '' }) {
   const { data, error } = await supabase.rpc('set_spot_availability', {
@@ -23,10 +23,10 @@ export async function updateSpotAvailability({ spotId, status, note = '' }) {
 
   if (error) {
     console.error('[availability] updateSpotAvailability error:', error.message);
-    return { spot: null, error: error.message, smsError: null };
+    return { spot: null, error: error.message, smsError: null, smsResult: null };
   }
 
-  const { error: smsError } = await supabase.functions.invoke('send-sms-notification', {
+  const { data: smsResult, error: smsError } = await supabase.functions.invoke('send-sms-notification', {
     body: { spotId, status },
   });
 
@@ -34,7 +34,12 @@ export async function updateSpotAvailability({ spotId, status, note = '' }) {
     console.warn('[availability] send-sms-notification warning:', smsError.message);
   }
 
-  return { spot: data, error: null, smsError: smsError?.message ?? null };
+  return {
+    spot: data,
+    error: null,
+    smsError: smsError?.message ?? null,
+    smsResult: smsResult ?? null,
+  };
 }
 
 /**

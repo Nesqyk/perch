@@ -48,6 +48,7 @@ Deno.serve(async (req) => {
       spotId,
       templateKey,
     });
+    console.info('[send-sms-notification] queued notifications:', notifications.length);
 
     let sent = 0;
     let failed = 0;
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
         to: notification.phone_e164,
         body: notification.message_body,
       });
+      console.info('[send-sms-notification] provider result:', result.ok ? 'sent' : result.error);
 
       if (result.ok) {
         sent += 1;

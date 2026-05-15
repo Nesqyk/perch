@@ -50,7 +50,7 @@ async function _onAvailabilityUpdate(e) {
     return;
   }
 
-  const { error, smsError } = await updateSpotAvailability({ spotId, status, note });
+  const { error, smsError, smsResult } = await updateSpotAvailability({ spotId, status, note });
   if (error) {
     showToast(error, 'error');
     return;
@@ -58,18 +58,30 @@ async function _onAvailabilityUpdate(e) {
 
   const { spots, confidence } = await fetchSpots();
   dispatch('SPOTS_LOADED', { spots, confidence });
-  showToast(
-    status === 'available' ? 'Marked available. WhatsApp alerts queued.' : 'Marked occupied.',
-    'success'
-  );
+  showToast(_statusToastCopy(status, smsResult), 'success');
 
   if (smsError) {
     showToast('Status saved, but WhatsApp delivery needs provider setup.', 'error');
+  } else if (smsResult?.error) {
+    showToast(smsResult.error, 'error');
+  } else if (Number(smsResult?.failed ?? 0) > 0) {
+    showToast('WhatsApp provider rejected at least one alert. Check notification logs.', 'error');
+  } else if (status === 'available' && Number(smsResult?.queued ?? 0) === 0) {
+    showToast('No eligible WhatsApp watchers for this spot yet.', 'info');
   }
 
   if (status === 'available') {
     _sendDemoEmailPreview(spotId, getState().currentUser?.email);
   }
+}
+
+function _statusToastCopy(status, smsResult) {
+  if (status !== 'available') return 'Marked occupied.';
+
+  const sent = Number(smsResult?.sent ?? 0);
+  if (sent > 0) return `Marked available. ${sent} WhatsApp alert${sent === 1 ? '' : 's'} sent.`;
+
+  return 'Marked available.';
 }
 
 async function _sendDemoEmailPreview(spotId, userEmail) {
