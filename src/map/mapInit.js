@@ -12,7 +12,7 @@
  *
  * Campus selection:
  *   When CAMPUS_SELECTED fires, flyToBounds() animates the viewport to
- *   the selected campus bounding box and updates maxBounds accordingly.
+ *   the selected campus bounding box without locking panning to that box.
  *
  * Map click:
  *   A single-click on the map (not on a marker) emits
@@ -77,17 +77,11 @@ export function initMap() {
     throw new Error('[mapInit] #map-container element not found in the DOM');
   }
 
-  const defaultBounds = L.latLngBounds([
-    [10.2916, 123.8789],
-    [10.2956, 123.8829],
-  ]);
-
   _map = L.map(container, {
     center:             [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
     zoom:               DEFAULT_ZOOM,
     zoomControl:        false,
     attributionControl: true,
-    maxBounds:          defaultBounds.pad(1.2),
     minZoom:            14,
   });
 
@@ -131,8 +125,8 @@ function _onZoomChanged() {
 // ─── Campus viewport ─────────────────────────────────────────────────────────
 
 /**
- * Fly the map to the bounding box of the newly selected campus and update
- * maxBounds so the user cannot pan too far away.
+ * Fly the map to the bounding box of the newly selected campus while keeping
+ * normal pan freedom around the surrounding area.
  *
  * @param {CustomEvent<{ campusId: string }>} e
  */
@@ -148,7 +142,6 @@ function _onCampusSelected(e) {
     [campus.bounds_ne_lat, campus.bounds_ne_lng],
   );
 
-  _map.setMaxBounds(bounds.pad(1.2));
   _map.flyToBounds(bounds, {
     padding:   [16, 16],
     maxZoom:   campus.default_zoom + 1,
