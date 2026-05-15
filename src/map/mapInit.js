@@ -59,6 +59,9 @@ let _clickMarker = null;
 /** @type {import('leaflet').CircleMarker | null} Marker shown at the selected spot's location */
 let _selectionMarker = null;
 
+/** @type {import('leaflet').CircleMarker | null} Marker shown after place search focus */
+let _searchMarker = null;
+
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 /**
@@ -104,6 +107,7 @@ export function initMap() {
 
   // ── Campus selected → fly to new bounds ─────────────────────────────────
   on(EVENTS.CAMPUS_SELECTED, _onCampusSelected);
+  on(EVENTS.UI_PLACE_FOCUS_REQUESTED, _onPlaceFocusRequested);
 
   emit(EVENTS.MAP_READY, { map: _map });
 
@@ -160,6 +164,29 @@ function _onCampusSelected(e) {
  *
  * @param {import('leaflet').LeafletMouseEvent} e
  */
+function _onPlaceFocusRequested(e) {
+  if (!_map) return;
+  const lat = Number(e.detail?.lat);
+  const lng = Number(e.detail?.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+  if (_searchMarker) {
+    _searchMarker.remove();
+    _searchMarker = null;
+  }
+
+  _searchMarker = L.circleMarker([lat, lng], {
+    radius:      14,
+    color:       'var(--color-green-700, #008f5f)',
+    fillColor:   'var(--color-brand, #7BDEB7)',
+    fillOpacity: 0.18,
+    weight:      3,
+    opacity:     0.95,
+  }).addTo(_map);
+
+  panTo({ lat, lng }, e.detail?.zoom ?? 17);
+}
+
 function _onMapClick(e) {
   const { lat, lng } = e.latlng;
 

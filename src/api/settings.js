@@ -72,14 +72,15 @@ export async function fetchSettingsDashboard() {
  * @param {{ nickname?: string, schoolLabel?: string, scholarLabel?: string, avatarUrl?: string | null, coverImageUrl?: string | null, studentId?: string, courseLabel?: string, classLabel?: string, studyVibes?: string[], phoneE164?: string | null, phoneCountry?: string | null }} updates
  * @returns {Promise<{ profile: object | null, error: string | null }>}
  */
-export async function updateSettingsProfile(updates) {
+export async function updateSettingsProfile(updates = {}) {
   const user = await _getCurrentUser();
   if (!user) return { profile: null, error: 'Not authenticated.' };
 
+  const nickname = await _resolveProfileNickname(user, updates.nickname);
   const row = {
     user_id: user.id,
+    nickname,
   };
-  if (updates.nickname !== undefined) row.nickname = updates.nickname;
   if (updates.schoolLabel !== undefined) row.school_label = updates.schoolLabel;
   if (updates.scholarLabel !== undefined) row.scholar_label = updates.scholarLabel;
   if (updates.avatarUrl !== undefined) row.avatar_url = updates.avatarUrl;
@@ -264,7 +265,7 @@ async function _ensureProfile(user) {
   }
   if (existing) return existing;
 
-  const nickname = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Perch member';
+  const nickname = _fallbackNickname(user);
   const avatarUrl = user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null;
 
   const { data, error } = await supabase
@@ -288,21 +289,9 @@ async function _ensureProfile(user) {
 }
 
 async function _ensureSettings(userId) {
-  const { data: existing, error: fetchError } = await supabase
-    .from('user_settings')
-    .select(SETTINGS_SELECT)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (fetchError) {
-    console.error('[settings] _ensureSettings fetch error:', fetchError.message);
-    return null;
-  }
-  if (existing) return existing;
-
   const { data, error } = await supabase
     .from('user_settings')
-    .insert({ user_id: userId })
+    .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: false })
     .select(SETTINGS_SELECT)
     .single();
 
@@ -312,6 +301,36 @@ async function _ensureSettings(userId) {
   }
 
   return data;
+}
+
+async function _resolveProfileNickname(user, explicitNickname) {
+  if (explicitNickname !== undefined) {
+    return _cleanNickname(explicitNickname) || _fallbackNickname(user);
+  }
+
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('nickname')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('[settings] _resolveProfileNickname warning:', error.message || error);
+  }
+
+  return _cleanNickname(data?.nickname) || _fallbackNickname(user);
+}
+
+function _cleanNickname(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function _fallbackNickname(user) {
+  return (
+    _cleanNickname(user.user_metadata?.full_name) ||
+    _cleanNickname(user.email?.split('@')[0]) ||
+    'Perch member'
+  );
 }
 
 async function _ensureDefaultCards(userId) {

@@ -261,27 +261,40 @@ function _buildBuildingTooltipHtml(building, status, roomCount) {
  * @returns {import('leaflet').DivIcon}
  */
 function _buildSpotIcon(spot, selected) {
+  if (!spot) return L.divIcon({ html: '', className: '', iconSize: [0, 0] });
+
   const status = deriveSpotStatus(spot.id);
   const color = PIN_COLORS[status] ?? PIN_COLORS.maybe;
   const opacity = status === 'full' ? 0.5 : 1;
   const scale = selected ? 1.35 : 1;
+  const showLabel = selected || (getMap().getZoom() >= 18 && getState().spots.length <= 45);
 
   if (spot.on_campus) {
     const width = Math.round(24 * scale);
     const height = Math.round(36 * scale);
     return L.divIcon({
-      html: _teardropSvg(color, opacity, width, height),
+      html: _markerShellHtml({
+        svg: _teardropSvg(color, opacity, width, height),
+        label: spot.name,
+        showLabel,
+        type: 'spot',
+      }),
       className: '',
-      iconSize: [width, height],
+      iconSize: [width, height + 18],
       iconAnchor: [width / 2, height],
     });
   }
 
   const diameter = Math.round(24 * scale);
   return L.divIcon({
-    html: _circleSvg(color, opacity, diameter),
+    html: _markerShellHtml({
+      svg: _circleSvg(color, opacity, diameter),
+      label: spot.name,
+      showLabel,
+      type: 'spot',
+    }),
     className: '',
-    iconSize: [diameter, diameter],
+    iconSize: [diameter, diameter + 18],
     iconAnchor: [diameter / 2, diameter / 2],
   });
 }
@@ -299,18 +312,32 @@ function _buildBuildingIcon(building, status, roomCount) {
   const verificationClass = building.verification_status === 'pending'
     ? 'campus-building-marker--pending'
     : 'campus-building-marker--verified';
+  const visibleCount = (getState().buildings ?? []).filter((entry) => entry.campus_id === getState().selectedCampusId).length;
+  const showLabel = getMap().getZoom() >= 16 && visibleCount <= 30;
 
   return L.divIcon({
     className: '',
-    iconSize: [56, 42],
+    iconSize: [76, 60],
     iconAnchor: [28, 36],
     html: /* html */`
-      <div class="campus-building-marker ${verificationClass}" style="--building-color:${color}">
-        <span class="campus-building-marker__glyph">🏢</span>
-        <span class="campus-building-marker__count">${roomCount > 0 ? roomCount : '+'}</span>
+      <div class="map-marker-shell map-marker-shell--building ${showLabel ? 'map-marker-shell--labeled' : ''}">
+        <span class="campus-building-marker ${verificationClass}" style="--building-color:${color}">
+          <span class="campus-building-marker__glyph">🏢</span>
+          <span class="campus-building-marker__count">${roomCount > 0 ? roomCount : '+'}</span>
+        </span>
+        <span class="map-marker-label">${_escapeHtml(building.name)}</span>
       </div>
     `,
   });
+}
+
+function _markerShellHtml({ svg, label, showLabel, type }) {
+  return /* html */`
+    <div class="map-marker-shell map-marker-shell--${type} ${showLabel ? 'map-marker-shell--labeled' : ''}">
+      ${svg}
+      <span class="map-marker-label">${_escapeHtml(label)}</span>
+    </div>
+  `;
 }
 
 function _capacityNum(rough) {

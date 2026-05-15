@@ -21,6 +21,9 @@ import { on, emit, EVENTS }      from '../core/events.js';
 import { getState, dispatch }    from '../core/store.js';
 import { renderSuggestionsList } from './suggestionsList.js';
 import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
+import { hasStrongLocalPlaceMatch,
+         searchLocalPlaces,
+         searchPlaces }          from '../utils/placeSearch.js';
 import { timeAgo }               from '../utils/time.js';
 import { ArrowRight, LogOut, Copy, Link,
           Search, MapPin, Star,
@@ -58,6 +61,12 @@ let _groupSubForm = 'create';
 
 /** @type {'find' | 'group'} Active tab — persists across re-renders. */
 let _activeTab = 'find';
+
+/** @type {number | null} Debounce handle for place search input */
+let _placeSearchTimer = null;
+
+/** @type {number} Monotonic token for ignoring stale async search results */
+let _placeSearchRun = 0;
 
 const _AMENITY_CHIPS = [
   { key: 'quiet',  icon: '🔇', label: 'Quiet'   },
@@ -195,6 +204,7 @@ function _buildTabBody() {
   body.className = 'filter-tab-body';
 
   if (_activeTab === 'find') {
+    body.appendChild(_buildPlaceSearch());
     body.appendChild(_buildViewModeToggle());
     body.appendChild(_buildCampusSelectorBox());
     body.appendChild(_buildFilterAccordion());
@@ -219,6 +229,145 @@ function _buildTabBody() {
  *
  * @returns {HTMLElement}
  */
+function _buildPlaceSearch() {
+  const wrap = document.createElement('div');
+  wrap.className = 'place-search';
+
+  const box = document.createElement('div');
+  box.className = 'place-search__box';
+  box.innerHTML = iconSvg(Search, 16);
+
+  const input = document.createElement('input');
+  input.id = 'place-search-input';
+  input.className = 'place-search__input';
+  input.type = 'search';
+  input.placeholder = 'Search spots, buildings, areas';
+  input.autocomplete = 'off';
+  input.addEventListener('input', () => _schedulePlaceSearch(input.value));
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const first = document.querySelector('.place-search__result');
+    if (first && typeof first.click === 'function') first.click();
+  });
+
+  box.appendChild(input);
+  wrap.appendChild(box);
+
+  const results = document.createElement('div');
+  results.id = 'place-search-results';
+  results.className = 'place-search__results';
+  results.hidden = true;
+  wrap.appendChild(results);
+
+  return wrap;
+}
+
+function _schedulePlaceSearch(query) {
+  if (_placeSearchTimer) window.clearTimeout(_placeSearchTimer);
+  _placeSearchTimer = window.setTimeout(() => {
+    _runPlaceSearch(query);
+  }, 240);
+}
+
+async function _runPlaceSearch(query) {
+  const term = query.trim();
+  const runId = ++_placeSearchRun;
+  if (term.length < 2) {
+    _renderPlaceSearchResults([]);
+    return;
+  }
+
+  const { spots, buildings, areas } = getState();
+  const localResults = searchLocalPlaces(term, { spots, buildings, areas });
+  if (hasStrongLocalPlaceMatch(localResults)) {
+    _renderPlaceSearchResults(localResults);
+    return;
+  }
+
+  _renderPlaceSearchResults(localResults, { loading: true });
+  const externalResults = await searchPlaces(term);
+  if (runId !== _placeSearchRun) return;
+
+  _renderPlaceSearchResults([...localResults, ...externalResults].slice(0, 8), {
+    message: localResults.length || externalResults.length ? '' : 'No places found.',
+  });
+}
+
+function _renderPlaceSearchResults(results, { loading = false, message = '' } = {}) {
+  const resultsEl = document.getElementById('place-search-results');
+  if (!resultsEl) return;
+
+  resultsEl.innerHTML = '';
+  resultsEl.hidden = !loading && !message && results.length === 0;
+
+  if (loading) {
+    const loadingEl = document.createElement('div');
+    loadingEl.className = 'place-search__status';
+    loadingEl.textContent = results.length ? 'Checking nearby places...' : 'Searching places...';
+    resultsEl.appendChild(loadingEl);
+  }
+
+  results.forEach((result) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'place-search__result';
+    btn.innerHTML = /* html */`
+      <span class="place-search__kind">${_placeKindLabel(result.kind)}</span>
+      <span class="place-search__copy">
+        <strong>${_escHtml(result.name)}</strong>
+        <small>${_escHtml(result.subtitle || _placeKindLabel(result.kind))}</small>
+      </span>
+    `;
+    btn.addEventListener('click', () => _selectPlaceSearchResult(result));
+    resultsEl.appendChild(btn);
+  });
+
+  if (message) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'place-search__status';
+    messageEl.textContent = message;
+    resultsEl.appendChild(messageEl);
+  }
+}
+
+function _selectPlaceSearchResult(result) {
+  const input = document.getElementById('place-search-input');
+  if (input && 'value' in input) input.value = result.name;
+  _renderPlaceSearchResults([]);
+
+  if (result.kind === 'spot') {
+    dispatch('SELECT_SPOT', { spotId: result.id, navigate: true });
+    return;
+  }
+
+  if (Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+    emit(EVENTS.UI_PLACE_FOCUS_REQUESTED, {
+      lat: result.lat,
+      lng: result.lng,
+      zoom: result.kind === 'external' ? 17 : 18,
+    });
+  }
+
+  if (result.kind === 'building') {
+    dispatch('SET_VIEW_MODE', 'campus');
+    emit(EVENTS.MAP_BUILDING_CLICKED, { buildingId: result.id });
+  }
+
+  if (result.kind === 'area') {
+    dispatch('SET_FILTERS', { areaId: result.id });
+  }
+}
+
+function _placeKindLabel(kind) {
+  return {
+    spot: 'Spot',
+    building: 'Building',
+    area: 'Area',
+    external: 'Place',
+  }[kind] ?? 'Place';
+}
+
 function _buildViewModeToggle() {
   const { viewMode } = getState();
 

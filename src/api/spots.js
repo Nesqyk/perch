@@ -209,6 +209,11 @@ export async function createCommunitySpot({
     created_by: userId,
   };
 
+  const existing = await _findExistingCommunitySpot(payload);
+  if (existing) {
+    return { spot: await _hydrateSpotImage(existing), error: null };
+  }
+
   const { data, error } = await supabase
     .from('spots')
     .insert(payload)
@@ -252,6 +257,63 @@ export async function createCommunitySpot({
   }
 
   return { spot: await _hydrateSpotImage(data), error: null };
+}
+
+async function _findExistingCommunitySpot(payload) {
+  let query = supabase
+    .from('spots')
+    .select(`
+      id,
+      name,
+      type,
+      campus_id,
+      area_id,
+      building_id,
+      on_campus,
+      building,
+      floor,
+      walk_time_min,
+      rough_capacity,
+      has_outlets,
+      wifi_strength,
+      noise_baseline,
+      has_food,
+      lat,
+      lng,
+      image_path,
+      created_by,
+      availability_status,
+      availability_updated_at,
+      availability_updated_by,
+      areas (
+        id,
+        sitio,
+        barangay,
+        city_municipality,
+        lat,
+        lng
+      )
+    `)
+    .eq('is_active', true)
+    .ilike('name', payload.name);
+
+  query = payload.campus_id
+    ? query.eq('campus_id', payload.campus_id)
+    : query.is('campus_id', null);
+  query = payload.building
+    ? query.ilike('building', payload.building)
+    : query.is('building', null);
+  query = payload.floor
+    ? query.ilike('floor', payload.floor)
+    : query.is('floor', null);
+
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error) {
+    console.warn('[spots] _findExistingCommunitySpot warning:', error.message);
+    return null;
+  }
+
+  return data ?? null;
 }
 
 /**
