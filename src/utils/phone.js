@@ -1,8 +1,8 @@
 /**
  * src/utils/phone.js
  *
- * Small phone-number helpers for the SMS opt-in flow. MVP validation is scoped
- * to Philippine mobile numbers and normalizes them to E.164 for outbound SMS.
+ * Small phone-number helpers for the WhatsApp opt-in flow. MVP validation is
+ * scoped to Philippine mobile numbers and normalizes them to E.164.
  */
 
 const PH_MOBILE_E164 = /^\+639\d{9}$/;
@@ -40,7 +40,7 @@ export function normalizePhoneNumber(value) {
 }
 
 /**
- * Check whether a number is already valid E.164 for PH SMS.
+ * Check whether a number is already valid E.164 for PH WhatsApp.
  *
  * @param {string | null | undefined} value
  * @returns {boolean}

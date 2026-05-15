@@ -1,7 +1,7 @@
 /**
  * src/features/availability.js
  *
- * Handles user-initiated spot availability reports and SMS watcher toggles.
+ * Handles user-initiated spot availability reports and WhatsApp watcher toggles.
  * UI modules emit intent events; this feature performs API work and dispatches
  * refreshed store state.
  */
@@ -21,7 +21,7 @@ import { fetchSpots } from '../api/spots.js';
 import { showToast } from '../ui/toast.js';
 
 /**
- * Wire availability and SMS watcher event handlers.
+ * Wire availability and WhatsApp watcher event handlers.
  *
  * @returns {void}
  */
@@ -58,10 +58,13 @@ async function _onAvailabilityUpdate(e) {
 
   const { spots, confidence } = await fetchSpots();
   dispatch('SPOTS_LOADED', { spots, confidence });
-  showToast(status === 'available' ? 'Marked available.' : 'Marked occupied.', 'success');
+  showToast(
+    status === 'available' ? 'Marked available. WhatsApp alerts queued.' : 'Marked occupied.',
+    'success'
+  );
 
   if (smsError) {
-    showToast('Status saved, but SMS delivery needs provider setup.', 'error');
+    showToast('Status saved, but WhatsApp delivery needs provider setup.', 'error');
   }
 
   if (status === 'available') {
@@ -130,7 +133,7 @@ async function _onSmsWatchToggle(e) {
       return;
     }
     dispatch('SPOT_WATCHER_UPDATED', { spotId, watcher });
-    showToast('SMS alerts enabled for this spot.', 'success');
+    showToast('WhatsApp alerts enabled for this spot.', 'success');
     return;
   }
 
@@ -140,5 +143,5 @@ async function _onSmsWatchToggle(e) {
     return;
   }
   dispatch('SPOT_WATCHER_UPDATED', { spotId, watcher: null });
-  showToast('SMS alerts disabled for this spot.', 'success');
+  showToast('WhatsApp alerts disabled for this spot.', 'success');
 }

@@ -83,7 +83,7 @@ const _state = {
    */
   confidence: {},               // Record<spotId, { score, reason, validUntil }>
 
-  /** Current user's SMS watchers keyed by spot id. */
+  /** Current user's WhatsApp watchers keyed by spot id. */
   spotWatchers: {},             // Record<spotId, SpotWatcher>
 
   /**

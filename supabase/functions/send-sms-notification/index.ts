@@ -3,7 +3,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-perch-session',
 };
 
-type SmsNotification = {
+type WhatsAppNotification = {
   id: string;
   phone_e164: string;
   message_body: string;
@@ -22,21 +22,30 @@ Deno.serve(async (req) => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   const infobipBaseUrl = Deno.env.get('INFOBIP_BASE_URL');
   const infobipApiKey = Deno.env.get('INFOBIP_API_KEY');
-  const infobipSender = Deno.env.get('INFOBIP_SENDER');
+  const infobipSender = Deno.env.get('INFOBIP_WHATSAPP_SENDER') ?? Deno.env.get('INFOBIP_SENDER');
 
   if (!supabaseUrl || !serviceKey || !infobipBaseUrl || !infobipApiKey || !infobipSender) {
-    return _json({ error: 'SMS provider is not configured.' }, 500);
+    return _json({ error: 'WhatsApp provider is not configured.' }, 500);
   }
 
   const body = await _readJson(req);
   const notificationIds = Array.isArray(body?.notificationIds)
     ? body.notificationIds.filter((id: unknown) => typeof id === 'string')
     : [];
+  const spotId = typeof body?.spotId === 'string' ? body.spotId : '';
+  const status = typeof body?.status === 'string' ? body.status : '';
+  const templateKey = status === 'available'
+    ? 'spot_available'
+    : status === 'occupied'
+      ? 'spot_occupied'
+      : '';
 
   const notifications = await _fetchQueuedNotifications({
     supabaseUrl,
     serviceKey,
     notificationIds,
+    spotId,
+    templateKey,
   });
 
   let sent = 0;
@@ -50,7 +59,7 @@ Deno.serve(async (req) => {
       patch: { status: 'sending', updated_at: new Date().toISOString() },
     });
 
-    const result = await _sendInfobipSms({
+    const result = await _sendInfobipWhatsApp({
       baseUrl: infobipBaseUrl,
       apiKey: infobipApiKey,
       sender: infobipSender,
@@ -66,7 +75,7 @@ Deno.serve(async (req) => {
         id: notification.id,
         patch: {
           status: 'sent',
-          provider: 'infobip',
+          provider: 'infobip_whatsapp',
           provider_message_id: result.messageId,
           error_message: null,
           sent_at: new Date().toISOString(),
@@ -81,7 +90,7 @@ Deno.serve(async (req) => {
         id: notification.id,
         patch: {
           status: 'failed',
-          provider: 'infobip',
+          provider: 'infobip_whatsapp',
           error_message: result.error,
           updated_at: new Date().toISOString(),
         },
@@ -96,11 +105,15 @@ async function _fetchQueuedNotifications({
   supabaseUrl,
   serviceKey,
   notificationIds,
+  spotId,
+  templateKey,
 }: {
   supabaseUrl: string;
   serviceKey: string;
   notificationIds: string[];
-}): Promise<SmsNotification[]> {
+  spotId: string;
+  templateKey: string;
+}): Promise<WhatsAppNotification[]> {
   const params = new URLSearchParams({
     select: 'id,phone_e164,message_body',
     status: 'eq.queued',
@@ -110,6 +123,12 @@ async function _fetchQueuedNotifications({
 
   if (notificationIds.length) {
     params.set('id', `in.(${notificationIds.join(',')})`);
+  }
+  if (spotId) {
+    params.set('spot_id', `eq.${spotId}`);
+  }
+  if (templateKey) {
+    params.set('template_key', `eq.${templateKey}`);
   }
 
   const res = await fetch(`${supabaseUrl}/rest/v1/sms_notifications?${params}`, {
@@ -142,7 +161,7 @@ async function _updateNotification({
   });
 }
 
-async function _sendInfobipSms({
+async function _sendInfobipWhatsApp({
   baseUrl,
   apiKey,
   sender,
@@ -155,7 +174,7 @@ async function _sendInfobipSms({
   to: string;
   body: string;
 }): Promise<{ ok: true; messageId: string } | { ok: false; error: string }> {
-  const endpoint = `${baseUrl.replace(/\/+$/, '')}/sms/3/messages`;
+  const endpoint = `${baseUrl.replace(/\/+$/, '')}/whatsapp/1/message/text`;
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -164,11 +183,9 @@ async function _sendInfobipSms({
       Accept: 'application/json',
     },
     body: JSON.stringify({
-      messages: [{
-        sender,
-        destinations: [{ to: _normalizeInfobipDestination(to) }],
-        content: { text: body },
-      }],
+      from: _normalizeInfobipDestination(sender),
+      to: _normalizeInfobipDestination(to),
+      content: { text: body },
     }),
   });
 
@@ -182,7 +199,7 @@ async function _sendInfobipSms({
 
   return {
     ok: true,
-    messageId: payload?.messages?.[0]?.messageId ?? payload?.bulkId ?? '',
+    messageId: payload?.messages?.[0]?.messageId ?? payload?.messageId ?? payload?.bulkId ?? '',
   };
 }
 

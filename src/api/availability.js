@@ -1,7 +1,7 @@
 /**
  * src/api/availability.js
  *
- * Spot availability and SMS watcher operations. Availability changes are
+ * Spot availability and WhatsApp watcher operations. Availability changes are
  * persisted through RPCs so the client can report status without broad spot
  * update permissions.
  */
@@ -9,7 +9,7 @@
 import { supabase } from './supabaseClient.js';
 
 /**
- * Mark a spot available or occupied and queue SMS notifications server-side.
+ * Mark a spot available or occupied and queue WhatsApp notifications server-side.
  *
  * @param {{ spotId: string, status: 'available' | 'occupied', note?: string }} params
  * @returns {Promise<{ spot: object | null, error: string | null, smsError: string | null }>}
@@ -27,7 +27,7 @@ export async function updateSpotAvailability({ spotId, status, note = '' }) {
   }
 
   const { error: smsError } = await supabase.functions.invoke('send-sms-notification', {
-    body: { spotId },
+    body: { spotId, status },
   });
 
   if (smsError) {
@@ -38,7 +38,7 @@ export async function updateSpotAvailability({ spotId, status, note = '' }) {
 }
 
 /**
- * Fetch SMS watchers for the current user.
+ * Fetch WhatsApp watchers for the current user.
  *
  * @returns {Promise<object[]>}
  */
@@ -57,7 +57,7 @@ export async function fetchMySmsWatchers() {
 }
 
 /**
- * Subscribe the current user to SMS updates for a spot.
+ * Subscribe the current user to WhatsApp updates for a spot.
  *
  * @param {string} spotId
  * @returns {Promise<{ watcher: object | null, error: string | null }>}
@@ -77,7 +77,7 @@ export async function watchSpotForSms(spotId) {
 }
 
 /**
- * Remove the current user's SMS watcher for a spot.
+ * Remove the current user's WhatsApp watcher for a spot.
  *
  * @param {string} spotId
  * @returns {Promise<{ error: string | null }>}

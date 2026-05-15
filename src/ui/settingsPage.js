@@ -232,8 +232,8 @@ function _buildNotificationCard(state) {
       <div class="settings-sms-box__head">
         ${iconSvg(Smartphone, 18)}
         <span>
-          <strong>SMS</strong>
-          <small>Send availability alerts to a verified mobile number.</small>
+          <strong>WhatsApp</strong>
+          <small>Send availability alerts to a WhatsApp-ready mobile number.</small>
         </span>
       </div>
       <label class="settings-field-label" for="settings-phone">Phone number</label>
@@ -246,8 +246,8 @@ function _buildNotificationCard(state) {
         placeholder="0917 123 4567"
         value="${_escapeAttr(phoneValue)}"
       >
-      <p class="settings-field-hint" id="settings-phone-hint">PH mobile numbers are saved as E.164 for SMS delivery.</p>
-      ${_toggleRow('sms-enabled', 'Enable SMS', 'Only opted-in users with valid phone numbers receive SMS.', settings.smsEnabled)}
+      <p class="settings-field-hint" id="settings-phone-hint">PH mobile numbers are saved as E.164 for WhatsApp delivery.</p>
+      ${_toggleRow('sms-enabled', 'Enable WhatsApp', 'Only opted-in users with valid phone numbers receive WhatsApp alerts.', settings.smsEnabled)}
     </div>
   `;
 
@@ -262,7 +262,7 @@ function _buildNotificationCard(state) {
   phoneInput?.addEventListener('blur', () => {
     if (!phoneInput.value.trim()) {
       phoneInput.classList.remove('input--error');
-      if (phoneHint) phoneHint.textContent = 'PH mobile numbers are saved as E.164 for SMS delivery.';
+      if (phoneHint) phoneHint.textContent = 'PH mobile numbers are saved as E.164 for WhatsApp delivery.';
       emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, {
         phoneE164: null,
         phoneCountry: 'PH',
@@ -279,7 +279,7 @@ function _buildNotificationCard(state) {
 
     phoneInput.classList.remove('input--error');
     phoneInput.value = normalized.value;
-    if (phoneHint) phoneHint.textContent = 'Ready for SMS alerts.';
+    if (phoneHint) phoneHint.textContent = 'Ready for WhatsApp alerts.';
     emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, {
       phoneE164: normalized.value,
       phoneCountry: 'PH',
@@ -291,7 +291,7 @@ function _buildNotificationCard(state) {
       event.target.checked = false;
       phoneInput?.classList.add('input--error');
       if (phoneHint) phoneHint.textContent = normalized.error;
-      showToast('Add a valid phone number before enabling SMS.', 'error');
+      showToast('Add a valid phone number before enabling WhatsApp.', 'error');
       return;
     }
 

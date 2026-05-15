@@ -1,7 +1,7 @@
 /**
  * src/ui/availabilityControls.js
  *
- * Shared spot availability and SMS watcher controls for card and route views.
+ * Shared spot availability and WhatsApp watcher controls for card and route views.
  */
 
 import { Bell, CheckCircle2, CircleSlash2, LogIn } from 'lucide';
@@ -15,7 +15,7 @@ import { loadUserPreferences } from '../utils/preferences.js';
 import { iconSvg } from './icons.js';
 
 /**
- * Build controls for status reporting and SMS watching.
+ * Build controls for status reporting and WhatsApp watching.
  *
  * @param {{ spot: object, compact?: boolean }} params
  * @returns {HTMLElement}
@@ -83,7 +83,7 @@ function _smsButtonMarkup({ currentUser, smsReady, isWatched }) {
     return /* html */`
       <button type="button" class="availability-sms-btn" data-sms-action="login">
         ${iconSvg(LogIn, 15)}
-        <span>Sign in for SMS</span>
+        <span>Sign in for WhatsApp</span>
       </button>
     `;
   }
@@ -92,7 +92,7 @@ function _smsButtonMarkup({ currentUser, smsReady, isWatched }) {
     return /* html */`
       <button type="button" class="availability-sms-btn" data-sms-action="settings">
         ${iconSvg(Bell, 15)}
-        <span>Set up SMS</span>
+        <span>Set up WhatsApp</span>
       </button>
     `;
   }
@@ -100,7 +100,7 @@ function _smsButtonMarkup({ currentUser, smsReady, isWatched }) {
   return /* html */`
     <button type="button" class="availability-sms-btn ${isWatched ? 'is-active' : ''}" data-sms-action="toggle">
       ${iconSvg(Bell, 15)}
-      <span>${isWatched ? 'SMS alerts on' : 'Notify me by SMS'}</span>
+      <span>${isWatched ? 'WhatsApp alerts on' : 'Notify me by WhatsApp'}</span>
     </button>
   `;
 }

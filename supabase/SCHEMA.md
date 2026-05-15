@@ -299,7 +299,7 @@ erDiagram
     spots ||--o{ schedule_entries : "has schedule"
     spots ||--o{ spot_availability_events : "status reports"
     spots ||--o{ spot_watchers : "watched by users"
-    spots ||--o{ sms_notifications : "triggers SMS"
+    spots ||--o{ sms_notifications : "triggers WhatsApp"
     spots ||--o{ group_pins : "pinned by squads"
     spots ||--o{ groups : "current venue"
     groups ||--o{ group_members : "has members"
@@ -325,8 +325,8 @@ erDiagram
 - `spots.availability_status`: community-reported `available` | `occupied`; null means no direct report yet.
 - `areas`: basic geo-referencing layer. Barangay and city/municipality are required; coordinates are optional.
 - `spot_availability_events`: append-only status history for availability reports.
-- `spot_watchers`: unique `(spot_id, user_id)` subscriptions for SMS availability alerts.
-- `sms_notifications`: Infobip-backed delivery log. Failures are stored here and do not block availability updates.
+- `spot_watchers`: unique `(spot_id, user_id)` subscriptions for WhatsApp availability alerts. Column names retain `sms` for compatibility.
+- `sms_notifications`: Infobip WhatsApp delivery log. Failures are stored here and do not block availability updates.
 - `sms_notifications.provider_message_id`: provider acknowledgement id for sent messages.
 - `rough_capacity`: `small` (~8) | `medium` (~20) | `large` (~40)
 - `wifi_strength`: `none` | `weak` | `ok` | `strong`
@@ -341,8 +341,8 @@ erDiagram
 - `group_perks`: persisted squad offer rows; the dashboard reads the first unredeemed row.
 - `user_settings.default_map_view`: `campus` | `cafes`; `cafes` maps to app `city` view mode.
 - `user_settings.preferred_study_environment`: `quiet` | `moderate`.
-- `user_settings.sms_enabled`: explicit opt-in for the UI-labeled SMS feature.
+- `user_settings.sms_enabled`: explicit opt-in for the UI-labeled WhatsApp feature. Column name is retained for compatibility.
 - `user_profiles.study_vibes`: user-edited profile chips shown on the Profile route; empty arrays render as editable empty states.
-- `user_profiles.phone_e164`: validated E.164 number used for SMS notifications.
+- `user_profiles.phone_e164`: validated E.164 number used for WhatsApp notifications.
 - `user_devices`: v1 browser/session heartbeat rows, not push-notification registrations.
 - `user_sessions` and `user_shared_notes`: persisted right-column Settings cards.
