@@ -130,16 +130,34 @@ export async function createGroup({ name, displayName, context = 'campus', campu
 export async function joinGroup({ code, displayName }) {
   const { data: authData, error: authError } = await supabase.auth.getUser();
   const userId = authData?.user?.id ?? null;
+  const normalizedCode = _normalizeJoinCode(code);
 
   if (authError || !userId) {
     console.error('[groups] joinGroup auth error:', authError?.message ?? 'Not authenticated.');
     return { group: null, member: null, error: 'Please sign in before joining a squad.' };
   }
 
+  if (normalizedCode.length !== 4) {
+    return { group: null, member: null, error: 'Enter the 4-character squad code.' };
+  }
+
+  const { data: joined, error: joinErr } = await supabase.rpc('join_group_by_code', {
+    p_code: normalizedCode,
+    p_display_name: displayName,
+  });
+
+  if (!joinErr && joined?.group && joined?.member) {
+    return { group: joined.group, member: joined.member, error: null };
+  }
+
+  if (joinErr) {
+    console.warn('[groups] joinGroup RPC warning:', joinErr.message);
+  }
+
   const { data: group, error: gErr } = await supabase
     .from('groups')
     .select(GROUP_SELECT)
-    .eq('code', code.toUpperCase())
+    .eq('code', normalizedCode)
     .single();
 
   if (gErr || !group) {
@@ -151,6 +169,90 @@ export async function joinGroup({ code, displayName }) {
   if (mErr) return { group: null, member: null, error: mErr };
 
   return { group, member, error: null };
+}
+
+/**
+ * Fetch the signed-in user's most recent persisted squad membership.
+ *
+ * @returns {Promise<{
+ *   group: object | null,
+ *   member: object | null,
+ *   dashboard: object | null,
+ *   error: string | null
+ * }>}
+ */
+export async function fetchMyActiveGroupMembership() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    console.error('[groups] fetchMyActiveGroupMembership auth error:', authError?.message ?? 'Not authenticated.');
+    return { group: null, member: null, dashboard: null, error: 'Please sign in before loading your squad.' };
+  }
+
+  const { data: membership, error } = await supabase.rpc('my_active_group_membership');
+  if (error) {
+    console.warn('[groups] fetchMyActiveGroupMembership RPC warning:', error.message);
+    return _fetchMyActiveGroupMembershipFallback(userId);
+  }
+
+  if (!membership?.group || !membership?.member) {
+    return { group: null, member: null, dashboard: null, error: null };
+  }
+
+  const dashboard = await fetchGroupDashboard(membership.group.id);
+  return {
+    group: membership.group,
+    member: membership.member,
+    dashboard,
+    error: dashboard.error,
+  };
+}
+
+async function _fetchMyActiveGroupMembershipFallback(userId) {
+  const { data: member, error } = await supabase
+    .from('group_members')
+    .select(MEMBER_SELECT)
+    .eq('user_id', userId)
+    .order('joined_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[groups] fetchMyActiveGroupMembership fallback error:', error.message);
+    return { group: null, member: null, dashboard: null, error: error.message };
+  }
+
+  if (!member) {
+    return { group: null, member: null, dashboard: null, error: null };
+  }
+
+  const dashboard = await fetchGroupDashboard(member.group_id);
+  return {
+    group: dashboard.group,
+    member,
+    dashboard,
+    error: dashboard.error,
+  };
+}
+
+/**
+ * Persistently leave the current user's group.
+ *
+ * @param {string} groupId
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function leaveMyGroup(groupId) {
+  const { error } = await supabase.rpc('leave_my_group', {
+    p_group_id: groupId,
+  });
+
+  if (error) {
+    console.error('[groups] leaveMyGroup error:', error.message);
+    return { error: error.message };
+  }
+
+  return { error: null };
 }
 
 /**
@@ -603,6 +705,13 @@ function _randomCode() {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
+}
+
+function _normalizeJoinCode(code) {
+  return String(code ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 4);
 }
 
 async function _hydrateDashboardAssets(group, members) {

@@ -84,11 +84,16 @@ function _renderGroupPage() {
   const view = document.getElementById(VIEW_ID);
   if (!view) return;
 
-  const { currentUser, group } = getState();
+  const { currentUser, group, status } = getState();
   view.innerHTML = '';
 
   if (!currentUser) {
     view.appendChild(_buildSignedOutState());
+    return;
+  }
+
+  if (!group && status.groupLoading) {
+    view.appendChild(_buildLoadingState());
     return;
   }
 
@@ -98,6 +103,19 @@ function _renderGroupPage() {
   }
 
   view.appendChild(_buildSquadDashboard());
+}
+
+function _buildLoadingState() {
+  const shell = _pageShell('Squad Space', 'Loading your saved squad and syncing the latest activity.');
+  const empty = document.createElement('section');
+  empty.className = 'page-card page-card--empty';
+  empty.innerHTML = /* html */`
+    <div class="page-empty__icon">${iconSvg(Users, 28)}</div>
+    <h2 class="page-empty__title">Loading your squad...</h2>
+    <p class="page-empty__copy">Checking your saved membership before opening the create or join flow.</p>
+  `;
+  shell.appendChild(empty);
+  return shell;
 }
 
 function _buildSignedOutState() {

@@ -11,10 +11,12 @@
  * All cross-module communication goes through the event bus.
  */
 
-import { on, emit, EVENTS }                    from '../core/events.js';
-import { dispatch }                             from '../core/store.js';
+import { on, EVENTS }                          from '../core/events.js';
+import { dispatch, getState }                   from '../core/store.js';
 import { createGroup, joinGroup,
          fetchGroupDashboard,
+         fetchMyActiveGroupMembership,
+         leaveMyGroup,
          updateMyGroupPresence,
          updateGroupCurrentSpot,
          createOrUpdateGroupMeetup,
@@ -26,6 +28,9 @@ import { subscribeToGroupRealtime,
          unsubscribeFromGroupRealtime }          from '../api/realtime.js';
 import { showToast }                            from '../ui/toast.js';
 
+let _bootstrappedUserId = null;
+let _bootstrapRunId = 0;
+
 // ─── Initialise ───────────────────────────────────────────────────────────────
 
 /**
@@ -33,6 +38,7 @@ import { showToast }                            from '../ui/toast.js';
  * Call once from main.js after boot.
  */
 export function initGroups() {
+  on(EVENTS.AUTH_STATE_CHANGED, _onAuthChanged);
   on(EVENTS.UI_GROUP_CREATE, _onCreateRequested);
   on(EVENTS.UI_GROUP_JOIN,   _onJoinRequested);
   on(EVENTS.UI_GROUP_PRESENCE_UPDATE, _onPresenceUpdateRequested);
@@ -42,6 +48,11 @@ export function initGroups() {
   on(EVENTS.UI_GROUP_PERK_REDEEM, _onPerkRedeemRequested);
   on(EVENTS.UI_GROUP_COVER_UPLOAD, _onCoverUploadRequested);
   on(EVENTS.UI_GROUP_AVATAR_UPLOAD, _onAvatarUploadRequested);
+
+  const currentUser = getState().currentUser;
+  if (currentUser) {
+    _onAuthChanged({ detail: { user: currentUser } });
+  }
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -67,6 +78,35 @@ async function _onCreateRequested(e) {
 
   await _activateGroup(group, member);
   showToast(`Group "${group.name}" created! Code: ${group.code}`, 'success');
+}
+
+async function _onAuthChanged(e) {
+  if (!e.detail.user) {
+    _bootstrappedUserId = null;
+    _bootstrapRunId += 1;
+    unsubscribeFromGroupRealtime();
+    dispatch('SET_STATUS', { groupLoading: false });
+    dispatch('GROUP_LEFT', {});
+    return;
+  }
+  if (_bootstrappedUserId === e.detail.user.id) return;
+  _bootstrappedUserId = e.detail.user.id;
+  const runId = ++_bootstrapRunId;
+
+  dispatch('SET_STATUS', { groupLoading: true });
+  const { group, member, dashboard, error } = await fetchMyActiveGroupMembership();
+  if (runId !== _bootstrapRunId || getState().currentUser?.id !== e.detail.user.id) return;
+  dispatch('SET_STATUS', { groupLoading: false });
+
+  if (error) {
+    console.warn('[groups] squad bootstrap warning:', error);
+    showToast('Could not load your saved squad yet.', 'info');
+    return;
+  }
+
+  if (!group || !member) return;
+
+  _activateGroupFromDashboard({ group, member, dashboard });
 }
 
 /**
@@ -227,8 +267,36 @@ async function _onAvatarUploadRequested(e) {
  * @param {object} member
  */
 async function _activateGroup(group, member) {
-  // Normalise member fields to camelCase for the store.
-  const normMember = {
+  dispatch('GROUP_JOINED', { group, member: _normalizeMember(member) });
+
+  const dashboard = await fetchGroupDashboard(group.id);
+  _loadGroupDashboardState(group.id, dashboard);
+}
+
+function _activateGroupFromDashboard({ group, member, dashboard }) {
+  dispatch('GROUP_JOINED', { group, member: _normalizeMember(member) });
+  _loadGroupDashboardState(group.id, dashboard);
+}
+
+function _loadGroupDashboardState(groupId, dashboard) {
+  dispatch('GROUP_DASHBOARD_LOADED', dashboard ?? {});
+  if (dashboard?.error) {
+    showToast('Joined, but some squad details could not load yet.', 'info');
+  }
+
+  const pins = dashboard?.pins ?? [];
+  dispatch('GROUP_PINS_LOADED', { pins });
+
+  for (const join of dashboard?.pinJoins ?? []) {
+    dispatch('GROUP_PIN_JOIN_UPSERTED', { join });
+  }
+
+  // Open Realtime for this group.
+  subscribeToGroupRealtime(groupId);
+}
+
+function _normalizeMember(member) {
+  return {
     id:          member.id,
     groupId:     member.group_id,
     userId:      member.user_id,
@@ -239,24 +307,6 @@ async function _activateGroup(group, member) {
     availabilityStatus: member.availability_status,
     avatarUrl:   member.avatar_url,
   };
-
-  dispatch('GROUP_JOINED', { group, member: normMember });
-
-  const dashboard = await fetchGroupDashboard(group.id);
-  dispatch('GROUP_DASHBOARD_LOADED', dashboard);
-  if (dashboard.error) {
-    showToast('Joined, but some squad details could not load yet.', 'info');
-  }
-
-  const pins = dashboard.pins ?? [];
-  dispatch('GROUP_PINS_LOADED', { pins });
-
-  for (const join of dashboard.pinJoins ?? []) {
-    dispatch('GROUP_PIN_JOIN_UPSERTED', { join });
-  }
-
-  // Open Realtime for this group.
-  subscribeToGroupRealtime(group.id);
 }
 
 /**
@@ -264,9 +314,7 @@ async function _activateGroup(group, member) {
  * Exported so spotCard.js can call it from a "Leave group" button.
  */
 export function leaveGroup() {
-  unsubscribeFromGroupRealtime();
-  dispatch('GROUP_LEFT', {});
-  emit(EVENTS.GROUP_LEFT, {});
+  _leaveGroupPersistently();
 }
 
 /**
@@ -279,4 +327,19 @@ export function buildGroupJoinUrl(code) {
   const url = new URL(window.location.origin + window.location.pathname);
   url.searchParams.set('join', code);
   return url.toString();
+}
+
+async function _leaveGroupPersistently() {
+  const groupId = getState().group?.id;
+  if (groupId) {
+    const { error } = await leaveMyGroup(groupId);
+    if (error) {
+      showToast(error, 'error');
+      return;
+    }
+  }
+
+  unsubscribeFromGroupRealtime();
+  dispatch('GROUP_LEFT', {});
+  showToast('Left squad.', 'success');
 }

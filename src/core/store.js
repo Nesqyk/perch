@@ -125,6 +125,7 @@ const _state = {
     claimPending:       false,
     correctionPending:  false,
     groupPending:       false,
+    groupLoading:       false,
     campusPending:      false,
     error:              null,   // string | null
   },

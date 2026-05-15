@@ -88,7 +88,7 @@ describe('getState', () => {
     expect(state.availabilityHeatEnabled).toBe(false);
     expect(state.status).toEqual({
       spotsLoading: false, claimPending: false, correctionPending: false,
-      groupPending: false, campusPending: false, error: null,
+      groupPending: false, groupLoading: false, campusPending: false, error: null,
     });
   });
 
