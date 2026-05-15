@@ -12,10 +12,10 @@ const MIN_QUERY_LENGTH = 2;
  * Rank loaded Perch places for a free-text query.
  *
  * @param {string} query
- * @param {{ spots?: object[], buildings?: object[], areas?: object[] }} source
- * @returns {Array<{ kind: 'spot' | 'building' | 'area', id: string, name: string, subtitle: string, lat: number | null, lng: number | null, score: number }>}
+ * @param {{ spots?: object[], buildings?: object[], areas?: object[], campuses?: object[] }} source
+ * @returns {Array<{ kind: 'spot' | 'building' | 'area' | 'campus', id: string, name: string, subtitle: string, lat: number | null, lng: number | null, score: number, zoom?: number | null }>}
  */
-export function searchLocalPlaces(query, { spots = [], buildings = [], areas = [] } = {}) {
+export function searchLocalPlaces(query, { spots = [], buildings = [], areas = [], campuses = [] } = {}) {
   const normalized = _normalize(query);
   if (normalized.length < MIN_QUERY_LENGTH) return [];
 
@@ -70,6 +70,21 @@ export function searchLocalPlaces(query, { spots = [], buildings = [], areas = [
       lat: _numberOrNull(area.lat),
       lng: _numberOrNull(area.lng),
       score,
+    });
+  });
+
+  campuses.forEach((campus) => {
+    const score = _scoreFields(normalized, [campus.name, campus.short_name, campus.city], 110);
+    if (score <= 0) return;
+    results.push({
+      kind: 'campus',
+      id: campus.id,
+      name: campus.short_name || campus.name,
+      subtitle: _joinLabel([campus.name, campus.city]),
+      lat: _numberOrNull(campus.lat),
+      lng: _numberOrNull(campus.lng),
+      score,
+      zoom: _numberOrNull(campus.default_zoom),
     });
   });
 
@@ -145,7 +160,7 @@ function _scoreFields(query, fields, base) {
 }
 
 function _kindWeight(kind) {
-  return { spot: 0, building: 1, area: 2 }[kind] ?? 3;
+  return { spot: 0, campus: 1, building: 2, area: 3 }[kind] ?? 4;
 }
 
 function _externalName(row) {

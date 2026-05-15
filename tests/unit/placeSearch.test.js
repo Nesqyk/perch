@@ -43,6 +43,19 @@ function area(overrides = {}) {
   };
 }
 
+function campus(overrides = {}) {
+  return {
+    id: 'campus-1',
+    name: 'Cebu Technological University Main Campus',
+    short_name: 'CTU Main',
+    city: 'Cebu City',
+    lat: 10.29,
+    lng: 123.88,
+    default_zoom: 17,
+    ...overrides,
+  };
+}
+
 describe('placeSearch', () => {
   it('ranks exact spot matches above building and area matches', () => {
     const results = searchLocalPlaces('Engineering Building Corridor', {
@@ -78,5 +91,18 @@ describe('placeSearch', () => {
       buildings: [building()],
       areas: [area()],
     })).toEqual([]);
+  });
+
+  it('matches campuses by short name and abbreviation-friendly labels', () => {
+    const results = searchLocalPlaces('ctu', {
+      campuses: [campus()],
+    });
+
+    expect(results[0]).toMatchObject({
+      kind: 'campus',
+      id: 'campus-1',
+      name: 'CTU Main',
+    });
+    expect(hasStrongLocalPlaceMatch(results)).toBe(true);
   });
 });
