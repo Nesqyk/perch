@@ -33,6 +33,7 @@ vi.mock('../../src/core/events.js', () => {
     CAMPUSES_LOADED:           'state:campusesLoaded',
     CAMPUS_SELECTED:           'state:campusSelected',
     BUILDINGS_LOADED:          'state:buildingsLoaded',
+    MAP_OVERLAY_CHANGED:       'map:overlayChanged',
     GROUP_JOINED:              'state:groupJoined',
     GROUP_LEFT:                'state:groupLeft',
     GROUP_UPDATED:             'state:groupUpdated',
@@ -84,6 +85,7 @@ describe('getState', () => {
     expect(state.currentRoute).toBe('/');
     expect(state.currentUser).toBeNull();
     expect(state.group).toBeNull();
+    expect(state.availabilityHeatEnabled).toBe(false);
     expect(state.status).toEqual({
       spotsLoading: false, claimPending: false, correctionPending: false,
       groupPending: false, campusPending: false, error: null,
@@ -116,6 +118,15 @@ describe('dispatch — location & view mode', () => {
     expect(emitMock).toHaveBeenCalledWith(
       'state:viewModeChanged',
       { viewMode: 'city' },
+    );
+  });
+
+  it('SET_AVAILABILITY_HEAT_ENABLED updates heat visibility and emits', () => {
+    dispatch('SET_AVAILABILITY_HEAT_ENABLED', true);
+    expect(getState().availabilityHeatEnabled).toBe(true);
+    expect(emitMock).toHaveBeenCalledWith(
+      'map:overlayChanged',
+      { availabilityHeatEnabled: true },
     );
   });
 

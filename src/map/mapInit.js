@@ -4,8 +4,8 @@
  * Constructs and configures the Leaflet map instance.
  * Called once from main.js after loadGoogleMaps() resolves (now a no-op).
  *
- * Tile layer: CartoDB Positron — clean grey/minimal palette that keeps the
- * coloured pins visually dominant without competing road styling.
+ * Tile layer: OpenStreetMap standard tiles so real-world place labels stay
+ * readable and the map feels closer to a familiar everyday map.
  *
  * The map object is module-level so other map/ modules can import it
  * via getMap() without prop-drilling through the whole app.
@@ -50,8 +50,9 @@ const DEFAULT_ZOOM = 17;
  */
 const _ZOOM_ROOM_THRESHOLD = 18;
 
-// CartoDB Positron tile URL — clean grey/minimal palette, no API key required.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+// OpenStreetMap standard tiles — richer place labels, no API key required.
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const TILE_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 /** @type {import('leaflet').Rectangle | null} Temporary marker shown on click */
 let _clickMarker = null;
@@ -85,14 +86,14 @@ export function initMap() {
     center:             [DEFAULT_CENTER.lat, DEFAULT_CENTER.lng],
     zoom:               DEFAULT_ZOOM,
     zoomControl:        false,
-    attributionControl: false,
+    attributionControl: true,
     maxBounds:          defaultBounds.pad(1.2),
     minZoom:            14,
   });
 
   L.tileLayer(TILE_URL, {
     maxZoom:    19,
-    subdomains: 'abcd',
+    attribution: TILE_ATTRIBUTION,
   }).addTo(_map);
 
   // ── Map click → suggest a spot ──────────────────────────────────────────
@@ -159,15 +160,15 @@ function _onCampusSelected(e) {
 // ─── Map click ────────────────────────────────────────────────────────────────
 
 /**
- * Handle a bare map click (not on a marker).
- * Emits UI_SUBMIT_SPOT_REQUESTED so the panel can show the "Suggest a Spot" form.
+ * Focus the map on a searched place and show a temporary focus marker.
  *
- * @param {import('leaflet').LeafletMouseEvent} e
+ * @param {CustomEvent<{ lat: number, lng: number, zoom?: number, viewMode?: 'campus' | 'city' }>} e
  */
 function _onPlaceFocusRequested(e) {
   if (!_map) return;
   const lat = Number(e.detail?.lat);
   const lng = Number(e.detail?.lng);
+  const requestedViewMode = e.detail?.viewMode;
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
 
   if (_searchMarker) {
@@ -183,6 +184,12 @@ function _onPlaceFocusRequested(e) {
     weight:      3,
     opacity:     0.95,
   }).addTo(_map);
+
+  if (requestedViewMode) {
+    _map.once('moveend', () => {
+      dispatch('SET_VIEW_MODE', requestedViewMode);
+    });
+  }
 
   panTo({ lat, lng }, e.detail?.zoom ?? 17);
 }

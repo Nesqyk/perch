@@ -35,6 +35,9 @@ const _state = {
    */
   viewMode: 'campus',           // 'campus' | 'city'
 
+  /** Whether the availability heat overlay is visible on the map. */
+  availabilityHeatEnabled: false, // boolean
+
   /**
    * All active campuses from the database.
    * Populated on boot. Used by campus selector UI and mapInit.
@@ -233,6 +236,12 @@ export function dispatch(action, payload) {
     case 'SET_VIEW_MODE': {
       _state.viewMode = payload; // 'campus' | 'city'
       emit(EVENTS.VIEW_MODE_CHANGED, { viewMode: payload });
+      break;
+    }
+
+    case 'SET_AVAILABILITY_HEAT_ENABLED': {
+      _state.availabilityHeatEnabled = Boolean(payload);
+      emit(EVENTS.MAP_OVERLAY_CHANGED, { availabilityHeatEnabled: _state.availabilityHeatEnabled });
       break;
     }
 

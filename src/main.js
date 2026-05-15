@@ -65,6 +65,7 @@ import { loadGoogleMaps }          from './map/mapLoader.js';
 import { initMap, clearClickMarker } from './map/mapInit.js';
 import { initPins, initGroupPinLayer } from './map/pins.js';
 import { initMapControls }             from './map/mapControls.js';
+import { initAvailabilityHeatLayer }   from './map/availabilityHeat.js';
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
@@ -174,6 +175,7 @@ async function boot() {
   try {
     await loadGoogleMaps();
     initMap();
+    initAvailabilityHeatLayer();
   } catch (err) {
     console.error('[main] Google Maps failed to load:', err);
     showToast('Could not load the map. Check your internet connection.', 'error');

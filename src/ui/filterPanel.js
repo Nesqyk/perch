@@ -241,7 +241,7 @@ function _buildPlaceSearch() {
   input.id = 'place-search-input';
   input.className = 'place-search__input';
   input.type = 'search';
-  input.placeholder = 'Search spots, buildings, areas';
+  input.placeholder = 'Search CTU, Cebu City, spots, buildings';
   input.autocomplete = 'off';
   input.addEventListener('input', () => _schedulePlaceSearch(input.value));
   input.addEventListener('keydown', (event) => {
@@ -278,8 +278,8 @@ async function _runPlaceSearch(query) {
     return;
   }
 
-  const { spots, buildings, areas } = getState();
-  const localResults = searchLocalPlaces(term, { spots, buildings, areas });
+  const { spots, buildings, areas, campuses } = getState();
+  const localResults = searchLocalPlaces(term, { spots, buildings, areas, campuses });
   if (hasStrongLocalPlaceMatch(localResults)) {
     _renderPlaceSearchResults(localResults);
     return;
@@ -341,21 +341,47 @@ function _selectPlaceSearchResult(result) {
     return;
   }
 
-  if (Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
-    emit(EVENTS.UI_PLACE_FOCUS_REQUESTED, {
-      lat: result.lat,
-      lng: result.lng,
-      zoom: result.kind === 'external' ? 17 : 18,
-    });
-  }
-
   if (result.kind === 'building') {
     dispatch('SET_VIEW_MODE', 'campus');
+    if (Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+      emit(EVENTS.UI_PLACE_FOCUS_REQUESTED, {
+        lat: result.lat,
+        lng: result.lng,
+        zoom: 18,
+        viewMode: 'campus',
+      });
+    }
     emit(EVENTS.MAP_BUILDING_CLICKED, { buildingId: result.id });
+    return;
+  }
+
+  if (result.kind === 'campus') {
+    dispatch('SET_VIEW_MODE', 'campus');
+    dispatch('CAMPUS_SELECTED', { campusId: result.id });
+    return;
   }
 
   if (result.kind === 'area') {
+    dispatch('SET_VIEW_MODE', 'city');
     dispatch('SET_FILTERS', { areaId: result.id });
+  }
+
+  if (result.kind === 'external') {
+    dispatch('SET_VIEW_MODE', 'city');
+  }
+
+  if (Number.isFinite(result.lat) && Number.isFinite(result.lng)) {
+    const zoom = result.kind === 'external'
+      ? 14
+      : result.kind === 'area'
+        ? 15
+        : 18;
+    emit(EVENTS.UI_PLACE_FOCUS_REQUESTED, {
+      lat: result.lat,
+      lng: result.lng,
+      zoom,
+      viewMode: result.kind === 'external' || result.kind === 'area' ? 'city' : undefined,
+    });
   }
 }
 
@@ -363,6 +389,7 @@ function _placeKindLabel(kind) {
   return {
     spot: 'Spot',
     building: 'Building',
+    campus: 'Campus',
     area: 'Area',
     external: 'Place',
   }[kind] ?? 'Place';

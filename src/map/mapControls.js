@@ -11,7 +11,7 @@
  * Each icon is serialised to an inline SVG string via _iconSvg().
  */
 
-import { MapPin, Plus, Minus } from 'lucide';
+import { Flame, MapPin, Plus, Minus } from 'lucide';
 
 import { L }                    from './mapLoader.js';
 import { getMap, panTo }        from './mapInit.js';
@@ -60,6 +60,11 @@ export function initMapControls() {
     const btn = document.getElementById('ctrl-locate');
     if (btn) btn.dataset.active = 'true';
   });
+  on(EVENTS.MAP_OVERLAY_CHANGED, () => {
+    const btn = document.getElementById('ctrl-availability-heat');
+    if (!btn) return;
+    btn.dataset.active = getState().availabilityHeatEnabled ? 'true' : 'false';
+  });
 }
 
 // ─── Single grouped control ───────────────────────────────────────────────────
@@ -71,6 +76,8 @@ _MapControlGroup.onAdd = function () {
   L.DomEvent.disableClickPropagation(wrapper);
 
   wrapper.appendChild(_buildLocateMeBtn());
+  wrapper.appendChild(_buildDivider());
+  wrapper.appendChild(_buildAvailabilityHeatBtn());
   wrapper.appendChild(_buildDivider());
   wrapper.appendChild(_buildZoomInBtn());
   wrapper.appendChild(_buildZoomOutBtn());
@@ -135,6 +142,26 @@ function _buildZoomInBtn() {
   btn.addEventListener('click', () => {
     const map = getMap();
     map.setZoom(map.getZoom() + 1);
+  });
+
+  return btn;
+}
+
+/**
+ * @returns {HTMLButtonElement}
+ */
+function _buildAvailabilityHeatBtn() {
+  const btn = document.createElement('button');
+  btn.className = 'map-control-btn';
+  btn.id = 'ctrl-availability-heat';
+  btn.dataset.active = getState().availabilityHeatEnabled ? 'true' : 'false';
+  btn.setAttribute('aria-label', 'Toggle availability heat');
+  btn.innerHTML = _iconSvg(Flame);
+
+  btn.addEventListener('click', () => {
+    const next = !getState().availabilityHeatEnabled;
+    dispatch('SET_AVAILABILITY_HEAT_ENABLED', next);
+    btn.dataset.active = next ? 'true' : 'false';
   });
 
   return btn;
