@@ -312,7 +312,7 @@ erDiagram
 
 ## Notes
 
-- `spot_confidence.spot_id` is both PK and FK — one row per spot, auto-seeded on `spots` INSERT via trigger.
+- `spot_confidence.spot_id` is both PK and FK — one row per spot, auto-seeded on `spots` INSERT via a privileged trigger function.
 - `claims.user_id`: authenticated owner of the claim; legacy `session_id` is nullable and only retained for old rows.
 - `claims.cancelled_at` nullable — null + future `expires_at` = active claim.
 - `corrections.user_id`: authenticated owner of the report; legacy `session_id` is nullable and unused by new writes.

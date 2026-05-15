@@ -17,6 +17,14 @@
 
 import { on, emit, EVENTS } from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
+import { parseRoomRange } from '../utils/roomRange.js';
+import {
+  attachSpotImage,
+  createCommunitySpot,
+  createCommunitySpotsBulk,
+  fetchSpots,
+  uploadSpotImage,
+} from '../api/spots.js';
 import {
   createBuilding,
   confirmBuilding,
@@ -24,12 +32,6 @@ import {
   fetchBuildings,
   fetchPendingSpotSubmissions,
 } from '../api/campuses.js';
-import {
-  attachSpotImage,
-  createCommunitySpot,
-  fetchSpots,
-  uploadSpotImage,
-} from '../api/spots.js';
 import { getVisibleRooms, summarizeBuildingInventory } from '../state/buildingState.js';
 import { buildBuildingShareUrl } from '../core/router.js';
 import { createImageUploadField } from './imageUploadField.js';
@@ -453,29 +455,123 @@ function _buildAddRoomComposer(building) {
   const wrap = document.createElement('div');
   wrap.className = 'submit-spot-panel__form';
   wrap.innerHTML = /* html */`
-    <input id="composer-room-name" class="input" type="text" placeholder="Room 404" maxlength="60" />
+    <div class="campus-building-panel__composer-mode chip-row" role="tablist" aria-label="Room input mode">
+      <button type="button" class="chip chip-active" data-room-mode="single" aria-pressed="true">Single</button>
+      <button type="button" class="chip" data-room-mode="range" aria-pressed="false">Range</button>
+    </div>
+    <div data-room-mode-panel="single">
+      <input id="composer-room-name" class="input" type="text" placeholder="Room 404" maxlength="60" />
+    </div>
+    <div data-room-mode-panel="range" hidden>
+      <input id="composer-room-range" class="input" type="text" placeholder="101-110" maxlength="20" />
+      <p class="campus-building-panel__composer-help">Creates numeric room names exactly as entered, up to 50 rooms at once.</p>
+    </div>
     <input id="composer-room-floor" class="input" type="text" placeholder="4F (optional)" maxlength="12" />
     <textarea id="composer-room-notes" class="input submit-spot-panel__textarea" rows="3" placeholder="Quiet after 3pm, strong WiFi"></textarea>
     <button type="button" class="btn btn-primary btn-full" id="composer-add-room">Add Room</button>
   `;
 
   const imageField = createImageUploadField({ idPrefix: 'composer-room' });
-  wrap.insertBefore(imageField.element, wrap.querySelector('#composer-add-room'));
+  wrap.insertBefore(imageField.element, wrap.querySelector('#composer-room-floor'));
+
+  /** @type {'single' | 'range'} */
+  let mode = 'single';
+
+  const _setMode = (nextMode) => {
+    mode = nextMode;
+    wrap.querySelectorAll('[data-room-mode]').forEach((button) => {
+      const isActive = button.getAttribute('data-room-mode') === nextMode;
+      button.classList.toggle('chip-active', isActive);
+      button.setAttribute('aria-pressed', String(isActive));
+    });
+
+    wrap.querySelectorAll('[data-room-mode-panel]').forEach((panel) => {
+      panel.hidden = panel.getAttribute('data-room-mode-panel') !== nextMode;
+    });
+
+    imageField.element.hidden = nextMode !== 'single';
+    const submitBtn = /** @type {HTMLButtonElement | null} */(wrap.querySelector('#composer-add-room'));
+    if (submitBtn) submitBtn.textContent = nextMode === 'single' ? 'Add Room' : 'Add Rooms';
+  };
+
+  wrap.querySelectorAll('[data-room-mode]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextMode = button.getAttribute('data-room-mode');
+      if (nextMode === 'single' || nextMode === 'range') _setMode(nextMode);
+    });
+  });
+
+  _setMode('single');
 
   wrap.querySelector('#composer-add-room')?.addEventListener('click', async () => {
     const submitBtn = /** @type {HTMLButtonElement | null} */(wrap.querySelector('#composer-add-room'));
     const roomName = /** @type {HTMLInputElement} */(wrap.querySelector('#composer-room-name'))?.value.trim() ?? '';
+    const roomRange = /** @type {HTMLInputElement} */(wrap.querySelector('#composer-room-range'))?.value.trim() ?? '';
     const floor = /** @type {HTMLInputElement} */(wrap.querySelector('#composer-room-floor'))?.value.trim() ?? '';
     const notes = /** @type {HTMLTextAreaElement} */(wrap.querySelector('#composer-room-notes'))?.value.trim() ?? '';
 
-    if (!roomName) {
+    if (mode === 'single' && !roomName) {
       wrap.querySelector('#composer-room-name')?.focus();
+      return;
+    }
+
+    if (mode === 'range' && !roomRange) {
+      wrap.querySelector('#composer-room-range')?.focus();
       return;
     }
 
     if (submitBtn) {
       submitBtn.disabled = true;
-      submitBtn.textContent = 'Adding...';
+      submitBtn.textContent = mode === 'single' ? 'Adding...' : 'Adding Rooms...';
+    }
+
+    if (mode === 'range') {
+      const parsed = parseRoomRange(roomRange, { maxCount: 50 });
+      if (parsed.error) {
+        showToast(parsed.error, 'error');
+        wrap.querySelector('#composer-room-range')?.focus();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Rooms';
+        }
+        return;
+      }
+
+      const { created, skipped, error } = await createCommunitySpotsBulk({
+        campusId: building.campus_id,
+        lat: Number(building.lat),
+        lng: Number(building.lng),
+        buildingName: building.name,
+        floor,
+        roomNames: parsed.names,
+        description: notes,
+        onCampus: true,
+      });
+
+      if (error) {
+        showToast(error ?? 'Could not add these rooms.', 'error');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Rooms';
+        }
+        return;
+      }
+
+      if (!created.length) {
+        showToast(`No new rooms were added. ${skipped.length} already exist.`, 'info');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Add Rooms';
+        }
+        return;
+      }
+
+      await _refreshCampusCatalogue(building.campus_id);
+      const summary = `${created.length} room${created.length === 1 ? '' : 's'} added${skipped.length ? `, ${skipped.length} skipped because ${skipped.length === 1 ? 'it already exists' : 'they already exist'}.` : '.'}`;
+      showToast(summary, 'success');
+      _closeModal();
+      await openBuildingPanel(building.id);
+      return;
     }
 
     const { spot, error } = await createCommunitySpot({

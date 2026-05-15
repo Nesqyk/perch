@@ -9,6 +9,39 @@
 
 import { supabase } from './supabaseClient.js';
 
+const COMMUNITY_SPOT_SELECT = `
+  id,
+  name,
+  type,
+  campus_id,
+  area_id,
+  building_id,
+  on_campus,
+  building,
+  floor,
+  walk_time_min,
+  rough_capacity,
+  has_outlets,
+  wifi_strength,
+  noise_baseline,
+  has_food,
+  lat,
+  lng,
+  image_path,
+  created_by,
+  availability_status,
+  availability_updated_at,
+  availability_updated_by,
+  areas (
+    id,
+    sitio,
+    barangay,
+    city_municipality,
+    lat,
+    lng
+  )
+`;
+
 const SPOT_IMAGES_BUCKET = 'spot-images';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
@@ -180,15 +213,151 @@ export async function createCommunitySpot({
   spotType = '',
   onCampus = true,
 }) {
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  const userId = authData?.user?.id ?? null;
-
-  if (authError || !userId) {
-    const message = authError?.message ?? 'Please sign in before adding a spot.';
-    console.error('[spots] createCommunitySpot auth error:', message);
-    return { spot: null, error: message };
+  const userId = await _getAuthenticatedUserId();
+  if (!userId) {
+    return { spot: null, error: 'Please sign in before adding a spot.' };
   }
 
+  const result = await _createOrFindCommunitySpot({
+    userId,
+    campusId,
+    areaId,
+    lat,
+    lng,
+    buildingName,
+    floor,
+    spotName,
+    description,
+    spotType,
+    onCampus,
+  });
+
+  if (result.error) {
+    console.error('[spots] createCommunitySpot error:', result.error);
+    return { spot: null, error: result.error };
+  }
+
+  return { spot: result.spot, error: null };
+}
+
+/**
+ * Create many live community spots in one building using shared metadata.
+ *
+ * @param {{
+ *   campusId: string | null,
+ *   areaId?: string | null,
+ *   lat: number,
+ *   lng: number,
+ *   buildingName: string,
+ *   floor: string,
+ *   roomNames: string[],
+ *   description?: string,
+ *   spotType?: string,
+ *   onCampus?: boolean,
+ * }} params
+ * @returns {Promise<{ created: object[], skipped: string[], error: string | null }>}
+ */
+export async function createCommunitySpotsBulk({
+  campusId,
+  areaId = null,
+  lat,
+  lng,
+  buildingName,
+  floor,
+  roomNames,
+  description = '',
+  spotType = '',
+  onCampus = true,
+}) {
+  const userId = await _getAuthenticatedUserId();
+  if (!userId) {
+    return { created: [], skipped: [], error: 'Please sign in before adding rooms.' };
+  }
+
+  const created = [];
+  const skipped = [];
+  for (const roomName of roomNames) {
+    const result = await _createOrFindCommunitySpot({
+      userId,
+      campusId,
+      areaId,
+      lat,
+      lng,
+      buildingName,
+      floor,
+      spotName: roomName,
+      description,
+      spotType,
+      onCampus,
+    });
+
+    if (result.error) {
+      console.error('[spots] createCommunitySpotsBulk error:', result.error);
+      return { created, skipped, error: result.error };
+    }
+
+    if (result.duplicate) {
+      skipped.push(roomName);
+      continue;
+    }
+
+    if (result.spot) {
+      created.push(result.spot);
+    }
+  }
+
+  return { created, skipped, error: null };
+}
+
+async function _findExistingCommunitySpot(payload) {
+  let query = supabase
+    .from('spots')
+    .select(COMMUNITY_SPOT_SELECT)
+    .eq('is_active', true)
+    .ilike('name', payload.name);
+
+  query = payload.campus_id
+    ? query.eq('campus_id', payload.campus_id)
+    : query.is('campus_id', null);
+  query = payload.building
+    ? query.ilike('building', payload.building)
+    : query.is('building', null);
+  query = payload.floor
+    ? query.ilike('floor', payload.floor)
+    : query.is('floor', null);
+
+  const { data, error } = await query.limit(1).maybeSingle();
+  if (error) {
+    console.warn('[spots] _findExistingCommunitySpot warning:', error.message);
+    return null;
+  }
+
+  return data ?? null;
+}
+
+async function _getAuthenticatedUserId() {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+  if (authError || !userId) {
+    console.error('[spots] auth error:', authError?.message ?? 'Missing authenticated user.');
+    return null;
+  }
+  return userId;
+}
+
+async function _createOrFindCommunitySpot({
+  userId,
+  campusId,
+  areaId = null,
+  lat,
+  lng,
+  buildingName,
+  floor,
+  spotName,
+  description = '',
+  spotType = '',
+  onCampus = true,
+}) {
   const payload = {
     campus_id: campusId || null,
     area_id: areaId || null,
@@ -211,109 +380,24 @@ export async function createCommunitySpot({
 
   const existing = await _findExistingCommunitySpot(payload);
   if (existing) {
-    return { spot: await _hydrateSpotImage(existing), error: null };
+    return { spot: await _hydrateSpotImage(existing), duplicate: true, error: null };
   }
 
   const { data, error } = await supabase
     .from('spots')
     .insert(payload)
-    .select(`
-      id,
-      name,
-      type,
-      campus_id,
-      area_id,
-      building_id,
-      on_campus,
-      building,
-      floor,
-      walk_time_min,
-      rough_capacity,
-      has_outlets,
-      wifi_strength,
-      noise_baseline,
-      has_food,
-      lat,
-      lng,
-      image_path,
-      created_by,
-      availability_status,
-      availability_updated_at,
-      availability_updated_by,
-      areas (
-        id,
-        sitio,
-        barangay,
-        city_municipality,
-        lat,
-        lng
-      )
-    `)
+    .select(COMMUNITY_SPOT_SELECT)
     .single();
 
   if (error) {
-    console.error('[spots] createCommunitySpot error:', error.message);
-    return { spot: null, error: error.message };
+    const fallback = await _findExistingCommunitySpot(payload);
+    if (fallback) {
+      return { spot: await _hydrateSpotImage(fallback), duplicate: true, error: null };
+    }
+    return { spot: null, duplicate: false, error: error.message };
   }
 
-  return { spot: await _hydrateSpotImage(data), error: null };
-}
-
-async function _findExistingCommunitySpot(payload) {
-  let query = supabase
-    .from('spots')
-    .select(`
-      id,
-      name,
-      type,
-      campus_id,
-      area_id,
-      building_id,
-      on_campus,
-      building,
-      floor,
-      walk_time_min,
-      rough_capacity,
-      has_outlets,
-      wifi_strength,
-      noise_baseline,
-      has_food,
-      lat,
-      lng,
-      image_path,
-      created_by,
-      availability_status,
-      availability_updated_at,
-      availability_updated_by,
-      areas (
-        id,
-        sitio,
-        barangay,
-        city_municipality,
-        lat,
-        lng
-      )
-    `)
-    .eq('is_active', true)
-    .ilike('name', payload.name);
-
-  query = payload.campus_id
-    ? query.eq('campus_id', payload.campus_id)
-    : query.is('campus_id', null);
-  query = payload.building
-    ? query.ilike('building', payload.building)
-    : query.is('building', null);
-  query = payload.floor
-    ? query.ilike('floor', payload.floor)
-    : query.is('floor', null);
-
-  const { data, error } = await query.limit(1).maybeSingle();
-  if (error) {
-    console.warn('[spots] _findExistingCommunitySpot warning:', error.message);
-    return null;
-  }
-
-  return data ?? null;
+  return { spot: await _hydrateSpotImage(data), duplicate: false, error: null };
 }
 
 /**

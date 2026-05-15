@@ -321,6 +321,17 @@
   display: flex;
 }
 
+.campus-building-panel__composer-mode {
+  margin-bottom: 0;
+}
+
+.campus-building-panel__composer-help {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
 /* ------------------------------------------------------------------
    Sticky footer — "+ Add Unmapped Room" / "✕ Cancel" toggle button
    ------------------------------------------------------------------ */
