@@ -14,91 +14,96 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
-  if (req.method !== 'POST') {
-    return _json({ error: 'Method not allowed.' }, 405);
-  }
+  try {
+    if (req.method !== 'POST') {
+      return _json({ error: 'Method not allowed.' }, 405);
+    }
 
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  const infobipBaseUrl = Deno.env.get('INFOBIP_BASE_URL');
-  const infobipApiKey = Deno.env.get('INFOBIP_API_KEY');
-  const infobipSender = Deno.env.get('INFOBIP_WHATSAPP_SENDER') ?? Deno.env.get('INFOBIP_SENDER');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const infobipBaseUrl = Deno.env.get('INFOBIP_BASE_URL');
+    const infobipApiKey = Deno.env.get('INFOBIP_API_KEY');
+    const infobipSender = Deno.env.get('INFOBIP_WHATSAPP_SENDER') ?? Deno.env.get('INFOBIP_SENDER');
 
-  if (!supabaseUrl || !serviceKey || !infobipBaseUrl || !infobipApiKey || !infobipSender) {
-    return _json({ error: 'WhatsApp provider is not configured.' }, 500);
-  }
+    if (!supabaseUrl || !serviceKey || !infobipBaseUrl || !infobipApiKey || !infobipSender) {
+      return _json({ error: 'WhatsApp provider is not configured.' }, 500);
+    }
 
-  const body = await _readJson(req);
-  const notificationIds = Array.isArray(body?.notificationIds)
-    ? body.notificationIds.filter((id: unknown) => typeof id === 'string')
-    : [];
-  const spotId = typeof body?.spotId === 'string' ? body.spotId : '';
-  const status = typeof body?.status === 'string' ? body.status : '';
-  const templateKey = status === 'available'
-    ? 'spot_available'
-    : status === 'occupied'
-      ? 'spot_occupied'
-      : '';
+    const body = await _readJson(req);
+    const notificationIds = Array.isArray(body?.notificationIds)
+      ? body.notificationIds.filter((id: unknown) => typeof id === 'string')
+      : [];
+    const spotId = typeof body?.spotId === 'string' ? body.spotId : '';
+    const status = typeof body?.status === 'string' ? body.status : '';
+    const templateKey = status === 'available'
+      ? 'spot_available'
+      : status === 'occupied'
+        ? 'spot_occupied'
+        : '';
 
-  const notifications = await _fetchQueuedNotifications({
-    supabaseUrl,
-    serviceKey,
-    notificationIds,
-    spotId,
-    templateKey,
-  });
-
-  let sent = 0;
-  let failed = 0;
-
-  for (const notification of notifications) {
-    await _updateNotification({
+    const notifications = await _fetchQueuedNotifications({
       supabaseUrl,
       serviceKey,
-      id: notification.id,
-      patch: { status: 'sending', updated_at: new Date().toISOString() },
+      notificationIds,
+      spotId,
+      templateKey,
     });
 
-    const result = await _sendInfobipWhatsApp({
-      baseUrl: infobipBaseUrl,
-      apiKey: infobipApiKey,
-      sender: infobipSender,
-      to: notification.phone_e164,
-      body: notification.message_body,
-    });
+    let sent = 0;
+    let failed = 0;
 
-    if (result.ok) {
-      sent += 1;
+    for (const notification of notifications) {
       await _updateNotification({
         supabaseUrl,
         serviceKey,
         id: notification.id,
-        patch: {
-          status: 'sent',
-          provider: 'infobip_whatsapp',
-          provider_message_id: result.messageId,
-          error_message: null,
-          sent_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
+        patch: { status: 'sending', updated_at: new Date().toISOString() },
       });
-    } else {
-      failed += 1;
-      await _updateNotification({
-        supabaseUrl,
-        serviceKey,
-        id: notification.id,
-        patch: {
-          status: 'failed',
-          provider: 'infobip_whatsapp',
-          error_message: result.error,
-          updated_at: new Date().toISOString(),
-        },
+
+      const result = await _sendInfobipWhatsApp({
+        baseUrl: infobipBaseUrl,
+        apiKey: infobipApiKey,
+        sender: infobipSender,
+        to: notification.phone_e164,
+        body: notification.message_body,
       });
+
+      if (result.ok) {
+        sent += 1;
+        await _updateNotification({
+          supabaseUrl,
+          serviceKey,
+          id: notification.id,
+          patch: {
+            status: 'sent',
+            provider: 'infobip_whatsapp',
+            provider_message_id: result.messageId,
+            error_message: null,
+            sent_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        });
+      } else {
+        failed += 1;
+        await _updateNotification({
+          supabaseUrl,
+          serviceKey,
+          id: notification.id,
+          patch: {
+            status: 'failed',
+            provider: 'infobip_whatsapp',
+            error_message: result.error,
+            updated_at: new Date().toISOString(),
+          },
+        });
+      }
     }
-  }
 
-  return _json({ queued: notifications.length, sent, failed });
+    return _json({ queued: notifications.length, sent, failed });
+  } catch (err) {
+    console.error('[send-sms-notification] unhandled error:', err);
+    return _json({ error: _errorMessage(err) }, 500);
+  }
 });
 
 async function _fetchQueuedNotifications({
@@ -227,6 +232,10 @@ function _infobipErrorMessage(payload: any, status: number) {
     ?? payload?.requestError?.serviceException?.messageId
     ?? payload?.message
     ?? `Infobip request failed with ${status}`;
+}
+
+function _errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : 'WhatsApp notification failed.';
 }
 
 function _json(payload: unknown, status = 200) {
