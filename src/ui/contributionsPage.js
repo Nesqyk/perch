@@ -7,7 +7,7 @@
  * the map, including room submissions and buildings awaiting verification.
  */
 
-import { Building2, CheckCircle2, Compass, FolderClock, Layers3, LogIn, MapPinned, Plus, Sparkles } from 'lucide';
+import { Building2, Compass, FolderClock, LogIn, MapPinned, Plus, Sparkles } from 'lucide';
 
 import { on, emit, EVENTS } from '../core/events.js';
 import { getState } from '../core/store.js';

@@ -8,13 +8,29 @@
 
 import { supabase } from './supabaseClient.js';
 
-const PROFILE_SELECT = 'user_id, nickname, avatar_url, cover_image_url, school_label, scholar_label';
+const PROFILE_SELECT = `
+  user_id,
+  nickname,
+  avatar_url,
+  cover_image_url,
+  school_label,
+  scholar_label,
+  student_id,
+  course_label,
+  class_label,
+  verified_student,
+  study_vibes,
+  phone_e164,
+  phone_country,
+  phone_verified_at
+`;
 const SETTINGS_SELECT = `
   user_id,
   default_map_view,
   preferred_study_environment,
   spot_availability_alerts,
   squad_updates,
+  sms_enabled,
   preferred_campus_id,
   google_calendar_linked,
   created_at,
@@ -53,7 +69,7 @@ export async function fetchSettingsDashboard() {
 /**
  * Update account profile fields.
  *
- * @param {{ nickname?: string, schoolLabel?: string, scholarLabel?: string, avatarUrl?: string | null, coverImageUrl?: string | null }} updates
+ * @param {{ nickname?: string, schoolLabel?: string, scholarLabel?: string, avatarUrl?: string | null, coverImageUrl?: string | null, studentId?: string, courseLabel?: string, classLabel?: string, studyVibes?: string[], phoneE164?: string | null, phoneCountry?: string | null }} updates
  * @returns {Promise<{ profile: object | null, error: string | null }>}
  */
 export async function updateSettingsProfile(updates) {
@@ -68,6 +84,18 @@ export async function updateSettingsProfile(updates) {
   if (updates.scholarLabel !== undefined) row.scholar_label = updates.scholarLabel;
   if (updates.avatarUrl !== undefined) row.avatar_url = updates.avatarUrl;
   if (updates.coverImageUrl !== undefined) row.cover_image_url = updates.coverImageUrl;
+  if (updates.studentId !== undefined) row.student_id = updates.studentId || null;
+  if (updates.courseLabel !== undefined) row.course_label = updates.courseLabel || null;
+  if (updates.classLabel !== undefined) row.class_label = updates.classLabel || null;
+  if (updates.phoneE164 !== undefined) row.phone_e164 = updates.phoneE164 || null;
+  if (updates.phone_e164 !== undefined) row.phone_e164 = updates.phone_e164 || null;
+  if (updates.phoneCountry !== undefined) row.phone_country = updates.phoneCountry || null;
+  if (updates.phone_country !== undefined) row.phone_country = updates.phone_country || null;
+  if (updates.studyVibes !== undefined) {
+    row.study_vibes = Array.isArray(updates.studyVibes)
+      ? updates.studyVibes.map((vibe) => String(vibe).trim()).filter(Boolean).slice(0, 6)
+      : [];
+  }
 
   const { data, error } = await supabase
     .from('user_profiles')
@@ -336,6 +364,8 @@ function _settingsUpdateToRow(updates, userId) {
   if (updates.spot_availability_alerts !== undefined) row.spot_availability_alerts = updates.spot_availability_alerts;
   if (updates.squadUpdates !== undefined) row.squad_updates = updates.squadUpdates;
   if (updates.squad_updates !== undefined) row.squad_updates = updates.squad_updates;
+  if (updates.smsEnabled !== undefined) row.sms_enabled = updates.smsEnabled;
+  if (updates.sms_enabled !== undefined) row.sms_enabled = updates.sms_enabled;
   if (updates.preferredCampusId !== undefined) row.preferred_campus_id = updates.preferredCampusId || null;
   if (updates.preferred_campus_id !== undefined) row.preferred_campus_id = updates.preferred_campus_id || null;
   if (updates.googleCalendarLinked !== undefined) row.google_calendar_linked = updates.googleCalendarLinked;

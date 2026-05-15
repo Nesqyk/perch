@@ -23,6 +23,7 @@ const ROUTE_VIEW_IDS = Object.freeze({
   '/settings': 'view-settings',
   '/contributions': 'view-contributions',
   '/notifications': 'view-notifications',
+  '/landing': 'view-landing',
 });
 
 const ROUTE_ICONS = Object.freeze({
@@ -117,9 +118,10 @@ function _syncShell(route, isAuthenticated) {
   const isMapRoute = layoutMode === 'map';
   const rail = document.getElementById('dashboard-rail');
   const bottom = document.getElementById('dashboard-bottom');
+  const isImmersiveRoute = layoutMode === 'immersive';
 
-  rail?.toggleAttribute('hidden', !isAuthenticated);
-  bottom?.toggleAttribute('hidden', !isAuthenticated);
+  rail?.toggleAttribute('hidden', !isAuthenticated || isImmersiveRoute);
+  bottom?.toggleAttribute('hidden', !isAuthenticated || isImmersiveRoute);
 
   if (isAuthenticated) {
     document.body.dataset.nav = 'ready';

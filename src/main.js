@@ -47,6 +47,7 @@ import './styles/filters.css';
 import './styles/campusSelector.css';
 import './styles/navMenu.css';
 import './styles/pages.css';
+import './styles/landing.css';
 import './styles/submitSpotPanel.css';
 import './styles/buildingPanel.css';
 
@@ -71,6 +72,7 @@ import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
 import { getProfile, upsertProfile } from './api/profile.js';
 import { fetchCampuses, fetchBuildings } from './api/campuses.js';
+import { fetchAreas } from './api/areas.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
 // ─── Features ────────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ import { initGroups }           from './features/groups.js';
 import { initGroupPins }        from './features/groupPins.js';
 import { initCampus }           from './features/campus.js';
 import { initSettingsFeature }  from './features/settings.js';
+import { initAvailabilityFeature } from './features/availability.js';
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 
@@ -100,6 +103,7 @@ import { initSharedSpotPage } from './ui/sharedSpotPage.js';
 import { initContributionsPage } from './ui/contributionsPage.js';
 import { initNotificationsPage } from './ui/notificationsPage.js';
 import { initSettingsPage } from './ui/settingsPage.js';
+import { initLandingPage } from './ui/landingPage.js';
 import { loadUserPreferences } from './utils/preferences.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
@@ -116,6 +120,7 @@ async function boot() {
   // initialises onAuthStateChange that syncs currentUser to store.
   initAuth();
   initSettingsFeature();
+  initAvailabilityFeature();
 
   // ── 3.5 UI Header + Router + Nav shell + AuthModal ─────────────────────────
   initAuthModal();
@@ -136,6 +141,7 @@ async function boot() {
   initContributionsPage();
   initNotificationsPage();
   initSettingsPage();
+  initLandingPage();
 
   // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────
   // getProfile() must run AFTER onAuthStateChange fires (which is async), so
@@ -186,6 +192,8 @@ async function boot() {
   try {
     const campuses = await fetchCampuses();
     dispatch('CAMPUSES_LOADED', { campuses });
+    const areas = await fetchAreas();
+    dispatch('AREAS_LOADED', { areas });
 
     // ?campus= deep-link overrides the auto-selected campus.
     const preferredCampusId = !urlState.campusId ? preferences.preferredCampusId : null;

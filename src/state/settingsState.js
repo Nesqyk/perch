@@ -10,6 +10,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   preferredStudyEnvironment: 'quiet',
   spotAvailabilityAlerts: true,
   squadUpdates: false,
+  smsEnabled: false,
   preferredCampusId: '',
   googleCalendarLinked: false,
 });
@@ -27,6 +28,7 @@ export function normalizeSettings(row, fallback = {}) {
     preferredStudyEnvironment: row?.preferred_study_environment === 'moderate' ? 'moderate' : 'quiet',
     spotAvailabilityAlerts: row?.spot_availability_alerts ?? fallback.notifyClaimExpiry ?? DEFAULT_SETTINGS.spotAvailabilityAlerts,
     squadUpdates: row?.squad_updates ?? fallback.notifyGroupActivity ?? DEFAULT_SETTINGS.squadUpdates,
+    smsEnabled: row?.sms_enabled ?? DEFAULT_SETTINGS.smsEnabled,
     preferredCampusId: row?.preferred_campus_id ?? fallback.preferredCampusId ?? DEFAULT_SETTINGS.preferredCampusId,
     googleCalendarLinked: row?.google_calendar_linked ?? DEFAULT_SETTINGS.googleCalendarLinked,
   };

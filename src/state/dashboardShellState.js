@@ -13,6 +13,7 @@ export const DASHBOARD_ROUTES = Object.freeze([
   { route: '/contributions', label: 'Contributions', nav: false, authRequired: true, layout: 'workspace' },
   { route: '/campus', label: 'Campus', nav: false, authRequired: false, layout: 'immersive' },
   { route: '/spot', label: 'Spot', nav: false, authRequired: false, layout: 'immersive' },
+  { route: '/landing', label: 'Landing', nav: false, authRequired: false, layout: 'immersive' },
 ]);
 
 /**

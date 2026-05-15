@@ -9,6 +9,47 @@
 
 import { supabase } from './supabaseClient.js';
 
+const SPOT_IMAGES_BUCKET = 'spot-images';
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+const SPOT_SELECT = `
+  id,
+  name,
+  type,
+  campus_id,
+  area_id,
+  building_id,
+  on_campus,
+  building,
+  floor,
+  walk_time_min,
+  rough_capacity,
+  has_outlets,
+  wifi_strength,
+  noise_baseline,
+  has_food,
+  lat,
+  lng,
+  image_path,
+  created_by,
+  availability_status,
+  availability_updated_at,
+  availability_updated_by,
+  areas (
+    id,
+    sitio,
+    barangay,
+    city_municipality,
+    lat,
+    lng
+  ),
+  spot_confidence (
+    score,
+    reason,
+    valid_until
+  )
+`;
+
 /**
  * Fetch all active spots together with their latest confidence scores.
  *
@@ -25,29 +66,7 @@ import { supabase } from './supabaseClient.js';
 export async function fetchSpots() {
   const { data, error } = await supabase
     .from('spots')
-    .select(`
-      id,
-      name,
-      type,
-      campus_id,
-      building_id,
-      on_campus,
-      building,
-      floor,
-      walk_time_min,
-      rough_capacity,
-      has_outlets,
-      wifi_strength,
-      noise_baseline,
-      has_food,
-      lat,
-      lng,
-      spot_confidence (
-        score,
-        reason,
-        valid_until
-      )
-    `)
+    .select(SPOT_SELECT)
     .eq('is_active', true)
     .order('name');
 
@@ -58,7 +77,7 @@ export async function fetchSpots() {
 
   // Flatten confidence: spot has at most one active confidence row.
   const confidence = {};
-  const spots = data.map(row => {
+  const spots = await Promise.all(data.map(async (row) => {
     const conf = row.spot_confidence?.[0] ?? null;
     if (conf) {
       confidence[row.id] = {
@@ -69,8 +88,8 @@ export async function fetchSpots() {
     }
     // Return the spot without the nested confidence array.
     const { spot_confidence: _, ...spot } = row;
-    return spot;
-  });
+    return _hydrateSpotImage(spot);
+  }));
 
   return { spots, confidence };
 }
@@ -85,7 +104,41 @@ export async function fetchSpots() {
 export async function fetchSpotById(spotId) {
   const { data, error } = await supabase
     .from('spots')
-    .select('*')
+    .select(`
+      id,
+      name,
+      type,
+      campus_id,
+      area_id,
+      building_id,
+      on_campus,
+      building,
+      floor,
+      walk_time_min,
+      rough_capacity,
+      has_outlets,
+      wifi_strength,
+      noise_baseline,
+      has_food,
+      lat,
+      lng,
+      image_path,
+      created_by,
+      availability_status,
+      availability_updated_at,
+      availability_updated_by,
+      areas (
+        id,
+        sitio,
+        barangay,
+        city_municipality,
+        lat,
+        lng
+      ),
+      is_active,
+      created_at,
+      updated_at
+    `)
     .eq('id', spotId)
     .eq('is_active', true)
     .single();
@@ -95,7 +148,177 @@ export async function fetchSpotById(spotId) {
     return null;
   }
 
-  return data;
+  return _hydrateSpotImage(data);
+}
+
+/**
+ * Create a live community spot.
+ *
+ * @param {{
+ *   campusId: string | null,
+ *   areaId?: string | null,
+ *   lat: number,
+ *   lng: number,
+ *   buildingName: string,
+ *   floor: string,
+ *   spotName: string,
+ *   description?: string,
+ *   spotType?: string,
+ *   onCampus?: boolean,
+ * }} params
+ * @returns {Promise<{ spot: object | null, error: string | null }>}
+ */
+export async function createCommunitySpot({
+  campusId,
+  areaId = null,
+  lat,
+  lng,
+  buildingName,
+  floor,
+  spotName,
+  description = '',
+  spotType = '',
+  onCampus = true,
+}) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    const message = authError?.message ?? 'Please sign in before adding a spot.';
+    console.error('[spots] createCommunitySpot auth error:', message);
+    return { spot: null, error: message };
+  }
+
+  const payload = {
+    campus_id: campusId || null,
+    area_id: areaId || null,
+    name: spotName,
+    type: spotType || (description ? 'community' : null),
+    on_campus: Boolean(onCampus),
+    building: buildingName || null,
+    floor: floor || null,
+    walk_time_min: 0,
+    rough_capacity: null,
+    has_outlets: false,
+    wifi_strength: null,
+    noise_baseline: null,
+    has_food: false,
+    lat,
+    lng,
+    is_active: true,
+    created_by: userId,
+  };
+
+  const { data, error } = await supabase
+    .from('spots')
+    .insert(payload)
+    .select(`
+      id,
+      name,
+      type,
+      campus_id,
+      area_id,
+      building_id,
+      on_campus,
+      building,
+      floor,
+      walk_time_min,
+      rough_capacity,
+      has_outlets,
+      wifi_strength,
+      noise_baseline,
+      has_food,
+      lat,
+      lng,
+      image_path,
+      created_by,
+      availability_status,
+      availability_updated_at,
+      availability_updated_by,
+      areas (
+        id,
+        sitio,
+        barangay,
+        city_municipality,
+        lat,
+        lng
+      )
+    `)
+    .single();
+
+  if (error) {
+    console.error('[spots] createCommunitySpot error:', error.message);
+    return { spot: null, error: error.message };
+  }
+
+  return { spot: await _hydrateSpotImage(data), error: null };
+}
+
+/**
+ * Upload a spot image into Supabase Storage.
+ *
+ * @param {{ spotId: string, file: File }} params
+ * @returns {Promise<{ path: string, url: string, error: string | null }>}
+ */
+export async function uploadSpotImage({ spotId, file }) {
+  const path = `spots/${spotId}/${Date.now()}-${_safeFileName(file.name)}`;
+  const { error } = await supabase
+    .storage
+    .from(SPOT_IMAGES_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      contentType: file.type || 'image/jpeg',
+      upsert: true,
+    });
+
+  if (error) {
+    console.error('[spots] uploadSpotImage error:', error.message);
+    return { path: '', url: '', error: error.message };
+  }
+
+  return { path, url: await signSpotImageUrl(path), error: null };
+}
+
+/**
+ * Attach the first image to a spot.
+ *
+ * @param {{ spotId: string, imagePath: string }} params
+ * @returns {Promise<{ spot: object | null, error: string | null }>}
+ */
+export async function attachSpotImage({ spotId, imagePath }) {
+  const { data, error } = await supabase.rpc('set_spot_image', {
+    p_spot_id: spotId,
+    p_image_path: imagePath,
+  });
+
+  if (error) {
+    console.error('[spots] attachSpotImage error:', error.message);
+    return { spot: null, error: error.message };
+  }
+
+  return { spot: await _hydrateSpotImage(data), error: null };
+}
+
+/**
+ * Create a temporary signed URL for a spot image path.
+ *
+ * @param {string | null | undefined} path
+ * @returns {Promise<string>}
+ */
+export async function signSpotImageUrl(path) {
+  if (!path) return '';
+
+  const { data, error } = await supabase
+    .storage
+    .from(SPOT_IMAGES_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+
+  if (error) {
+    console.warn('[spots] signSpotImageUrl error:', error.message);
+    return '';
+  }
+
+  return data?.signedUrl ?? '';
 }
 
 /**
@@ -117,4 +340,22 @@ export async function fetchScheduleForSpot(spotId) {
   }
 
   return data ?? [];
+}
+
+async function _hydrateSpotImage(spot) {
+  if (!spot) return spot;
+  const { areas, ...rest } = spot;
+  return {
+    ...rest,
+    area: areas ?? null,
+    image_url: await signSpotImageUrl(rest.image_path),
+  };
+}
+
+function _safeFileName(name) {
+  return String(name ?? 'spot-image')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'spot-image';
 }

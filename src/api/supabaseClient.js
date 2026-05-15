@@ -8,10 +8,9 @@
  * Set up RLS rules in the Supabase dashboard to ensure:
  *  - spots:            public SELECT, no INSERT/UPDATE/DELETE from client
  *  - spot_confidence:  public SELECT, no client writes
- *  - claims:           public SELECT; INSERT where session_id = current token;
- *                      UPDATE (cancel) where session_id matches
- *  - corrections:      INSERT only (append-only log)
- *  - spot_submissions: INSERT only from client
+ *  - claims:           public SELECT; authenticated INSERT/UPDATE by user_id
+ *  - corrections:      authenticated INSERT only (append-only log)
+ *  - spot_submissions: authenticated INSERT; public read only after approval
  */
 
 import { createClient } from '@supabase/supabase-js';

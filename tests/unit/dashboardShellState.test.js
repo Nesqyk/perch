@@ -24,6 +24,7 @@ describe('dashboardShellState', () => {
       '/contributions',
       '/campus',
       '/spot',
+      '/landing',
     ]);
   });
 
@@ -31,6 +32,7 @@ describe('dashboardShellState', () => {
     expect(getRouteLayoutMode('/')).toBe('map');
     expect(getRouteLayoutMode('/group')).toBe('workspace');
     expect(getRouteLayoutMode('/spot')).toBe('immersive');
+    expect(getRouteLayoutMode('/landing')).toBe('immersive');
   });
 
   it('falls back to the map route for unknown routes', () => {

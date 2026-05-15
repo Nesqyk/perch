@@ -31,6 +31,7 @@ import { getState } from '../core/store.js';
 import { navigateTo } from '../core/router.js';
 import { signOut } from '../api/auth.js';
 import { normalizeSettings } from '../state/settingsState.js';
+import { normalizePhoneNumber } from '../utils/phone.js';
 import { loadUserPreferences } from '../utils/preferences.js';
 import { iconSvg } from './icons.js';
 import { showToast } from './toast.js';
@@ -113,8 +114,6 @@ function _buildDashboard(state) {
   aside.appendChild(_buildNoteCard(state));
   aside.appendChild(_buildWorkspaceFooter());
   shell.appendChild(aside);
-
-  shell.appendChild(_scrollMarker());
   return shell;
 }
 
@@ -223,11 +222,33 @@ function _buildPreferencesCard(state) {
 
 function _buildNotificationCard(state) {
   const settings = normalizeSettings(state.userSettings, loadUserPreferences());
+  const phoneValue = state.settingsProfile?.phone_e164 ?? '';
   const card = document.createElement('section');
   card.className = 'settings-form-card settings-notifications-panel';
   card.innerHTML = /* html */`
     ${_toggleRow('spot-alerts', 'Spot Availability Alerts', 'Get notified when your favorite spot opens up.', settings.spotAvailabilityAlerts)}
     ${_toggleRow('squad-updates', 'Squad Updates', "Stay updated on your study group's activity.", settings.squadUpdates)}
+    <div class="settings-sms-box">
+      <div class="settings-sms-box__head">
+        ${iconSvg(Smartphone, 18)}
+        <span>
+          <strong>SMS</strong>
+          <small>Send availability alerts to a verified mobile number.</small>
+        </span>
+      </div>
+      <label class="settings-field-label" for="settings-phone">Phone number</label>
+      <input
+        id="settings-phone"
+        class="input"
+        type="tel"
+        inputmode="tel"
+        autocomplete="tel"
+        placeholder="0917 123 4567"
+        value="${_escapeAttr(phoneValue)}"
+      >
+      <p class="settings-field-hint" id="settings-phone-hint">PH mobile numbers are saved as E.164 for SMS delivery.</p>
+      ${_toggleRow('sms-enabled', 'Enable SMS', 'Only opted-in users with valid phone numbers receive SMS.', settings.smsEnabled)}
+    </div>
   `;
 
   card.querySelector('#spot-alerts')?.addEventListener('change', (event) => {
@@ -235,6 +256,52 @@ function _buildNotificationCard(state) {
   });
   card.querySelector('#squad-updates')?.addEventListener('change', (event) => {
     emit(EVENTS.UI_SETTINGS_UPDATE, { squadUpdates: event.target.checked });
+  });
+  const phoneInput = card.querySelector('#settings-phone');
+  const phoneHint = card.querySelector('#settings-phone-hint');
+  phoneInput?.addEventListener('blur', () => {
+    if (!phoneInput.value.trim()) {
+      phoneInput.classList.remove('input--error');
+      if (phoneHint) phoneHint.textContent = 'PH mobile numbers are saved as E.164 for SMS delivery.';
+      emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, {
+        phoneE164: null,
+        phoneCountry: 'PH',
+      });
+      return;
+    }
+
+    const normalized = normalizePhoneNumber(phoneInput.value);
+    if (normalized.error) {
+      phoneInput.classList.add('input--error');
+      if (phoneHint) phoneHint.textContent = normalized.error;
+      return;
+    }
+
+    phoneInput.classList.remove('input--error');
+    phoneInput.value = normalized.value;
+    if (phoneHint) phoneHint.textContent = 'Ready for SMS alerts.';
+    emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, {
+      phoneE164: normalized.value,
+      phoneCountry: 'PH',
+    });
+  });
+  card.querySelector('#sms-enabled')?.addEventListener('change', (event) => {
+    const normalized = normalizePhoneNumber(phoneInput?.value ?? '');
+    if (event.target.checked && normalized.error) {
+      event.target.checked = false;
+      phoneInput?.classList.add('input--error');
+      if (phoneHint) phoneHint.textContent = normalized.error;
+      showToast('Add a valid phone number before enabling SMS.', 'error');
+      return;
+    }
+
+    if (normalized.value) {
+      emit(EVENTS.UI_SETTINGS_PROFILE_UPDATE, {
+        phoneE164: normalized.value,
+        phoneCountry: 'PH',
+      });
+    }
+    emit(EVENTS.UI_SETTINGS_UPDATE, { smsEnabled: event.target.checked });
   });
   return card;
 }

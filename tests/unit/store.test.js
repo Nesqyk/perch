@@ -78,7 +78,7 @@ describe('getState', () => {
     expect(state.spots).toEqual([]);
     expect(state.claims).toEqual({});
     expect(state.confidence).toEqual({});
-    expect(state.filters).toEqual({ groupSize: null, needs: [], nearBuilding: null });
+    expect(state.filters).toEqual({ groupSize: null, needs: [], nearBuilding: null, areaId: null });
     expect(state.userLocation).toBeNull();
     expect(state.selectedSpotId).toBeNull();
     expect(state.currentRoute).toBe('/');
@@ -149,7 +149,7 @@ describe('dispatch — filters', () => {
   it('RESET_FILTERS restores filter defaults', () => {
     dispatch('SET_FILTERS', { groupSize: 'large', needs: ['outlet'] });
     dispatch('RESET_FILTERS');
-    expect(getState().filters).toEqual({ groupSize: null, needs: [], nearBuilding: null });
+    expect(getState().filters).toEqual({ groupSize: null, needs: [], nearBuilding: null, areaId: null });
   });
 });
 

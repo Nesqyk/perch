@@ -22,8 +22,7 @@
 
 import { supabase }     from './supabaseClient.js';
 import { fetchGroupCurrentSpot, signGroupAssetUrl } from './groups.js';
-import { dispatch }     from '../core/store.js';
-import { getSessionId } from '../utils/session.js';
+import { dispatch, getState } from '../core/store.js';
 
 /** @type {import('@supabase/supabase-js').RealtimeChannel | null} */
 let _channel = null;
@@ -50,7 +49,7 @@ export function subscribeToRealtime() {
       { event: 'INSERT', schema: 'public', table: 'claims' },
       (payload) => {
         const claim  = payload.new;
-        const isMine = claim.session_id === getSessionId();
+        const isMine = claim.user_id === getState().currentUser?.id;
 
         dispatch('CLAIM_ADDED', {
           spotId: claim.spot_id,
@@ -82,8 +81,9 @@ export function subscribeToRealtime() {
       { event: 'INSERT', schema: 'public', table: 'corrections' },
       (payload) => {
         const correction = payload.new;
-        // Avoid double-applying our own correction (store.js already applied it).
-        if (correction.session_id !== getSessionId()) {
+        // Avoid double-applying our own correction; the feature dispatches
+        // after the insert succeeds.
+        if (correction.user_id !== getState().currentUser?.id) {
           dispatch('CORRECTION_FILED', { spotId: correction.spot_id });
         }
       }

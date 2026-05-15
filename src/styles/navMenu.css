@@ -34,8 +34,12 @@ body[data-shell-layout="immersive"] .app-layout {
 }
 
 body[data-nav="ready"][data-shell-layout="workspace"] .app-layout,
-body[data-nav="ready"][data-shell-layout="immersive"] .app-layout {
+body[data-nav="ready"][data-shell-layout="workspace"] .app-layout {
   grid-template-columns: var(--nav-rail-width) minmax(0, 1fr);
+}
+
+body[data-nav="ready"][data-shell-layout="immersive"] .app-layout {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 @media (max-width: 767px) {
@@ -340,6 +344,14 @@ body[data-nav="ready"][data-shell-layout="immersive"] .app-layout {
 
 body[data-nav="ready"] .page-view {
   grid-column: 2 / -1;
+}
+
+body[data-nav="ready"][data-shell-layout="immersive"] .page-view {
+  grid-column: 1 / -1;
+}
+
+.page-view--immersive {
+  grid-column: 1 / -1;
 }
 
 .page-view.view--active {

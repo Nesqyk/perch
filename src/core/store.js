@@ -41,6 +41,9 @@ const _state = {
    */
   campuses: [],                 // Campus[]
 
+  /** Multi-area catalogue for city/barangay/sitio filtering. */
+  areas: [],                    // Area[]
+
   /** The id of the currently selected campus. null = no campus constraint. */
   selectedCampusId: null,       // string (uuid) | null
 
@@ -52,6 +55,7 @@ const _state = {
     groupSize:    null,         // 'solo' | 'small' | 'medium' | 'large' | null
     needs:        [],           // Array<'outlet' | 'wifi' | 'quiet' | 'food'>
     nearBuilding: null,         // building id string | null
+    areaId:       null,         // area id string | null
   },
 
   /**
@@ -75,6 +79,9 @@ const _state = {
    * Updated by the background job and broadcast via Supabase Realtime.
    */
   confidence: {},               // Record<spotId, { score, reason, validUntil }>
+
+  /** Current user's SMS watchers keyed by spot id. */
+  spotWatchers: {},             // Record<spotId, SpotWatcher>
 
   /**
    * Active claims keyed by spot_id.
@@ -181,9 +188,9 @@ const _state = {
    * The currently active client-side route.
    * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
    * '/' is the Dashboard (map). '/profile', '/group', '/campus',
-   * '/spot', '/settings', '/contributions', and '/notifications' are page views.
+   * '/spot', '/settings', '/contributions', '/notifications', and '/landing' are page views.
    */
-  currentRoute: '/',            // '/' | '/profile' | '/group' | '/campus' | '/spot' | '/settings' | '/contributions' | '/notifications'
+  currentRoute: '/',            // '/' | '/profile' | '/group' | '/campus' | '/spot' | '/settings' | '/contributions' | '/notifications' | '/landing'
 
   /**
    * The authenticated Supabase user object, or null when signed out.
@@ -244,7 +251,7 @@ export function dispatch(action, payload) {
     }
 
     case 'RESET_FILTERS': {
-      _state.filters = { groupSize: null, needs: [], nearBuilding: null };
+      _state.filters = { groupSize: null, needs: [], nearBuilding: null, areaId: null };
       emit(EVENTS.FILTERS_CHANGED, { filters: getState().filters });
       break;
     }
@@ -265,6 +272,29 @@ export function dispatch(action, payload) {
       const { spotId, confidence } = payload;
       _state.confidence = { ..._state.confidence, [spotId]: confidence };
       emit(EVENTS.CLAIM_UPDATED, { spotId }); // reuse claim event to repaint pin
+      break;
+    }
+
+    case 'SPOT_WATCHERS_LOADED': {
+      const watchers = payload.watchers ?? [];
+      _state.spotWatchers = watchers.reduce((acc, watcher) => {
+        acc[watcher.spot_id] = watcher;
+        return acc;
+      }, {});
+      emit(EVENTS.SPOT_WATCHERS_UPDATED, { spotWatchers: _state.spotWatchers });
+      break;
+    }
+
+    case 'SPOT_WATCHER_UPDATED': {
+      const { spotId, watcher } = payload;
+      const next = { ..._state.spotWatchers };
+      if (watcher) {
+        next[spotId] = watcher;
+      } else {
+        delete next[spotId];
+      }
+      _state.spotWatchers = next;
+      emit(EVENTS.SPOT_WATCHERS_UPDATED, { spotWatchers: _state.spotWatchers, spotId });
       break;
     }
 
@@ -419,6 +449,12 @@ export function dispatch(action, payload) {
         _state.selectedCampusId = _state.campuses[0].id;
       }
       emit(EVENTS.CAMPUSES_LOADED, { campuses: _state.campuses });
+      break;
+    }
+
+    case 'AREAS_LOADED': {
+      _state.areas = payload.areas ?? [];
+      emit(EVENTS.AREAS_LOADED, { areas: _state.areas });
       break;
     }
 
@@ -591,6 +627,7 @@ export function dispatch(action, payload) {
         _state.userDevices = [];
         _state.nextSession = null;
         _state.sharedNote = null;
+        _state.spotWatchers = {};
       }
       emit(EVENTS.AUTH_STATE_CHANGED, { user: _state.currentUser });
       break;

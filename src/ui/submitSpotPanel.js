@@ -20,10 +20,15 @@ import {
   fetchBuildings,
   createBuilding,
   confirmBuilding,
-  submitSpot,
-  confirmSpotSubmission,
 } from '../api/campuses.js';
-import { fetchSpots }          from '../api/spots.js';
+import { fetchAreas, findOrCreateArea } from '../api/areas.js';
+import {
+  attachSpotImage,
+  createCommunitySpot,
+  fetchSpots,
+  uploadSpotImage,
+} from '../api/spots.js';
+import { createImageUploadField } from './imageUploadField.js';
 import { showToast }           from './toast.js';
 
 const OVERLAY_ID = 'submit-modal-overlay';
@@ -198,6 +203,8 @@ function _buildStep2Spot(lat, lng, buildings) {
   form.appendChild(floorLabel);
   form.appendChild(_input('submit-spot-floor', 'e.g. 4F', 12));
 
+  form.appendChild(_buildAreaFields('submit-spot', lat, lng));
+
   const nameLabel = _label('submit-spot-name', 'Table, corner, or spot name (required)');
   form.appendChild(nameLabel);
   const nameInput = _input('submit-spot-name', 'e.g. Window Bar Seats', 60);
@@ -218,6 +225,9 @@ function _buildStep2Spot(lat, lng, buildings) {
   descInput.rows = 3;
   form.appendChild(descInput);
 
+  const imageField = createImageUploadField({ idPrefix: 'submit-spot' });
+  form.appendChild(imageField.element);
+
   wrap.appendChild(form);
 
   const actions = document.createElement('div');
@@ -226,39 +236,60 @@ function _buildStep2Spot(lat, lng, buildings) {
   const submitBtn = document.createElement('button');
   submitBtn.type = 'button';
   submitBtn.className = 'btn btn-primary btn-full';
-  submitBtn.textContent = 'Add to Review Queue';
+  submitBtn.textContent = 'Add Spot';
   submitBtn.addEventListener('click', async () => {
     const venueName  = venueInput.value.trim();
     const spotName   = nameInput.value.trim();
     const floor      = /** @type {HTMLInputElement} */(form.querySelector('#submit-spot-floor'))?.value.trim() ?? '';
     const desc       = descInput.value.trim();
+    const areaInput  = _readAreaFields(form, 'submit-spot', lat, lng);
 
     if (!venueName) { venueInput.focus(); venueInput.classList.add('input--error'); return; }
     if (!spotName)  { nameInput.focus();  nameInput.classList.add('input--error'); return; }
+    if (areaInput.error) {
+      showToast(areaInput.error, 'error');
+      areaInput.focus?.();
+      return;
+    }
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting…';
+    submitBtn.textContent = 'Adding...';
+
+    let areaId = null;
+    if (areaInput.area) {
+      const areaResult = await findOrCreateArea(areaInput.area);
+      if (areaResult.error) {
+        showToast(areaResult.error, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Spot';
+        return;
+      }
+      areaId = areaResult.area?.id ?? null;
+      void _refreshAreas();
+    }
 
     const { selectedCampusId } = getState();
-    const { error } = await submitSpot({
+    const { spot, error } = await _publishSpotWithOptionalImage({
       campusId: selectedCampusId,
+      areaId,
       lat,
       lng,
       buildingName: venueName,
       floor,
       spotName,
       description: desc,
-      discovererDisplayName: _discovererName(),
+      imageFile: imageField.getFile(),
+      onCampus: getState().viewMode === 'campus',
     });
 
-    if (error) {
-      showToast('Could not submit. Please try again.', 'error');
+    if (error || !spot) {
+      showToast(error ?? 'Could not add this spot. Please try again.', 'error');
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Add to Review Queue';
+      submitBtn.textContent = 'Add Spot';
       return;
     }
 
-    _showSuccess(`"${spotName}" queued for review. You'll be credited if approved.`);
+    _showSuccess(`"${spotName}" is live on the map.`);
   });
 
   actions.appendChild(submitBtn);
@@ -310,6 +341,8 @@ function _buildStep2Room(lat, lng, buildings) {
   form.appendChild(_label('room-floor', 'Floor (optional)'));
   form.appendChild(_input('room-floor', 'e.g. 4F', 12));
 
+  form.appendChild(_buildAreaFields('submit-room', lat, lng));
+
   form.appendChild(_label('room-notes', 'Notes (optional)'));
   const notesInput = document.createElement('textarea');
   notesInput.id = 'room-notes';
@@ -319,6 +352,9 @@ function _buildStep2Room(lat, lng, buildings) {
   notesInput.rows = 3;
   form.appendChild(notesInput);
 
+  const imageField = createImageUploadField({ idPrefix: 'submit-room' });
+  form.appendChild(imageField.element);
+
   wrap.appendChild(form);
 
   const actions = document.createElement('div');
@@ -327,43 +363,62 @@ function _buildStep2Room(lat, lng, buildings) {
   const submitBtn = document.createElement('button');
   submitBtn.type = 'button';
   submitBtn.className = 'btn btn-primary btn-full';
-  submitBtn.textContent = 'Add Room for Peer Review';
+  submitBtn.textContent = 'Add Room';
   submitBtn.addEventListener('click', async () => {
     const buildingId   = buildingSelect.value;
     const roomName     = roomInput.value.trim();
     const floor        = /** @type {HTMLInputElement} */(form.querySelector('#room-floor'))?.value.trim() ?? '';
     const notes        = notesInput.value.trim();
+    const areaInput    = _readAreaFields(form, 'submit-room', lat, lng);
 
     if (!buildingId) { buildingSelect.focus(); return; }
     if (!roomName)   { roomInput.focus(); roomInput.classList.add('input--error'); return; }
+    if (areaInput.error) {
+      showToast(areaInput.error, 'error');
+      areaInput.focus?.();
+      return;
+    }
 
     const building = buildings.find((b) => b.id === buildingId);
     if (!building) return;
 
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Submitting…';
+    submitBtn.textContent = 'Adding...';
 
-    const { data, error } = await submitSpot({
+    let areaId = null;
+    if (areaInput.area) {
+      const areaResult = await findOrCreateArea(areaInput.area);
+      if (areaResult.error) {
+        showToast(areaResult.error, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Room';
+        return;
+      }
+      areaId = areaResult.area?.id ?? null;
+      void _refreshAreas();
+    }
+
+    const { spot, error } = await _publishSpotWithOptionalImage({
       campusId: building.campus_id,
+      areaId,
       lat: Number(building.lat),
       lng: Number(building.lng),
       buildingName: building.name,
       floor,
       spotName: roomName,
       description: notes,
-      discovererDisplayName: _discovererName(),
+      imageFile: imageField.getFile(),
+      onCampus: true,
     });
 
-    if (error || !data?.id) {
-      showToast(error ?? 'Could not queue this room.', 'error');
+    if (error || !spot) {
+      showToast(error ?? 'Could not add this room.', 'error');
       submitBtn.disabled = false;
-      submitBtn.textContent = 'Add Room for Peer Review';
+      submitBtn.textContent = 'Add Room';
       return;
     }
 
-    await confirmSpotSubmission(data.id);
-    await _refreshCampusCatalogue(building.campus_id);
-    _showSuccess(`"${roomName}" added. One more confirmation will make it live.`);
+    _showSuccess(`"${roomName}" is live on the map.`);
   });
 
   actions.appendChild(submitBtn);
@@ -575,16 +630,116 @@ function _input(id, placeholder, maxLength) {
 }
 
 /**
- * Derive the discoverer display name from auth state.
+ * Build the basic area fields shared by spot and room submissions.
  *
- * @returns {string}
+ * @param {string} idPrefix
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {HTMLElement}
  */
-function _discovererName() {
-  const { nickname, currentUser } = getState();
-  return nickname
-    || currentUser?.user_metadata?.full_name
-    || currentUser?.email?.split('@')[0]
-    || 'Perch member';
+function _buildAreaFields(idPrefix, lat, lng) {
+  const wrap = document.createElement('div');
+  wrap.className = 'submit-spot-panel__area-fields';
+  const { campuses, selectedCampusId } = getState();
+  const campus = campuses.find(item => item.id === selectedCampusId);
+  wrap.innerHTML = /* html */`
+    <div class="submit-spot-panel__area-head">
+      <strong>Area</strong>
+      <span>Supports multiple sitios, barangays, and cities.</span>
+    </div>
+  `;
+
+  const sitioLabel = _label(`${idPrefix}-sitio`, 'Sitio / purok (optional)');
+  wrap.appendChild(sitioLabel);
+  wrap.appendChild(_input(`${idPrefix}-sitio`, 'e.g. Sitio San Jose', 80));
+
+  const barangayLabel = _label(`${idPrefix}-barangay`, 'Barangay (required)');
+  wrap.appendChild(barangayLabel);
+  wrap.appendChild(_input(`${idPrefix}-barangay`, 'e.g. Sambag II', 80));
+
+  const cityLabel = _label(`${idPrefix}-city`, 'City / municipality (required)');
+  wrap.appendChild(cityLabel);
+  const cityInput = _input(`${idPrefix}-city`, 'e.g. Cebu City', 80);
+  cityInput.value = campus?.city ?? 'Cebu City';
+  wrap.appendChild(cityInput);
+
+  const coord = document.createElement('p');
+  coord.className = 'submit-spot-panel__area-coords';
+  coord.textContent = `Coordinates: ${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}`;
+  wrap.appendChild(coord);
+
+  return wrap;
+}
+
+/**
+ * Read and validate area fields from a submit form.
+ *
+ * @param {HTMLElement} form
+ * @param {string} idPrefix
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {{ area: object | null, error: string | null, focus?: () => void }}
+ */
+function _readAreaFields(form, idPrefix, lat, lng) {
+  const sitioInput = form.querySelector(`#${idPrefix}-sitio`);
+  const barangayInput = form.querySelector(`#${idPrefix}-barangay`);
+  const cityInput = form.querySelector(`#${idPrefix}-city`);
+  const sitio = sitioInput?.value?.trim() ?? '';
+  const barangay = barangayInput?.value?.trim() ?? '';
+  const cityMunicipality = cityInput?.value?.trim() ?? '';
+
+  if (!barangay) {
+    barangayInput?.classList.add('input--error');
+    return { area: null, error: 'Barangay is required.', focus: () => barangayInput?.focus() };
+  }
+  if (!cityMunicipality) {
+    cityInput?.classList.add('input--error');
+    return { area: null, error: 'City or municipality is required.', focus: () => cityInput?.focus() };
+  }
+
+  return {
+    area: { sitio, barangay, cityMunicipality, lat, lng },
+    error: null,
+  };
+}
+
+/**
+ * Create a live spot, optionally upload and attach its image, then refresh map data.
+ *
+ * @param {{
+ *   campusId: string | null,
+ *   areaId?: string | null,
+ *   lat: number,
+ *   lng: number,
+ *   buildingName: string,
+ *   floor: string,
+ *   spotName: string,
+ *   description: string,
+ *   imageFile: File | null,
+ *   onCampus: boolean,
+ * }} params
+ * @returns {Promise<{ spot: object | null, error: string | null }>}
+ */
+async function _publishSpotWithOptionalImage(params) {
+  const { spot, error } = await createCommunitySpot(params);
+  if (error || !spot) return { spot: null, error };
+
+  if (params.imageFile) {
+    const uploaded = await uploadSpotImage({ spotId: spot.id, file: params.imageFile });
+    if (uploaded.error) {
+      showToast('Spot added, but the photo could not upload. You can add it from the detail page.', 'error');
+    } else {
+      const attached = await attachSpotImage({ spotId: spot.id, imagePath: uploaded.path });
+      if (attached.error) {
+        showToast('Spot added, but the photo could not attach. You can add it from the detail page.', 'error');
+      }
+    }
+  }
+
+  const { selectedCampusId } = getState();
+  await _refreshCampusCatalogue(selectedCampusId || params.campusId);
+  dispatch('SELECT_SPOT', { spotId: spot.id, navigate: true });
+  return { spot, error: null };
 }
 
 /**
@@ -604,6 +759,11 @@ async function _refreshCampusCatalogue(campusId) {
   await _refreshBuildings(campusId);
   const { spots, confidence } = await fetchSpots();
   dispatch('SPOTS_LOADED', { spots, confidence });
+}
+
+async function _refreshAreas() {
+  const areas = await fetchAreas();
+  dispatch('AREAS_LOADED', { areas });
 }
 
 /**

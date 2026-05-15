@@ -1,32 +1,50 @@
 /**
  * src/ui/profilePage.js
  *
- * Route-level profile and account summary page rendered into #view-profile.
+ * Route-level profile dashboard rendered into #view-profile.
  *
- * Three render states:
- *   1. Signed out  — empty state with a Sign In prompt.
- *   2. Signed in   — account card (identity + edit nickname), status card
- *                    (auth + group membership), a claim history card, and a
- *                    settings stub card.
- *
- * Re-renders on: AUTH_STATE_CHANGED, NICKNAME_UPDATED, GROUP_JOINED,
- *                GROUP_LEFT, ROUTE_CHANGED.
+ * The page uses real authenticated data only: profile fields, claim history,
+ * contribution rows, current squad data, and persisted meetup/session records.
  */
 
-import { UserRound, LogIn, PencilLine, ShieldCheck, Users, Settings, History, MapPin, ChevronLeft, ChevronRight, Eye, Map, FolderClock } from 'lucide';
+import {
+  ArrowRight,
+  BadgeCheck,
+  Bookmark,
+  Calendar,
+  Handshake,
+  IdCard,
+  LogIn,
+  Mail,
+  MapPin,
+  PencilLine,
+  Radio,
+  Share2,
+  UserRound,
+  Users,
+} from 'lucide';
 
 import { emit, on, EVENTS } from '../core/events.js';
 import { getState } from '../core/store.js';
 import { navigateTo } from '../core/router.js';
-import { fetchClaimHistory } from '../api/claims.js';
-import { loadUserPreferences } from '../utils/preferences.js';
+import { fetchProfileDashboard } from '../api/profile.js';
+import { composeProfileActivity, deriveProfileStats, profileSubtitle } from '../state/profileState.js';
 import { openProfileModal } from './profileModal.js';
+import { showToast } from './toast.js';
 import { iconSvg } from './icons.js';
 
 const VIEW_ID = 'view-profile';
 
-/** @type {number} Number of claim history rows per page. */
-const HISTORY_PAGE_SIZE = 20;
+/** @type {{ userId: string | null, loading: boolean, error: string | null, profile: object | null, claims: object[], submissions: object[], buildings: object[] }} */
+let _pageState = {
+  userId: null,
+  loading: false,
+  error: null,
+  profile: null,
+  claims: [],
+  submissions: [],
+  buildings: [],
+};
 
 /**
  * Initialise the profile page renderer.
@@ -38,8 +56,13 @@ export function initProfilePage() {
 
   on(EVENTS.AUTH_STATE_CHANGED, rerender);
   on(EVENTS.NICKNAME_UPDATED, rerender);
+  on(EVENTS.SETTINGS_DASHBOARD_UPDATED, rerender);
   on(EVENTS.GROUP_JOINED, rerender);
   on(EVENTS.GROUP_LEFT, rerender);
+  on(EVENTS.GROUP_DASHBOARD_UPDATED, rerender);
+  on(EVENTS.GROUP_PINS_UPDATED, rerender);
+  on(EVENTS.GROUP_PIN_JOINS_UPDATED, rerender);
+  on(EVENTS.CLAIM_UPDATED, () => _reloadForCurrentUser());
   on(EVENTS.ROUTE_CHANGED, rerender);
 
   _renderProfilePage();
@@ -49,316 +72,419 @@ function _renderProfilePage() {
   const view = document.getElementById(VIEW_ID);
   if (!view) return;
 
-  const { currentUser, nickname, group, campuses } = getState();
-  const preferences = loadUserPreferences();
-  const preferredCampus = campuses.find((campus) => campus.id === preferences.preferredCampusId) ?? null;
+  const state = getState();
+  const { currentUser } = state;
   view.innerHTML = '';
 
   const shell = document.createElement('div');
-  shell.className = 'page-shell';
-
-  shell.innerHTML = /* html */`
-    <div class="page-shell__header">
-      <h1 class="page-shell__title">Profile</h1>
-      <p class="page-shell__subtitle">Account settings, identity, and your current place in the crew.</p>
-    </div>
-  `;
+  shell.className = 'profile-dashboard';
 
   if (!currentUser) {
-    const empty = document.createElement('section');
-    empty.className = 'page-card page-card--empty';
-    empty.innerHTML = /* html */`
-      <div class="page-empty__icon">${iconSvg(UserRound, 28)}</div>
-      <h2 class="page-empty__title">Sign in to personalize Perch.</h2>
-      <p class="page-empty__copy">Save a nickname, join groups, and make your claims identifiable to other students.</p>
-      <button type="button" class="btn btn-primary" id="profile-page-login">${iconSvg(LogIn, 16)} Sign in</button>
-    `;
-    empty.querySelector('#profile-page-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
-    shell.appendChild(empty);
+    shell.classList.add('profile-dashboard--signed-out');
+    shell.appendChild(_buildSignedOutCard());
     view.appendChild(shell);
     return;
   }
 
-  const grid = document.createElement('div');
-  grid.className = 'page-grid page-grid--two';
+  if (_pageState.userId !== currentUser.id && !_pageState.loading) {
+    _loadProfileData(currentUser.id);
+  }
 
-  const accountCard = document.createElement('section');
-  accountCard.className = 'page-card page-card--hero';
-  accountCard.innerHTML = /* html */`
-    <div class="profile-page__identity">
-      <span class="profile-page__avatar">${_initials(nickname || currentUser.email || 'P')}</span>
-      <div>
-        <div class="page-card__eyebrow">Signed in</div>
-        <h2 class="page-card__title">${_escapeHtml(nickname || currentUser.user_metadata?.full_name || 'Perch member')}</h2>
-        <p class="page-card__copy">${_escapeHtml(currentUser.email ?? 'No email available')}</p>
-      </div>
-    </div>
-    <div class="profile-page__actions">
-      <button type="button" class="btn btn-primary" id="profile-page-edit">${iconSvg(PencilLine, 16)} Edit nickname</button>
-      <button type="button" class="btn btn-ghost" id="profile-page-map">Back to map</button>
-    </div>
+  if (_pageState.loading && _pageState.userId === currentUser.id) {
+    shell.appendChild(_buildLoadingCard());
+    view.appendChild(shell);
+    return;
+  }
+
+  if (_pageState.error) {
+    shell.appendChild(_buildErrorCard(_pageState.error));
+    view.appendChild(shell);
+    return;
+  }
+
+  const profile = _pageState.profile ?? state.settingsProfile ?? {};
+  const stats = deriveProfileStats({
+    submissions: _pageState.submissions,
+    buildings: _pageState.buildings,
+    groupPins: state.groupPins,
+    groupPinJoins: state.groupPinJoins,
+    groupMember: state.groupMember,
+    userId: currentUser.id,
+  });
+  const activities = composeProfileActivity({
+    claims: _pageState.claims,
+    submissions: _pageState.submissions,
+    buildings: _pageState.buildings,
+    group: state.group,
+    groupMember: state.groupMember,
+    groupPins: state.groupPins,
+    groupPinJoins: state.groupPinJoins,
+    spots: state.spots,
+    userId: currentUser.id,
+    limit: 4,
+  });
+
+  shell.innerHTML = /* html */`
+    <header class="profile-dashboard__header">
+      <h1>Perch Profile</h1>
+      <p>Manage your academic identity and track campus life.</p>
+    </header>
   `;
-  accountCard.querySelector('#profile-page-edit')?.addEventListener('click', () => openProfileModal());
-  accountCard.querySelector('#profile-page-map')?.addEventListener('click', () => navigateTo('/'));
 
-  const statusCard = document.createElement('section');
-  statusCard.className = 'page-card';
-  statusCard.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Status</div>
-    <h3 class="page-card__title page-card__title--sm">Your current setup</h3>
-    <div class="profile-page__meta-list">
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(ShieldCheck, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Account</span>
-          <span class="profile-meta__copy">Authenticated with Google through Supabase.</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Users, 16)}</span>
-        <div>
-          <span class="profile-meta__title">Group</span>
-          <span class="profile-meta__copy">${group ? `Currently in ${_escapeHtml(group.name)}.` : 'Not currently in a study crew.'}</span>
-        </div>
-      </div>
-    </div>
-  `;
+  const top = document.createElement('section');
+  top.className = 'profile-dashboard__top';
+  top.appendChild(_buildIdentityCard({ user: currentUser, profile }));
+  top.appendChild(_buildStatCard({ icon: MapPin, value: stats.spotsFound, label: 'Spots Found', tone: 'map' }));
+  top.appendChild(_buildStatCard({ icon: Handshake, value: stats.squadContributions, label: 'Squad Contributions', tone: 'squad' }));
+  shell.appendChild(top);
 
-  grid.appendChild(accountCard);
-  grid.appendChild(statusCard);
-  shell.appendChild(grid);
+  const content = document.createElement('section');
+  content.className = 'profile-dashboard__content';
+  const left = document.createElement('div');
+  left.className = 'profile-dashboard__left';
+  const right = document.createElement('div');
+  right.className = 'profile-dashboard__right';
 
-  const historyCard = _buildHistoryCard();
-  shell.appendChild(historyCard);
-  _loadHistoryPage(historyCard, 0);
+  left.appendChild(_buildPersonalInfoCard({ user: currentUser, profile }));
+  left.appendChild(_buildMeetupCard({ meetup: state.groupMeetup }));
+  right.appendChild(_buildActivityCard(activities));
 
-  shell.appendChild(_buildSettingsCard({ preferences, preferredCampus }));
-  shell.appendChild(_buildContributionsCard());
+  content.appendChild(left);
+  content.appendChild(right);
+  shell.appendChild(content);
 
   view.appendChild(shell);
 }
 
-// ─── Private helpers ──────────────────────────────────────────────────────────
+async function _loadProfileData(userId) {
+  _pageState = {
+    userId,
+    loading: true,
+    error: null,
+    profile: null,
+    claims: [],
+    submissions: [],
+    buildings: [],
+  };
+  _renderProfilePage();
 
-/**
- * Build the empty skeleton for the claim history card.
- * Content is filled asynchronously by `_loadHistoryPage`.
- *
- * @returns {HTMLElement}
- */
-function _buildHistoryCard() {
+  try {
+    const dashboard = await fetchProfileDashboard({ activityLimit: 12 });
+    _pageState = {
+      userId,
+      loading: false,
+      error: dashboard.error,
+      profile: dashboard.profile,
+      claims: dashboard.claims,
+      submissions: dashboard.submissions,
+      buildings: dashboard.buildings,
+    };
+  } catch (err) {
+    console.error('[profilePage] load error:', err);
+    _pageState = {
+      userId,
+      loading: false,
+      error: 'Could not load your profile dashboard yet.',
+      profile: null,
+      claims: [],
+      submissions: [],
+      buildings: [],
+    };
+  }
+
+  _renderProfilePage();
+}
+
+function _reloadForCurrentUser() {
+  const { currentUser } = getState();
+  if (currentUser?.id) _loadProfileData(currentUser.id);
+}
+
+function _buildSignedOutCard() {
   const card = document.createElement('section');
-  card.className = 'page-card profile-page__history';
+  card.className = 'page-card page-card--empty profile-auth-card';
   card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Activity</div>
-    <h3 class="page-card__title page-card__title--sm">Claim history</h3>
-    <div class="claim-history__body">
-      <p class="claim-history__loading">Loading&hellip;</p>
+    <div class="page-empty__icon">${iconSvg(UserRound, 28)}</div>
+    <h2 class="page-empty__title">Sign in to view your profile.</h2>
+    <p class="page-empty__copy">Your claims, squad activity, and contribution history live behind your Perch account.</p>
+    <div class="settings-page__cta-row">
+      <button type="button" class="btn btn-primary" id="profile-page-login">${iconSvg(LogIn, 16)} Sign in</button>
+      <button type="button" class="btn btn-ghost" id="profile-page-map">Back to map</button>
     </div>
-    <div class="claim-history__footer" hidden></div>
+  `;
+  card.querySelector('#profile-page-login')?.addEventListener('click', () => emit(EVENTS.UI_LOGIN_REQUESTED, {}));
+  card.querySelector('#profile-page-map')?.addEventListener('click', () => navigateTo('/'));
+  return card;
+}
+
+function _buildLoadingCard() {
+  const card = document.createElement('section');
+  card.className = 'page-card page-card--empty profile-auth-card';
+  card.innerHTML = /* html */`
+    <div class="page-empty__icon">${iconSvg(Radio, 28)}</div>
+    <h2 class="page-empty__title">Loading your profile.</h2>
+    <p class="page-empty__copy">Gathering profile fields, recent claims, and your contribution history.</p>
   `;
   return card;
 }
 
-/**
- * Fetch one page of claim history and render it into the card.
- * Attaches pagination button listeners if there are more rows.
- *
- * @param {HTMLElement} card   The history card element produced by `_buildHistoryCard`.
- * @param {number}      offset Row offset for the current page (0-indexed).
- * @returns {Promise<void>}
- */
-async function _loadHistoryPage(card, offset) {
-  const body = card.querySelector('.claim-history__body');
-  const footer = card.querySelector('.claim-history__footer');
-  if (!body || !footer) return;
-
-  body.innerHTML = /* html */`<p class="claim-history__loading">Loading&hellip;</p>`;
-  footer.hidden = true;
-
-  const { data, error } = await fetchClaimHistory({ limit: HISTORY_PAGE_SIZE + 1, offset });
-
-  if (error) {
-    body.innerHTML = /* html */`
-      <p class="page-empty-inline">Could not load claim history. Please try again later.</p>
-    `;
-    return;
-  }
-
-  const hasMore = data.length > HISTORY_PAGE_SIZE;
-  const rows = hasMore ? data.slice(0, HISTORY_PAGE_SIZE) : data;
-
-  if (rows.length === 0 && offset === 0) {
-    body.innerHTML = /* html */`
-      <div class="claim-history__empty">
-        <span class="claim-history__empty-icon">${iconSvg(MapPin, 20)}</span>
-        <p>No claims yet &mdash; go <a href="#/" class="link">find a spot</a>!</p>
-      </div>
-    `;
-    return;
-  }
-
-  body.innerHTML = /* html */`
-    <ol class="claim-history__list">
-      ${rows.map(_renderHistoryRow).join('')}
-    </ol>
+function _buildErrorCard(message) {
+  const card = document.createElement('section');
+  card.className = 'page-card page-card--empty profile-auth-card';
+  card.innerHTML = /* html */`
+    <div class="page-empty__icon">${iconSvg(UserRound, 28)}</div>
+    <h2 class="page-empty__title">We could not load your profile.</h2>
+    <p class="page-empty__copy">${_escapeHtml(message)}</p>
+    <button type="button" class="btn btn-primary" id="profile-retry">Try again</button>
   `;
-
-  // Pagination footer
-  const hasPrev = offset > 0;
-  if (hasPrev || hasMore) {
-    footer.hidden = false;
-    footer.innerHTML = /* html */`
-      <div class="claim-history__pagination">
-        <button type="button" class="btn btn-ghost btn-sm" id="ch-prev" ${hasPrev ? '' : 'disabled'}>
-          ${iconSvg(ChevronLeft, 14)} Prev
-        </button>
-        <span class="claim-history__page-label">
-          ${offset / HISTORY_PAGE_SIZE + 1}
-        </span>
-        <button type="button" class="btn btn-ghost btn-sm" id="ch-next" ${hasMore ? '' : 'disabled'}>
-          Next ${iconSvg(ChevronRight, 14)}
-        </button>
-      </div>
-    `;
-    footer.querySelector('#ch-prev')?.addEventListener('click', () => _loadHistoryPage(card, offset - HISTORY_PAGE_SIZE));
-    footer.querySelector('#ch-next')?.addEventListener('click', () => _loadHistoryPage(card, offset + HISTORY_PAGE_SIZE));
-  }
+  card.querySelector('#profile-retry')?.addEventListener('click', _reloadForCurrentUser);
+  return card;
 }
 
-/**
- * Render a single claim history row as an HTML string.
- *
- * @param {{
- *   id:             string,
- *   spot_id:        string,
- *   group_size_key: string,
- *   claimed_at:     string,
- *   expires_at:     string,
- *   cancelled_at:   string | null,
- *   spots:          { name: string, building: string | null } | null,
- * }} claim
- * @returns {string}
- */
-function _renderHistoryRow(claim) {
-  const spotName = _escapeHtml(claim.spots?.name ?? 'Unknown spot');
-  const building = claim.spots?.building ? _escapeHtml(claim.spots.building) : null;
-  const date = new Date(claim.claimed_at).toLocaleDateString('en-PH', {
-    month: 'short', day: 'numeric', year: 'numeric',
-  });
-  const time = new Date(claim.claimed_at).toLocaleTimeString('en-PH', {
-    hour: 'numeric', minute: '2-digit',
-  });
-  const duration = _formatDuration(claim.claimed_at, claim.cancelled_at, claim.expires_at);
+function _buildIdentityCard({ user, profile }) {
+  const card = document.createElement('article');
+  card.className = 'profile-identity-card';
+  const displayName = profile.nickname || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Perch member';
+  const subtitle = profileSubtitle(profile) || profile.school_label || 'Add course and class details';
+  const avatar = profile.avatar_url || user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
+  const verified = !!profile.verified_student || user.email_confirmed_at || user.user_metadata?.email_verified;
 
+  card.innerHTML = /* html */`
+    <div class="profile-identity-card__avatar">
+      ${avatar
+        ? `<img src="${_escapeAttribute(avatar)}" alt="">`
+        : `<span>${_escapeHtml(_initials(displayName))}</span>`}
+    </div>
+    <div class="profile-identity-card__body">
+      <div class="profile-identity-card__name-row">
+        <h2>${_escapeHtml(displayName)}</h2>
+        ${verified ? `<span class="profile-verified">${iconSvg(BadgeCheck, 14)} Verified Student</span>` : ''}
+      </div>
+      <p>${_escapeHtml(subtitle)}</p>
+      <div class="profile-identity-card__actions">
+        <button type="button" class="btn btn-primary" id="profile-edit">${iconSvg(PencilLine, 15)} Edit Profile</button>
+        <button type="button" class="btn btn-ghost" id="profile-share">${iconSvg(Share2, 15)} Share Profile</button>
+      </div>
+    </div>
+  `;
+  card.querySelector('#profile-edit')?.addEventListener('click', () => openProfileModal());
+  card.querySelector('#profile-share')?.addEventListener('click', _copyProfileLink);
+  return card;
+}
+
+function _buildStatCard({ icon, value, label, tone }) {
+  const card = document.createElement('article');
+  card.className = `profile-stat-card profile-stat-card--${tone}`;
+  card.innerHTML = /* html */`
+    <span class="profile-stat-card__icon">${iconSvg(icon, 22)}</span>
+    <strong>${_escapeHtml(value)}</strong>
+    <span>${_escapeHtml(label)}</span>
+  `;
+  return card;
+}
+
+function _buildPersonalInfoCard({ user, profile }) {
+  const card = document.createElement('article');
+  card.className = 'profile-panel profile-personal-card';
+  const vibes = Array.isArray(profile.study_vibes) ? profile.study_vibes : [];
+
+  card.innerHTML = /* html */`
+    <h2>Personal Information</h2>
+    <div class="profile-info-list">
+      ${_infoRow({ icon: Mail, label: 'Email Address', value: user.email || 'No email available' })}
+      ${_infoRow({ icon: IdCard, label: 'Student ID', value: profile.student_id || '', empty: 'Add student ID' })}
+      <div class="profile-info-row profile-info-row--vibes">
+        <span class="profile-info-row__icon">${iconSvg(Radio, 16)}</span>
+        <div>
+          <span class="profile-info-row__label">Preferred Study Vibe</span>
+          <div class="profile-vibe-row">
+            ${vibes.length
+              ? vibes.map((vibe) => `<span class="profile-vibe-chip">${_escapeHtml(vibe)}</span>`).join('')
+              : '<button type="button" class="profile-empty-action" id="profile-add-vibes">Add study vibes</button>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  card.querySelectorAll('[data-profile-edit]').forEach((button) => {
+    button.addEventListener('click', () => openProfileModal());
+  });
+  card.querySelector('#profile-add-vibes')?.addEventListener('click', () => openProfileModal());
+  return card;
+}
+
+function _buildMeetupCard({ meetup }) {
+  const item = meetup || null;
+  const card = document.createElement('article');
+  card.className = `profile-meetup-card${item ? '' : ' profile-meetup-card--empty'}`;
+
+  if (!item) {
+    card.innerHTML = /* html */`
+      <span class="profile-meetup-card__eyebrow">Next Meetup</span>
+      <h2>No session scheduled</h2>
+      <p>Your next squad meetup or personal study session will appear here once it is saved.</p>
+      <button type="button" id="profile-open-group">Open Squad</button>
+    `;
+    card.querySelector('#profile-open-group')?.addEventListener('click', () => navigateTo('/group'));
+    return card;
+  }
+
+  card.innerHTML = /* html */`
+    <span class="profile-meetup-card__eyebrow">Next Meetup</span>
+    <h2>${_escapeHtml(item.title)}</h2>
+    <p>${iconSvg(Calendar, 15)} ${_escapeHtml(_formatMeetupTime(item.starts_at))}</p>
+    <button type="button" id="profile-add-calendar">Add to Calendar</button>
+  `;
+  card.querySelector('#profile-add-calendar')?.addEventListener('click', () => _downloadCalendar(item));
+  return card;
+}
+
+function _buildActivityCard(items) {
+  const card = document.createElement('article');
+  card.className = 'profile-activity-card';
+  card.innerHTML = /* html */`
+    <div class="profile-activity-card__head">
+      <h2>Recent Activity</h2>
+      <button type="button" id="profile-view-activity">View All ${iconSvg(ArrowRight, 14)}</button>
+    </div>
+    <div class="profile-activity-list">
+      ${items.length
+        ? items.map(_activityMarkup).join('')
+        : `<div class="profile-activity-empty">
+            <span>${iconSvg(Bookmark, 22)}</span>
+            <strong>No activity yet</strong>
+            <p>Claims, squad joins, saved pins, and map contributions will show up here.</p>
+          </div>`}
+    </div>
+  `;
+  card.querySelector('#profile-view-activity')?.addEventListener('click', () => navigateTo('/notifications'));
+  return card;
+}
+
+function _infoRow({ icon, label, value, empty = '' }) {
   return /* html */`
-    <li class="claim-history__row">
-      <span class="claim-history__row-icon">${iconSvg(History, 14)}</span>
-      <div class="claim-history__row-body">
-        <span class="claim-history__row-name">${spotName}</span>
-        ${building ? `<span class="claim-history__row-building">${building}</span>` : ''}
+    <div class="profile-info-row">
+      <span class="profile-info-row__icon">${iconSvg(icon, 16)}</span>
+      <div>
+        <span class="profile-info-row__label">${_escapeHtml(label)}</span>
+        ${value
+          ? `<strong>${_escapeHtml(value)}</strong>`
+          : `<button type="button" class="profile-empty-action" data-profile-edit>${_escapeHtml(empty)}</button>`}
       </div>
-      <div class="claim-history__row-meta">
-        <span class="claim-history__row-date">${date} &middot; ${time}</span>
-        <span class="claim-history__row-duration">${duration}</span>
-      </div>
-    </li>
+    </div>
   `;
 }
 
-/**
- * Format how long a claim was held.
- * - If cancelled_at is set: show minutes held.
- * - If expires_at is in the past (and no cancelled_at): "Expired".
- * - If still active: "Active".
- *
- * @param {string}      claimedAt
- * @param {string|null} cancelledAt
- * @param {string}      expiresAt
- * @returns {string}
- */
-function _formatDuration(claimedAt, cancelledAt, expiresAt) {
-  if (cancelledAt) {
-    const mins = Math.round((new Date(cancelledAt) - new Date(claimedAt)) / 60_000);
-    return `Held ${mins}m`;
+function _activityMarkup(item) {
+  return /* html */`
+    <article class="profile-activity-row profile-activity-row--${_escapeAttribute(item.tone)}">
+      <span class="profile-activity-row__icon">${_activityIcon(item.kind)}</span>
+      <div class="profile-activity-row__body">
+        <strong>${_escapeHtml(item.title)}</strong>
+        <span>${_escapeHtml(item.meta)}</span>
+      </div>
+      <div class="profile-activity-row__aside">
+        <time>${_escapeHtml(_formatRelative(item.date))}</time>
+        <span>${_escapeHtml(item.tag)}</span>
+      </div>
+    </article>
+  `;
+}
+
+function _activityIcon(kind) {
+  switch (kind) {
+    case 'squad':
+      return iconSvg(Users, 18);
+    case 'saved':
+      return iconSvg(Bookmark, 18);
+    case 'shared':
+      return iconSvg(Radio, 18);
+    case 'submission':
+    case 'building':
+      return iconSvg(Handshake, 18);
+    default:
+      return iconSvg(MapPin, 18);
   }
-  if (new Date(expiresAt) <= new Date()) return 'Expired';
-  return 'Active';
 }
 
-/**
- * Build a stub settings card shown below the history card.
- * Individual rows are disabled until each preference is implemented.
- *
- * @returns {HTMLElement}
- */
-function _buildSettingsCard({ preferences, preferredCampus }) {
-  const card = document.createElement('section');
-  card.className = 'page-card page-card--subtle profile-page__settings';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Settings</div>
-    <h3 class="page-card__title page-card__title--sm">App preferences</h3>
-    <div class="profile-page__meta-list">
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Settings, 14)}</span>
-        <div>
-          <span class="profile-meta__title">Default view on load</span>
-          <span class="profile-meta__copy">${preferences.defaultView === 'city' ? 'City map opens first.' : 'Campus map opens first.'}</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Map, 14)}</span>
-        <div>
-          <span class="profile-meta__title">Preferred campus</span>
-          <span class="profile-meta__copy">${preferredCampus ? _escapeHtml(preferredCampus.name) : 'Uses your current campus selection.'}</span>
-        </div>
-      </div>
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(Eye, 14)}</span>
-        <div>
-          <span class="profile-meta__title">Squad pins</span>
-          <span class="profile-meta__copy">${preferences.showGroupPins ? 'Visible on the map by default.' : 'Hidden until you turn them back on.'}</span>
-        </div>
-      </div>
-    </div>
-    <div class="profile-page__actions">
-      <button type="button" class="btn btn-primary" id="profile-page-settings-open">Open settings</button>
-    </div>
-  `;
-  card.querySelector('#profile-page-settings-open')?.addEventListener('click', () => navigateTo('/settings'));
-  return card;
+async function _copyProfileLink() {
+  const url = `${window.location.origin}${window.location.pathname}#/profile`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('Profile link copied.', 'success');
+  } catch (err) {
+    console.error('[profilePage] copy link error:', err);
+    showToast('Could not copy the profile link.', 'error');
+  }
 }
 
-function _buildContributionsCard() {
-  const card = document.createElement('section');
-  card.className = 'page-card page-card--subtle profile-page__settings';
-  card.innerHTML = /* html */`
-    <div class="page-card__eyebrow">Community</div>
-    <h3 class="page-card__title page-card__title--sm">Your map contributions</h3>
-    <div class="profile-page__meta-list">
-      <div class="profile-meta">
-        <span class="profile-meta__icon">${iconSvg(FolderClock, 14)}</span>
-        <div>
-          <span class="profile-meta__title">Contribution hub</span>
-          <span class="profile-meta__copy">See pending submissions, verified buildings, and confirmation progress in one place.</span>
-        </div>
-      </div>
-    </div>
-    <div class="profile-page__actions">
-      <button type="button" class="btn btn-primary" id="profile-page-contributions-open">Open contributions</button>
-    </div>
-  `;
-  card.querySelector('#profile-page-contributions-open')?.addEventListener('click', () => navigateTo('/contributions'));
-  return card;
+function _downloadCalendar(item) {
+  if (!item?.starts_at) {
+    showToast('No calendar time saved yet.', 'info');
+    return;
+  }
+
+  const starts = new Date(item.starts_at);
+  const ends = new Date(starts.getTime() + 60 * 60 * 1000);
+  const body = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Perch//Profile//EN',
+    'BEGIN:VEVENT',
+    `UID:${item.id ?? starts.getTime()}@perch`,
+    `DTSTAMP:${_icsDate(new Date())}`,
+    `DTSTART:${_icsDate(starts)}`,
+    `DTEND:${_icsDate(ends)}`,
+    `SUMMARY:${_icsText(item.title ?? 'Study session')}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new window.Blob([body], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'perch-session.ics';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function _formatMeetupTime(value) {
+  if (!value) return 'Time not set';
+  return new Date(value).toLocaleString('en-PH', {
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function _formatRelative(value) {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  const diffHours = (Date.now() - date.getTime()) / 36e5;
+  if (diffHours < 24) {
+    return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(-Math.max(1, Math.round(diffHours || 1)), 'hour');
+  }
+  return date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+}
+
+function _icsDate(date) {
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function _icsText(value) {
+  return String(value ?? '').replace(/[\\,;]/g, '\\$&').replace(/\n/g, '\\n');
 }
 
 function _initials(value) {
-  return String(value)
+  return String(value ?? 'P')
     .trim()
     .split(/\s+/)
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
+    .join('') || 'P';
 }
 
 function _escapeHtml(value) {
@@ -367,4 +493,8 @@ function _escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function _escapeAttribute(value) {
+  return _escapeHtml(value);
 }

@@ -78,6 +78,7 @@ export function initFilterPanel() {
   on(EVENTS.VIEW_MODE_CHANGED,    _syncFromState);
   on(EVENTS.SPOTS_LOADED,         _populateBuildingDropdown);
   on(EVENTS.BUILDINGS_LOADED,     _populateBuildingDropdown);
+  on(EVENTS.AREAS_LOADED,         _populateAreaDropdown);
   on(EVENTS.GROUP_JOINED,         _syncGroupTab);
   on(EVENTS.GROUP_LEFT,           _syncGroupTab);
   on(EVENTS.GROUP_MEMBERS_UPDATED, _syncGroupTab);
@@ -300,6 +301,15 @@ function _buildFilterAccordion() {
   nearRow.appendChild(_buildBuildingDropdown());
   body.appendChild(nearRow);
 
+  const areaRow = document.createElement('div');
+  areaRow.id = 'filter-area-row';
+  const areaLabel = document.createElement('p');
+  areaLabel.className = 'filter-accordion__label';
+  areaLabel.textContent = 'Area';
+  areaRow.appendChild(areaLabel);
+  areaRow.appendChild(_buildAreaDropdown());
+  body.appendChild(areaRow);
+
   return body;
 }
 
@@ -371,6 +381,32 @@ function _buildBuildingDropdown() {
 
   select.addEventListener('change', () => {
     dispatch('SET_FILTERS', { nearBuilding: select.value || null });
+  });
+
+  return select;
+}
+
+function _buildAreaDropdown() {
+  const select = document.createElement('select');
+  select.className = 'select';
+  select.id = 'filter-area';
+
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Any area';
+  select.appendChild(defaultOpt);
+
+  const { areas, filters } = getState();
+  areas.forEach((area) => {
+    const opt = document.createElement('option');
+    opt.value = area.id;
+    opt.textContent = _areaLabel(area);
+    opt.selected = filters.areaId === area.id;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', () => {
+    dispatch('SET_FILTERS', { areaId: select.value || null });
   });
 
   return select;
@@ -628,6 +664,11 @@ function _syncFromState() {
       sel.value = filters.nearBuilding ?? '';
     }
   }
+
+  const areaSelect = document.getElementById('filter-area');
+  if (areaSelect) {
+    areaSelect.value = filters.areaId ?? '';
+  }
 }
 
 /**
@@ -650,6 +691,22 @@ function _populateBuildingDropdown() {
     const opt       = document.createElement('option');
     opt.value       = name;
     opt.textContent = name;
+    sel.appendChild(opt);
+  });
+}
+
+function _populateAreaDropdown() {
+  const sel = document.getElementById('filter-area');
+  if (!sel) return;
+
+  const { areas, filters } = getState();
+  while (sel.options.length > 1) sel.remove(1);
+
+  areas.forEach((area) => {
+    const opt = document.createElement('option');
+    opt.value = area.id;
+    opt.textContent = _areaLabel(area);
+    opt.selected = filters.areaId === area.id;
     sel.appendChild(opt);
   });
 }
@@ -982,6 +1039,12 @@ function _toInitials(name) {
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
+}
+
+function _areaLabel(area) {
+  return [area.sitio, area.barangay, area.city_municipality]
+    .filter(Boolean)
+    .join(', ');
 }
 
 /**

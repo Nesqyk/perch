@@ -9,7 +9,7 @@
  */
 
 const DEFAULT_SHARED_SPOT_DETAIL = Object.freeze({
-  heroImage: '/location-nyor-cafe.png',
+  heroImage: '',
   address: 'M.J. Cuenco Ave, Cebu City',
   walkLabel: '2 min walk from CTU Gate 1',
   hoursLabel: 'Open until 9:00 PM',
@@ -25,6 +25,7 @@ const DEFAULT_SHARED_SPOT_DETAIL = Object.freeze({
 
 const SHARED_SPOT_DETAILS = Object.freeze({
   'a1b2c3d4-0001-4000-8000-000000000006': {
+    heroImage: '/spot-nyor-cafe.jpg',
     address: 'Inside CTU Main Campus Canteen',
     walkLabel: 'Near the main student flow',
     popularityLabel: 'Busiest during lunch breaks',

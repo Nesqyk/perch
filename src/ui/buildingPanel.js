@@ -23,11 +23,16 @@ import {
   confirmSpotSubmission,
   fetchBuildings,
   fetchPendingSpotSubmissions,
-  submitSpot,
 } from '../api/campuses.js';
-import { fetchSpots } from '../api/spots.js';
+import {
+  attachSpotImage,
+  createCommunitySpot,
+  fetchSpots,
+  uploadSpotImage,
+} from '../api/spots.js';
 import { getVisibleRooms, summarizeBuildingInventory } from '../state/buildingState.js';
 import { buildBuildingShareUrl } from '../core/router.js';
+import { createImageUploadField } from './imageUploadField.js';
 import { iconSvg } from './icons.js';
 import { showToast } from './toast.js';
 
@@ -451,10 +456,14 @@ function _buildAddRoomComposer(building) {
     <input id="composer-room-name" class="input" type="text" placeholder="Room 404" maxlength="60" />
     <input id="composer-room-floor" class="input" type="text" placeholder="4F (optional)" maxlength="12" />
     <textarea id="composer-room-notes" class="input submit-spot-panel__textarea" rows="3" placeholder="Quiet after 3pm, strong WiFi"></textarea>
-    <button type="button" class="btn btn-primary btn-full" id="composer-add-room">Add Room for Peer Review</button>
+    <button type="button" class="btn btn-primary btn-full" id="composer-add-room">Add Room</button>
   `;
 
+  const imageField = createImageUploadField({ idPrefix: 'composer-room' });
+  wrap.insertBefore(imageField.element, wrap.querySelector('#composer-add-room'));
+
   wrap.querySelector('#composer-add-room')?.addEventListener('click', async () => {
+    const submitBtn = /** @type {HTMLButtonElement | null} */(wrap.querySelector('#composer-add-room'));
     const roomName = /** @type {HTMLInputElement} */(wrap.querySelector('#composer-room-name'))?.value.trim() ?? '';
     const floor = /** @type {HTMLInputElement} */(wrap.querySelector('#composer-room-floor'))?.value.trim() ?? '';
     const notes = /** @type {HTMLTextAreaElement} */(wrap.querySelector('#composer-room-notes'))?.value.trim() ?? '';
@@ -464,14 +473,12 @@ function _buildAddRoomComposer(building) {
       return;
     }
 
-    const { nickname, currentUser } = getState();
-    const discovererDisplayName =
-      nickname ||
-      currentUser?.user_metadata?.full_name ||
-      currentUser?.email?.split('@')[0] ||
-      'Perch member';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Adding...';
+    }
 
-    const { data, error } = await submitSpot({
+    const { spot, error } = await createCommunitySpot({
       campusId: building.campus_id,
       lat: Number(building.lat),
       lng: Number(building.lng),
@@ -479,19 +486,35 @@ function _buildAddRoomComposer(building) {
       floor,
       spotName: roomName,
       description: notes,
-      discovererDisplayName,
+      onCampus: true,
     });
 
-    if (error || !data?.id) {
-      showToast(error ?? 'Could not queue this room.', 'error');
+    if (error || !spot) {
+      showToast(error ?? 'Could not add this room.', 'error');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Add Room';
+      }
       return;
     }
 
-    await confirmSpotSubmission(data.id);
+    const imageFile = imageField.getFile();
+    if (imageFile) {
+      const uploaded = await uploadSpotImage({ spotId: spot.id, file: imageFile });
+      if (uploaded.error) {
+        showToast('Room added, but the photo could not upload. You can add it from the detail page.', 'error');
+      } else {
+        const attached = await attachSpotImage({ spotId: spot.id, imagePath: uploaded.path });
+        if (attached.error) {
+          showToast('Room added, but the photo could not attach. You can add it from the detail page.', 'error');
+        }
+      }
+    }
+
     await _refreshCampusCatalogue(building.campus_id);
-    showToast(`"${roomName}" added. One more confirmation will make it live.`, 'success');
+    dispatch('SELECT_SPOT', { spotId: spot.id, navigate: true });
+    showToast(`"${roomName}" is live on the map.`, 'success');
     _closeModal();
-    await openBuildingPanel(building.id);
   });
 
   return wrap;

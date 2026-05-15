@@ -11,6 +11,7 @@ import {
   normalizeCampusName,
   findCampusTemplate,
   deriveCampusShell,
+  deriveCampusShortName,
   buildStarterBuildings,
   buildStarterSpots,
 } from '../../src/utils/campusBootstrap.js';
@@ -146,6 +147,17 @@ describe('deriveCampusShell', () => {
     const shell = deriveCampusShell('Unknown');
     expect(shell.lat).toBe(10.2936);
     expect(shell.lng).toBe(123.8809);
+  });
+});
+
+describe('deriveCampusShortName', () => {
+  it('uses the first letters from up to three words', () => {
+    expect(deriveCampusShortName('University of Technology')).toBe('UOT');
+  });
+
+  it('falls back to CMP for blank names', () => {
+    expect(deriveCampusShortName('')).toBe('CMP');
+    expect(deriveCampusShortName(null)).toBe('CMP');
   });
 });
 

@@ -89,6 +89,7 @@ export const EVENTS = Object.freeze({
   SPOTS_LOADED:           'state:spotsLoaded',
   SPOT_SELECTED:          'state:spotSelected',
   SPOT_DESELECTED:        'state:spotDeselected',
+  SPOT_WATCHERS_UPDATED:  'state:spotWatchersUpdated',
 
   // ── Store: claims ────────────────────────────────────────────────────────
   CLAIM_UPDATED:          'state:claimUpdated',
@@ -123,6 +124,7 @@ export const EVENTS = Object.freeze({
 
   // ── Store: campus ────────────────────────────────────────────────────────
   CAMPUSES_LOADED:        'state:campusesLoaded',
+  AREAS_LOADED:           'state:areasLoaded',
   CAMPUS_SELECTED:        'state:campusSelected',
   BUILDINGS_LOADED:       'state:buildingsLoaded',
 
@@ -148,6 +150,8 @@ export const EVENTS = Object.freeze({
   UI_GROUP_COVER_UPLOAD:       'ui:groupCoverUpload',
   UI_GROUP_AVATAR_UPLOAD:      'ui:groupAvatarUpload',
   UI_SUBMIT_SPOT_REQUESTED:    'ui:submitSpotRequested',
+  UI_SPOT_AVAILABILITY_UPDATE: 'ui:spotAvailabilityUpdate',
+  UI_SPOT_SMS_WATCH_TOGGLE:    'ui:spotSmsWatchToggle',
   UI_CAMPUS_CHANGE_REQUESTED:  'ui:campusChangeRequested',
   UI_CAMPUS_ADD_REQUESTED:     'ui:campusAddRequested',
   UI_SETTINGS_UPDATE:          'ui:settingsUpdate',

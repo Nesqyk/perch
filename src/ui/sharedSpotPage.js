@@ -10,6 +10,7 @@
 
 import {
   ArrowLeft,
+  ImagePlus,
   Clock,
   LogIn,
   MapPin,
@@ -24,16 +25,20 @@ import {
 } from 'lucide';
 
 import { emit, on, EVENTS } from '../core/events.js';
-import { getState } from '../core/store.js';
+import { dispatch, getState } from '../core/store.js';
 import { buildSpotShareUrl, navigateTo, readUrlParams } from '../core/router.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
 import { formatConfidence } from '../utils/confidence.js';
+import { attachSpotImage, fetchSpots, uploadSpotImage } from '../api/spots.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 import { iconSvg } from './icons.js';
 import { getSharedSpotDetail } from './sharedSpotDetails.js';
 import { showToast } from './toast.js';
+import { createAvailabilityControls } from './availabilityControls.js';
 
 const VIEW_ID = 'view-spot';
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 /**
  * Initialise the shared spot page renderer.
@@ -45,6 +50,7 @@ export function initSharedSpotPage() {
 
   on(EVENTS.ROUTE_CHANGED, rerender);
   on(EVENTS.SPOTS_LOADED, rerender);
+  on(EVENTS.SPOT_WATCHERS_UPDATED, rerender);
   on(EVENTS.CLAIM_UPDATED, rerender);
   on(EVENTS.CLAIM_REMOVED, rerender);
   on(EVENTS.CAMPUSES_LOADED, rerender);
@@ -95,7 +101,7 @@ function _renderSharedSpotPage() {
 
   const layout = document.createElement('div');
   layout.className = 'shared-location-page__layout';
-  layout.appendChild(_buildHeroPhoto(spot, detail, capacity));
+  layout.appendChild(_buildHeroPhoto(spot, detail, capacity, currentUser));
   layout.appendChild(_buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClaims, currentUser));
   shell.appendChild(layout);
 
@@ -103,6 +109,7 @@ function _renderSharedSpotPage() {
 }
 
 function _buildTopBar(currentUser, nickname) {
+  const avatarUrl = currentUser?.user_metadata?.avatar_url || currentUser?.user_metadata?.picture || '';
   const topBar = document.createElement('div');
   topBar.className = 'shared-location-page__topbar';
   topBar.innerHTML = /* html */`
@@ -110,7 +117,11 @@ function _buildTopBar(currentUser, nickname) {
       ${iconSvg(ArrowLeft, 24)}
     </button>
     <button type="button" class="shared-location-page__avatar-btn" id="shared-spot-profile" aria-label="${currentUser ? 'Open profile' : 'Sign in'}">
-      ${currentUser ? _escapeHtml(_initials(nickname || currentUser.email || 'Me')) : iconSvg(UserRound, 22)}
+      ${currentUser
+        ? (avatarUrl
+            ? `<img src="${_escapeAttribute(avatarUrl)}" alt="">`
+            : `<span>${_escapeHtml(_initials(nickname || currentUser.email || 'Me'))}</span>`)
+        : iconSvg(UserRound, 22)}
     </button>
   `;
 
@@ -126,18 +137,31 @@ function _buildTopBar(currentUser, nickname) {
   return topBar;
 }
 
-function _buildHeroPhoto(spot, detail, capacity) {
+function _buildHeroPhoto(spot, detail, capacity, currentUser) {
+  const imageUrl = spot.image_url || detail.heroImage || '';
   const figure = document.createElement('section');
   figure.className = 'shared-location-hero';
   figure.setAttribute('aria-label', `${spot.name} photo and quick details`);
   figure.innerHTML = /* html */`
-    <img class="shared-location-hero__image" src="${_escapeHtml(detail.heroImage)}" alt="${_escapeHtml(spot.name)}" />
+    ${imageUrl
+      ? `<img class="shared-location-hero__image" src="${_escapeAttribute(imageUrl)}" alt="${_escapeHtml(spot.name)}" />`
+      : _emptyHeroUploadMarkup(spot, Boolean(currentUser))}
     <div class="shared-location-hero__facts" aria-label="Location quick facts">
       ${_quickFact('Hours', detail.hoursLabel, iconSvg(Clock, 20))}
       ${_quickFact('Popularity', detail.popularityLabel, iconSvg(TrendingUp, 20))}
       ${_quickFact('Capacity', detail.capacityLabel || capacity.label, iconSvg(Users, 20))}
     </div>
   `;
+  figure.querySelector('#shared-spot-upload-trigger')?.addEventListener('click', () => {
+    if (!currentUser) {
+      emit(EVENTS.UI_LOGIN_REQUESTED, {});
+      return;
+    }
+    figure.querySelector('#shared-spot-image-input')?.click();
+  });
+  figure.querySelector('#shared-spot-image-input')?.addEventListener('change', (event) => {
+    _handleSpotImageInput(event, spot.id);
+  });
   return figure;
 }
 
@@ -145,6 +169,7 @@ function _buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClai
   const column = document.createElement('section');
   column.className = 'shared-location-detail';
   column.appendChild(_buildSummaryCard(spot, detail, statusKey, confDisplay));
+  column.appendChild(createAvailabilityControls({ spot }));
   column.appendChild(_buildMapCard(spot, campus, detail));
   column.appendChild(_buildActivityCard(detail, spotClaims));
   column.appendChild(_buildActionRow(spot, currentUser));
@@ -287,6 +312,59 @@ async function _copySpotLink(spotId) {
   }
 }
 
+function _emptyHeroUploadMarkup(spot, canUpload) {
+  return /* html */`
+    <div class="shared-location-hero__empty">
+      <div class="shared-location-hero__empty-icon">${iconSvg(ImagePlus, 30)}</div>
+      <p class="shared-location-hero__empty-title">Add the first real photo</p>
+      <p class="shared-location-hero__empty-copy">${_escapeHtml(spot.name)} does not have an image yet.</p>
+      <button type="button" class="shared-location-hero__upload-btn" id="shared-spot-upload-trigger">
+        ${canUpload ? 'Upload Image' : 'Sign in to Upload'}
+      </button>
+      ${canUpload
+        ? '<input id="shared-spot-image-input" class="shared-location-hero__file-input" type="file" accept="image/jpeg,image/png,image/webp">'
+        : ''}
+    </div>
+  `;
+}
+
+async function _handleSpotImageInput(event, spotId) {
+  const input = /** @type {HTMLInputElement} */(event.target);
+  const file = input.files?.[0] ?? null;
+  if (!file) return;
+
+  if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    showToast('Choose a JPEG, PNG, or WebP image.', 'error');
+    input.value = '';
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast('Choose an image under 5 MB.', 'error');
+    input.value = '';
+    return;
+  }
+
+  showToast('Uploading spot photo...', 'info');
+  const uploaded = await uploadSpotImage({ spotId, file });
+  if (uploaded.error) {
+    showToast(uploaded.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const attached = await attachSpotImage({ spotId, imagePath: uploaded.path });
+  if (attached.error) {
+    showToast(attached.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const { spots, confidence } = await fetchSpots();
+  dispatch('SPOTS_LOADED', { spots, confidence });
+  showToast('Spot photo added.', 'success');
+}
+
 function _hasWifi(spot) {
   return Boolean(spot.wifi_strength && spot.wifi_strength !== 'none');
 }
@@ -326,4 +404,8 @@ function _escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function _escapeAttribute(value) {
+  return _escapeHtml(value);
 }

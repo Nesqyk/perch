@@ -45,6 +45,28 @@
   --color-brand-dark : #55cfa0;
   /* Perch teal-green */
   --color-brand-light: #e8f5ee;
+  --color-landing-ink: #00613f;
+  --color-landing-copy: #5f776d;
+  --color-landing-muted: #96a79f;
+  --color-landing-mint: #e4fff1;
+  --color-landing-mint-strong: #68ff7a;
+  --color-landing-mint-soft: #cffff0;
+  --color-landing-lime: #2ce348;
+  --color-landing-wave: #30b945;
+  --color-landing-dot: rgba(64, 206, 110, .28);
+  --color-landing-glass: rgba(255, 255, 255, .76);
+  --color-landing-glass-faint: rgba(255, 255, 255, .22);
+  --color-landing-glass-soft: rgba(255, 255, 255, .38);
+  --color-landing-glass-panel: rgba(255, 255, 255, .62);
+  --color-landing-glass-frame: rgba(255, 255, 255, .75);
+  --color-landing-glass-ring: rgba(255, 255, 255, .35);
+  --color-landing-highlight: rgba(219, 255, 230, .86);
+  --color-landing-highlight-dot: rgba(255, 255, 255, .48);
+  --color-landing-stroke: rgba(62, 194, 112, .62);
+  --color-landing-soft-stroke: rgba(255, 255, 255, .26);
+  --color-landing-neutral-shadow: rgba(0, 0, 0, .06);
+  --color-landing-shadow: rgba(34, 144, 71, .18);
+  --color-landing-preview-shadow: rgba(6, 83, 47, .2);
   --color-surface: var(--color-white);
   --color-surface-alt: var(--color-gray-50);
   --color-border: var(--color-gray-200);

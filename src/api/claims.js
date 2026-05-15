@@ -4,8 +4,9 @@
  * Read and write operations for the `claims` table.
  *
  * All writes require the user to be authenticated through Supabase Auth.
- * The database enforces ownership via auth.uid() in RLS policies — the client
- * never needs to pass a session or user id manually.
+ * The database enforces ownership via auth.uid() in RLS policies. The client
+ * also sends user_id explicitly so inserts satisfy RLS even if deployed DB
+ * defaults are stale.
  *
  * The database enforces a 30-minute auto-expiry via the `expires_at` column.
  * A pg_cron job sets cancelled_at on expired rows; Supabase Realtime
@@ -26,11 +27,20 @@ import { supabase } from './supabaseClient.js';
  * @returns {Promise<{ data: object | null, error: object | null }>}
  */
 export async function createClaim({ spotId, groupSizeKey, groupSizeMin, groupSizeMax }) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    const error = { message: authError?.message ?? 'Please sign in before claiming a spot.' };
+    console.error('[claims] createClaim auth error:', error.message);
+    return { data: null, error };
+  }
+
   const { data, error } = await supabase
     .from('claims')
     .insert({
       spot_id:        spotId,
-      // user_id is set implicitly by the RLS policy (auth.uid()) — not passed here.
+      user_id:        userId,
       group_size_key: groupSizeKey,
       group_size_min: groupSizeMin,
       group_size_max: groupSizeMax,
@@ -54,11 +64,20 @@ export async function createClaim({ spotId, groupSizeKey, groupSizeMin, groupSiz
  * @returns {Promise<{ error: object | null }>}
  */
 export async function cancelClaim(claimId) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    const error = { message: authError?.message ?? 'Please sign in before cancelling a claim.' };
+    console.error('[claims] cancelClaim auth error:', error.message);
+    return { error };
+  }
+
   const { error } = await supabase
     .from('claims')
     .update({ cancelled_at: new Date().toISOString() })
-    .eq('id', claimId);
-  // RLS policy handles the user_id check (auth.uid() = user_id)
+    .eq('id', claimId)
+    .eq('user_id', userId);
 
   if (error) {
     console.error('[claims] cancelClaim error:', error.message);
@@ -110,7 +129,7 @@ export async function fetchActiveClaims(spotIds) {
 
   const { data, error } = await supabase
     .from('claims')
-    .select('id, spot_id, user_id, nickname, group_size_key, group_size_min, group_size_max, claimed_at, expires_at')
+    .select('id, spot_id, user_id, nickname, group_size_key, group_size_min, group_size_max, claimed_at, expires_at, cancelled_at')
     .in('spot_id', spotIds)
     .is('cancelled_at', null)
     .gt('expires_at', now);
@@ -120,7 +139,6 @@ export async function fetchActiveClaims(spotIds) {
     return {};
   }
 
-  // Group by spot_id.
   return (data ?? []).reduce((acc, claim) => {
     if (!acc[claim.spot_id]) acc[claim.spot_id] = [];
     acc[claim.spot_id].push(claim);

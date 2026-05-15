@@ -73,7 +73,9 @@ export function initBottomSheet() {
   on(EVENTS.SPOT_DESELECTED,    _onSpotDeselected);
   on(EVENTS.CLAIM_UPDATED,      _onClaimUpdated);
   on(EVENTS.CLAIM_REMOVED,      _onClaimUpdated);
-  on(EVENTS.CORRECTION_FILED,   _onCorrectionFiled);
+  on(EVENTS.CORRECTION_FILED,   _onClaimUpdated);
+  on(EVENTS.SPOT_WATCHERS_UPDATED, _onClaimUpdated);
+  on(EVENTS.UI_REPORT_REQUESTED, _onReportRequested);
   on(EVENTS.GROUP_JOINED,       _onGroupJoined);
   on(EVENTS.GROUP_LEFT,         _onGroupLeft);
   on(EVENTS.GROUP_PINS_UPDATED, _onGroupPinsUpdated);
@@ -118,8 +120,10 @@ function _onGroupPinsUpdated() {
   if (selectedSpotId) renderSpotCard(selectedSpotId);
 }
 
-function _onCorrectionFiled(e) {
+function _onReportRequested(e) {
   if (_isDesktop()) return;
+  if (e.detail.reasonProvided) return;
+  if (!getState().currentUser) return;
   // Report panel is a modal — open it without changing the bottom sheet.
   renderReportPanel(null, e.detail.spotId);
 }

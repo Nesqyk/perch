@@ -28,17 +28,21 @@ import { getState } from '../core/store.js';
  * @returns {'free' | 'maybe' | 'claimed' | 'full'}
  */
 export function deriveSpotStatus(spotId) {
-  const { confidence, claims } = getState();
-
+  const { confidence, claims, spots } = getState();
+  const spot = spots.find(item => item.id === spotId);
   const conf   = confidence[spotId];
   const score  = _effectiveScore(conf);
   const active = _activeClaimsForSpot(spotId, claims);
+
+  if (spot?.availability_status === 'occupied') return 'full';
 
   // A score of <= 0.15 means a very recent correction tanked it.
   if (score <= 0.15) return 'full';
 
   // Any active claim makes the spot "claimed" (blue) regardless of score.
   if (active.length > 0) return 'claimed';
+
+  if (spot?.availability_status === 'available') return 'free';
 
   if (score >= 0.65) return 'free';
 

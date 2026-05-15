@@ -216,7 +216,9 @@ function _buildSpotTooltipHtml(spot) {
         <span class="map-spot-popup__name">${_escapeHtml(spot.name)}</span>
         <span class="map-spot-popup__badge map-spot-popup__badge--${status}">${confLabel}</span>
       </div>
-      <div class="map-spot-popup__photo-placeholder" aria-hidden="true"></div>
+      ${spot.image_url
+        ? `<img class="map-spot-popup__photo" src="${_escapeHtml(spot.image_url)}" alt="">`
+        : '<div class="map-spot-popup__photo-placeholder" aria-hidden="true"></div>'}
       <div class="map-spot-popup__meta">
         <span class="map-spot-popup__capacity">👤 ${_capacityNum(spot.rough_capacity)}</span>
         <span class="map-spot-popup__amenities">${_amenityIcons(spot)}</span>

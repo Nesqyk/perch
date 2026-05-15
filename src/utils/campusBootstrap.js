@@ -121,7 +121,7 @@ export function deriveCampusShell(campusName) {
   const safeName = String(campusName ?? '').trim() || 'New Campus';
   return {
     name:              safeName,
-    short_name:        _shortName(safeName),
+    short_name:        deriveCampusShortName(safeName),
     city:              'Campus City',
     lat:               10.2936,
     lng:               123.8809,
@@ -135,6 +135,23 @@ export function deriveCampusShell(campusName) {
     bootstrap_notes:   'Created from user input without a template match.',
     normalized_name:   normalizeCampusName(safeName),
   };
+}
+
+/**
+ * Derive the compact campus label used in selectors and route titles.
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+export function deriveCampusShortName(name) {
+  const letters = String(name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 3)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+
+  return letters || 'CMP';
 }
 
 /**
@@ -192,15 +209,4 @@ export function buildStarterSpots(campusId, campusShell, buildingBySlug) {
       };
     })
     .filter(Boolean);
-}
-
-function _shortName(name) {
-  const letters = String(name ?? '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 3)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-
-  return letters || 'CMP';
 }

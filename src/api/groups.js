@@ -11,6 +11,7 @@
 
 import { supabase } from './supabaseClient.js';
 import { fetchGroupPins, fetchGroupPinJoins } from './groupPins.js';
+import { signSpotImageUrl } from './spots.js';
 
 const GROUP_ASSETS_BUCKET = 'group-assets';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
@@ -73,7 +74,8 @@ const SPOT_SELECT = `
   noise_baseline,
   has_food,
   lat,
-  lng
+  lng,
+  image_path
 `;
 
 /**
@@ -83,6 +85,14 @@ const SPOT_SELECT = `
  * @returns {Promise<{ group: object | null, member: object | null, error: string | null }>}
  */
 export async function createGroup({ name, displayName, context = 'campus', campusId = null }) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    console.error('[groups] createGroup auth error:', authError?.message ?? 'Not authenticated.');
+    return { group: null, member: null, error: 'Please sign in before creating a squad.' };
+  }
+
   const code  = _randomCode();
   const color = GROUP_COLORS[_nameHash(name) % GROUP_COLORS.length];
 
@@ -94,6 +104,7 @@ export async function createGroup({ name, displayName, context = 'campus', campu
       color,
       context,
       campus_id: campusId,
+      created_by: userId,
       progress_current: 0,
     })
     .select(GROUP_SELECT)
@@ -104,7 +115,7 @@ export async function createGroup({ name, displayName, context = 'campus', campu
     return { group: null, member: null, error: gErr.message };
   }
 
-  const { member, error: mErr } = await _insertMember(group.id, displayName, 'mayor');
+  const { member, error: mErr } = await _insertMember(group.id, displayName, 'mayor', userId);
   if (mErr) return { group: null, member: null, error: mErr };
 
   return { group, member, error: null };
@@ -117,6 +128,14 @@ export async function createGroup({ name, displayName, context = 'campus', campu
  * @returns {Promise<{ group: object | null, member: object | null, error: string | null }>}
  */
 export async function joinGroup({ code, displayName }) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    console.error('[groups] joinGroup auth error:', authError?.message ?? 'Not authenticated.');
+    return { group: null, member: null, error: 'Please sign in before joining a squad.' };
+  }
+
   const { data: group, error: gErr } = await supabase
     .from('groups')
     .select(GROUP_SELECT)
@@ -128,7 +147,7 @@ export async function joinGroup({ code, displayName }) {
     return { group: null, member: null, error: 'Group not found. Check the code and try again.' };
   }
 
-  const { member, error: mErr } = await _insertMember(group.id, displayName, 'member');
+  const { member, error: mErr } = await _insertMember(group.id, displayName, 'member', userId);
   if (mErr) return { group: null, member: null, error: mErr };
 
   return { group, member, error: null };
@@ -225,7 +244,9 @@ export async function fetchGroupCurrentSpot(spotId) {
     return null;
   }
 
-  return data ?? null;
+  return data
+    ? { ...data, image_url: await signSpotImageUrl(data.image_path) }
+    : null;
 }
 
 /**
@@ -547,11 +568,11 @@ export async function uploadMyGroupAvatar({ groupId, memberId, file }) {
  * @param {'mayor' | 'member'} role
  * @returns {Promise<{ member: object | null, error: string | null }>}
  */
-async function _insertMember(groupId, displayName, role = 'member') {
+async function _insertMember(groupId, displayName, role = 'member', userId = null) {
   const { data, error } = await supabase
     .from('group_members')
     .upsert(
-      { group_id: groupId, display_name: displayName, role },
+      { group_id: groupId, display_name: displayName, role, user_id: userId },
       { onConflict: 'group_id,user_id', ignoreDuplicates: false },
     )
     .select(MEMBER_SELECT)

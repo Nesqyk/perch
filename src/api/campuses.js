@@ -7,7 +7,7 @@
 
 import { supabase } from './supabaseClient.js';
 
-import { deriveCampusShell, normalizeCampusName } from '../utils/campusBootstrap.js';
+import { deriveCampusShell, deriveCampusShortName, normalizeCampusName } from '../utils/campusBootstrap.js';
 import { extractCity }                            from '../utils/nominatim.js';
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
@@ -137,6 +137,7 @@ export async function ensureCampus(campusName, osmResult = null) {
 
     campusShell = {
       name:             campusName.trim(),
+      short_name:       deriveCampusShortName(campusName),
       normalized_name:  normalizedName,
       lat:              parseFloat(osmResult.lat),
       lng:              parseFloat(osmResult.lng),
@@ -294,10 +295,20 @@ export async function submitSpot({
   description,
   discovererDisplayName,
 }) {
+  const { data: authData, error: authError } = await supabase.auth.getUser();
+  const userId = authData?.user?.id ?? null;
+
+  if (authError || !userId) {
+    const message = authError?.message ?? 'Please sign in before suggesting a spot.';
+    console.error('[campuses] submitSpot auth error:', message);
+    return { data: null, error: message };
+  }
+
   const { data, error } = await supabase
     .from('spot_submissions')
     .insert({
       campus_id:               campusId,
+      user_id:                 userId,
       lat,
       lng,
       building_name:           buildingName || null,

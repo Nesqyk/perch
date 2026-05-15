@@ -29,7 +29,7 @@
 import {
   Users, Wifi, WifiOff, Lightbulb, BarChart2,
   X, CheckCircle, Share, Clock,
-  LogOut, ThumbsUp, Copy, MapPinned, Sparkles,
+  LogOut, ThumbsUp, Copy, MapPinned, Sparkles, ImagePlus,
 } from 'lucide';
 
 import { emit, EVENTS }       from '../core/events.js';
@@ -39,6 +39,7 @@ import { formatConfidence }   from '../utils/confidence.js';
 import { timeAgo, claimExpiresIn } from '../utils/time.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
+import { attachSpotImage, fetchSpots, uploadSpotImage } from '../api/spots.js';
 
 import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
 import { leaveGroup, buildGroupJoinUrl } from '../features/groups.js';
@@ -47,6 +48,7 @@ import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { iconSvg } from './icons.js';
 import { getFeaturedSpotDetails } from './featuredSpotDetails.js';
+import { createAvailabilityControls } from './availabilityControls.js';
 
 // ─── Group colour swatches ────────────────────────────────────────────────────
 
@@ -57,6 +59,9 @@ const _GROUP_SWATCHES = [
   '#f97316', // orange
   '#a855f7', // purple
 ];
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 
@@ -165,7 +170,8 @@ function _buildCard(
   scrollable.className = 'spot-card__scrollable';
 
   scrollable.appendChild(_buildStatusRow(confDisplay, status));
-  scrollable.appendChild(_buildPhoto());
+  scrollable.appendChild(createAvailabilityControls({ spot, compact: true }));
+  scrollable.appendChild(_buildPhoto(spot));
   scrollable.appendChild(_buildInfoRow(spot));
   scrollable.appendChild(_buildDivider());
   scrollable.appendChild(_buildReportedRow(activeClaims));
@@ -381,6 +387,7 @@ function _buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeCla
   main.className = 'spot-card__featured-main';
 
   main.appendChild(_buildStatusRow(confDisplay, status));
+  main.appendChild(createAvailabilityControls({ spot }));
   main.appendChild(_buildFeaturedAmenityRail(spot));
   main.appendChild(_buildFeaturedPanels(spot, featuredDetail, confDisplay, activeClaims, capacity));
 
@@ -550,15 +557,85 @@ function _buildStatusRow(confDisplay, status) {
 }
 
 /**
- * Full-width photo placeholder with diagonal stripe pattern.
+ * Full-width spot photo, or an upload prompt when none exists.
  *
+ * @param {object} spot
  * @returns {HTMLElement}
  */
-function _buildPhoto() {
+function _buildPhoto(spot) {
   const photo     = document.createElement('div');
-  photo.className = 'spot-card__photo';
-  photo.setAttribute('aria-hidden', 'true');
+  photo.className = `spot-card__photo${spot.image_url ? ' spot-card__photo--has-image' : ' spot-card__photo--empty'}`;
+
+  if (spot.image_url) {
+    photo.innerHTML = /* html */`<img src="${_escapeAttr(spot.image_url)}" alt="${_escapeHtml(spot.name)}">`;
+    return photo;
+  }
+
+  const { currentUser } = getState();
+  photo.innerHTML = /* html */`
+    <div class="spot-card__photo-empty-icon">${iconSvg(ImagePlus, 22)}</div>
+    <div class="spot-card__photo-empty-copy">
+      <strong>Add the first photo</strong>
+      <span>Show people what this spot looks like.</span>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="spot-card-upload-trigger">
+      ${currentUser ? 'Upload Image' : 'Sign in to Upload'}
+    </button>
+    ${currentUser
+      ? '<input id="spot-card-image-input" class="spot-card__photo-input" type="file" accept="image/jpeg,image/png,image/webp">'
+      : ''}
+  `;
+
+  photo.querySelector('#spot-card-upload-trigger')?.addEventListener('click', () => {
+    if (!currentUser) {
+      emit(EVENTS.UI_LOGIN_REQUESTED, {});
+      return;
+    }
+    photo.querySelector('#spot-card-image-input')?.click();
+  });
+  photo.querySelector('#spot-card-image-input')?.addEventListener('change', (event) => {
+    _handleSpotImageInput(event, spot.id);
+  });
+
   return photo;
+}
+
+async function _handleSpotImageInput(event, spotId) {
+  const input = /** @type {HTMLInputElement} */(event.target);
+  const file = input.files?.[0] ?? null;
+  if (!file) return;
+
+  if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    showToast('Choose a JPEG, PNG, or WebP image.', 'error');
+    input.value = '';
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast('Choose an image under 5 MB.', 'error');
+    input.value = '';
+    return;
+  }
+
+  showToast('Uploading spot photo...', 'info');
+  const uploaded = await uploadSpotImage({ spotId, file });
+  if (uploaded.error) {
+    showToast(uploaded.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const attached = await attachSpotImage({ spotId, imagePath: uploaded.path });
+  if (attached.error) {
+    showToast(attached.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const { spots, confidence } = await fetchSpots();
+  dispatch('SPOTS_LOADED', { spots, confidence });
+  renderSpotCard(spotId);
+  showToast('Spot photo added.', 'success');
 }
 
 /**
@@ -1289,4 +1366,16 @@ function _toInitials(name) {
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('');
+}
+
+function _escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _escapeAttr(value) {
+  return _escapeHtml(value);
 }

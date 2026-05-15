@@ -68,7 +68,7 @@ async function _onSpotSelected(e) {
  *
  * @param {object[]} spots
  * @param {object}   confidence  - Record<spotId, { score, updatedAt?, validUntil? }>
- * @param {object}   filters     - { groupSize, needs, nearBuilding, userLocation, viewMode }
+ * @param {object}   filters     - { groupSize, needs, nearBuilding, areaId, userLocation, viewMode }
  * @returns {object[]} filtered + ranked spots (annotated with _score, _distance, _isBusy)
  */
 export function _rankSpots(spots, confidence, filters) {
@@ -120,6 +120,10 @@ function _calculateDistance(p1, p2) {
 }
 
 function _matchesFilters(spot, filters) {
+  if (filters.areaId && spot.area_id !== filters.areaId) {
+    return false;
+  }
+
   // Near building filter.
   if (filters.nearBuilding && spot.on_campus) {
     if (spot.building?.toLowerCase() !== filters.nearBuilding.toLowerCase()) {
