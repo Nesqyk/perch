@@ -14,6 +14,9 @@
  *   2. claimed — at least one active claim
  *   3. free    — confidence score >= 0.65
  *   4. maybe   — everything else (uncertain / low confidence)
+ *
+ * Also exports campusStats() which derives per-campus spot/claim
+ * summary data for the campus selector card row.
  */
 
 import { getState } from '../core/store.js';
@@ -25,17 +28,21 @@ import { getState } from '../core/store.js';
  * @returns {'free' | 'maybe' | 'claimed' | 'full'}
  */
 export function deriveSpotStatus(spotId) {
-  const { confidence, claims } = getState();
-
+  const { confidence, claims, spots } = getState();
+  const spot = spots.find(item => item.id === spotId);
   const conf   = confidence[spotId];
   const score  = _effectiveScore(conf);
   const active = _activeClaimsForSpot(spotId, claims);
+
+  if (spot?.availability_status === 'occupied') return 'full';
 
   // A score of <= 0.15 means a very recent correction tanked it.
   if (score <= 0.15) return 'full';
 
   // Any active claim makes the spot "claimed" (blue) regardless of score.
   if (active.length > 0) return 'claimed';
+
+  if (spot?.availability_status === 'available') return 'free';
 
   if (score >= 0.65) return 'free';
 
@@ -95,6 +102,52 @@ function _activeClaimsForSpot(spotId, claims) {
     !c.cancelled_at &&
     (!c.expires_at || new Date(c.expires_at) > now)
   );
+}
+
+// ─── Campus stats ─────────────────────────────────────────────────────────────
+
+/**
+ * Derive per-campus statistics from the spots and claims already in the store.
+ *
+ * This is a pure function — no store reads, no side effects.
+ * Called by campusSelector.js to populate the campus card row.
+ *
+ * @param {object[]}                   campuses - Campus rows from store
+ * @param {object[]}                   spots    - Spot rows from store
+ * @param {Record<string, object[]>}   claims   - Active claims map from store
+ * @returns {Map<string, { spotCount: number, liveClaimCount: number, liveClaimantCount: number }>}
+ */
+export function campusStats(campuses, spots, claims) {
+  const stats = new Map();
+
+  // Initialise every campus with zero counts so callers never get undefined.
+  for (const campus of campuses) {
+    stats.set(campus.id, { spotCount: 0, liveClaimCount: 0, liveClaimantCount: 0 });
+  }
+
+  // Count spots per campus and accumulate live claim data.
+  for (const spot of spots) {
+    if (!spot.campus_id || !stats.has(spot.campus_id)) continue;
+    const entry = stats.get(spot.campus_id);
+    entry.spotCount += 1;
+
+    const spotClaims = _activeClaimsForSpot(spot.id, claims);
+    entry.liveClaimCount += spotClaims.length;
+
+    // Unique claimants: collect user_ids into a Set stored on the entry.
+    if (!entry._claimantSet) entry._claimantSet = new Set();
+    for (const c of spotClaims) {
+      if (c.user_id) entry._claimantSet.add(c.user_id);
+    }
+  }
+
+  // Materialise claimant count and remove the internal Set.
+  for (const entry of stats.values()) {
+    entry.liveClaimantCount = entry._claimantSet ? entry._claimantSet.size : 0;
+    delete entry._claimantSet;
+  }
+
+  return stats;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────

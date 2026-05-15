@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="520" viewBox="0 0 900 520" role="img" aria-label="Sunlit campus library">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#dff4e8"/>
+      <stop offset="0.55" stop-color="#8fc7a7"/>
+      <stop offset="1" stop-color="#295940"/>
+    </linearGradient>
+    <linearGradient id="shade" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#16402f" stop-opacity=".15"/>
+      <stop offset="1" stop-color="#0f2f24" stop-opacity=".74"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="520" fill="url(#g)"/>
+  <g opacity=".34" stroke="#f8fff9" stroke-width="8">
+    <path d="M75 76h750M75 168h750M75 260h750"/>
+    <path d="M182 22v306M348 22v306M514 22v306M680 22v306"/>
+  </g>
+  <g fill="#17382c" opacity=".46">
+    <rect x="72" y="246" width="96" height="214" rx="4"/>
+    <rect x="184" y="218" width="92" height="242" rx="4"/>
+    <rect x="640" y="220" width="90" height="240" rx="4"/>
+    <rect x="748" y="250" width="86" height="210" rx="4"/>
+  </g>
+  <g stroke="#e8fff2" stroke-width="5" opacity=".52">
+    <path d="M92 286h56M92 326h56M92 366h56M92 406h56"/>
+    <path d="M204 260h52M204 300h52M204 340h52M204 380h52M204 420h52"/>
+    <path d="M660 260h50M660 302h50M660 344h50M660 386h50M660 428h50"/>
+    <path d="M766 288h48M766 328h48M766 368h48M766 408h48"/>
+  </g>
+  <path d="M0 318c118-74 223-89 341-46 116 42 221 41 326-4 83-36 155-38 233-10v262H0z" fill="#183f2f" opacity=".28"/>
+  <rect width="900" height="520" fill="url(#shade)"/>
+</svg>

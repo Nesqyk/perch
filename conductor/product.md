@@ -14,6 +14,7 @@ Perch is a real-time, map-based web app that helps Filipino college students fin
 - **Smart Recommendations**: Ranking spots based on distance, capacity, and confidence.
 
 ## Key Features
+- **User Identity**: Ability to set a personalized nickname that persists across sessions and is shared with other users in groups and claims.
 - **Find My Spot**: Intelligent ranking of top 3 study locations with walk-time estimates and integrated map navigation.
 - **Campus Map Visualization**: Interactive map with all study spots plotted.
 - **Real-time Availability Status**: Immediate visual indication of whether a spot is Free, Maybe, or Full.

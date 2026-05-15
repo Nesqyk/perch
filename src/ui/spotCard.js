@@ -1,12 +1,13 @@
 /**
  * src/ui/spotCard.js
  *
- * Renders the detailed view for a single selected spot.
- * Used by both sidebar.js (desktop) and bottomSheet.js (mobile) — they each
- * pass their container element, so the render logic is never duplicated.
+ * Renders the detailed view for a single selected spot inside the
+ * #spot-modal-overlay. Opening and closing is managed here; callers only
+ * need to call renderSpotCard(spotId) and closeSpotCard().
  *
  * Layout (top → bottom):
- *   1. Header — spot name, subtitle, × close button
+ *   1. Header — spot name, subtitle, × close button  [sticky, outside scroll]
+ *   ── scrollable region ──
  *   2. Status chips — "Likely Free" pill + percentage pill
  *   3. Photo placeholder (full-width, striped)
  *   4. Info row — capacity (person icon + number) | amenity icons
@@ -28,20 +29,26 @@
 import {
   Users, Wifi, WifiOff, Lightbulb, BarChart2,
   X, CheckCircle, Share, Clock,
-  LogOut, ThumbsUp, Copy,
+  LogOut, ThumbsUp, Copy, MapPinned, Sparkles, ImagePlus,
 } from 'lucide';
 
 import { emit, EVENTS }       from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
+import { navigateToSpot } from '../core/router.js';
 import { formatConfidence }   from '../utils/confidence.js';
 import { timeAgo, claimExpiresIn } from '../utils/time.js';
 import { deriveSpotStatus, getActiveClaimsForSpot } from '../state/spotState.js';
 import { calcRemainingCapacity } from '../utils/capacity.js';
+import { attachSpotImage, fetchSpots, uploadSpotImage } from '../api/spots.js';
+
+import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
+import { leaveGroup, buildGroupJoinUrl } from '../features/groups.js';
+
 import { openModal } from './modal.js';
 import { showToast } from './toast.js';
 import { iconSvg } from './icons.js';
-import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
-import { leaveGroup } from '../features/groups.js';
+import { getFeaturedSpotDetails } from './featuredSpotDetails.js';
+import { createAvailabilityControls } from './availabilityControls.js';
 
 // ─── Group colour swatches ────────────────────────────────────────────────────
 
@@ -52,6 +59,9 @@ const _GROUP_SWATCHES = [
   '#f97316', // orange
   '#a855f7', // purple
 ];
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ACCEPTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // ─── Module state ─────────────────────────────────────────────────────────────
 
@@ -64,19 +74,25 @@ let _groupSubForm = 'create';
 // ─── Public render ────────────────────────────────────────────────────────────
 
 /**
- * Render the spot detail card into a container element.
+ * Render the spot detail card into the #spot-modal-overlay and open it.
+ * Safe to call multiple times — re-renders in place if the modal is already open.
  *
- * @param {HTMLElement} container
- * @param {string}      spotId
+ * @param {string} spotId
  * @returns {void}
  */
-export function renderSpotCard(container, spotId) {
+export function renderSpotCard(spotId) {
+  const overlay = document.getElementById('spot-modal-overlay');
+  const box = document.getElementById('spot-modal-box');
+  const content = document.getElementById('spot-modal-content');
+  if (!overlay || !content || !box) return;
+
   const {
     spots, confidence, claims, group,
     myActiveClaim, groupMember, groupPins, groupPinJoins, myGroupPinId,
   } = getState();
   const spot = spots.find(s => s.id === spotId);
   if (!spot) return;
+  const featuredDetail = getFeaturedSpotDetails(spot.id);
 
   const conf         = confidence[spotId];
   const confDisplay  = formatConfidence(conf?.score);
@@ -86,14 +102,31 @@ export function renderSpotCard(container, spotId) {
   // Is OUR claim on this spot?
   const ownClaim = myActiveClaim?.spotId === spotId ? myActiveClaim : null;
 
-  container.innerHTML = '';
-  container.appendChild(
+  content.innerHTML = '';
+  box.classList.toggle('modal-box--spot-featured', Boolean(featuredDetail));
+  content.appendChild(
     _buildCard(
       spot, confDisplay, status, activeClaims,
       group, groupMember, groupPins, groupPinJoins, myGroupPinId,
       ownClaim, spots,
     ),
   );
+
+  overlay.hidden = false;
+}
+
+/**
+ * Close the spot card modal and clear its contents.
+ *
+ * @returns {void}
+ */
+export function closeSpotCard() {
+  const overlay = document.getElementById('spot-modal-overlay');
+  const box = document.getElementById('spot-modal-box');
+  const content = document.getElementById('spot-modal-content');
+  if (overlay) overlay.hidden = true;
+  if (box) box.classList.remove('modal-box--spot-featured');
+  if (content) content.innerHTML = '';
 }
 
 // ─── Card builder ─────────────────────────────────────────────────────────────
@@ -117,30 +150,107 @@ function _buildCard(
   group, groupMember, groupPins, groupPinJoins, myGroupPinId,
   ownClaim, spots,
 ) {
+  const featuredDetail = getFeaturedSpotDetails(spot.id);
+  if (featuredDetail) {
+    return _buildFeaturedCard(
+      spot, featuredDetail, confDisplay, status, activeClaims,
+      group, groupMember, groupPins, groupPinJoins, myGroupPinId,
+      ownClaim, spots,
+    );
+  }
+
   const card     = document.createElement('div');
   card.className = 'spot-card';
 
+  // Header is sticky — sits outside the scrollable region
   card.appendChild(_buildHeader(spot));
-  card.appendChild(_buildStatusRow(confDisplay, status));
-  card.appendChild(_buildPhoto());
-  card.appendChild(_buildInfoRow(spot));
-  card.appendChild(_buildDivider());
-  card.appendChild(_buildReportedRow(activeClaims));
+
+  // All remaining sections scroll together inside the modal box
+  const scrollable     = document.createElement('div');
+  scrollable.className = 'spot-card__scrollable';
+
+  scrollable.appendChild(_buildStatusRow(confDisplay, status));
+  scrollable.appendChild(createAvailabilityControls({ spot, compact: true }));
+  scrollable.appendChild(_buildPhoto(spot));
+  scrollable.appendChild(_buildInfoRow(spot));
+  scrollable.appendChild(_buildDivider());
+  scrollable.appendChild(_buildReportedRow(activeClaims));
 
   if (ownClaim) {
-    card.appendChild(_buildClaimSection(spot, activeClaims, ownClaim));
+    scrollable.appendChild(_buildClaimSection(spot, activeClaims, ownClaim));
   } else {
-    card.appendChild(_buildActions(spot.id, status));
+    scrollable.appendChild(_buildActions(spot.id, status));
   }
 
-  card.appendChild(_buildDivider());
+  scrollable.appendChild(_buildDivider());
   if (group) {
-    card.appendChild(_buildGroupMembersSection(
+    scrollable.appendChild(_buildGroupMembersSection(
       group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots,
     ));
   } else {
-    card.appendChild(_buildGroupSection());
+    scrollable.appendChild(_buildGroupSection());
   }
+
+  card.appendChild(scrollable);
+  return card;
+}
+
+/**
+ * Featured modal layout for curated spots.
+ *
+ * @param {object}      spot
+ * @param {object}      featuredDetail
+ * @param {object}      confDisplay
+ * @param {string}      status
+ * @param {object[]}    activeClaims
+ * @param {object|null} group
+ * @param {object|null} groupMember
+ * @param {object}      groupPins
+ * @param {object}      groupPinJoins
+ * @param {string|null} myGroupPinId
+ * @param {object|null} ownClaim
+ * @param {object[]}    spots
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedCard(
+  spot, featuredDetail, confDisplay, status, activeClaims,
+  group, groupMember, groupPins, groupPinJoins, myGroupPinId,
+  ownClaim, spots,
+) {
+  const capacity = calcRemainingCapacity(spot.rough_capacity, activeClaims);
+  const card = document.createElement('div');
+  card.className = 'spot-card spot-card--featured';
+  card.style.setProperty('--spot-feature-accent', featuredDetail.accent);
+  card.style.setProperty('--spot-feature-accent-strong', featuredDetail.accentStrong);
+  card.style.setProperty('--spot-feature-accent-soft', featuredDetail.accentSoft);
+  card.style.setProperty('--spot-feature-accent-contrast', featuredDetail.accentContrast);
+
+  card.appendChild(_buildHeader(spot, featuredDetail));
+
+  const scrollable = document.createElement('div');
+  scrollable.className = 'spot-card__scrollable spot-card__scrollable--featured';
+
+  const shell = document.createElement('section');
+  shell.className = 'spot-card__featured-shell';
+  shell.appendChild(_buildFeaturedVisual(spot, featuredDetail, confDisplay));
+  shell.appendChild(_buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity));
+  scrollable.appendChild(shell);
+
+  scrollable.appendChild(_buildDivider());
+  if (group) {
+    scrollable.appendChild(_buildGroupMembersSection(
+      group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots,
+    ));
+  } else {
+    scrollable.appendChild(_buildGroupSection());
+  }
+
+  card.appendChild(scrollable);
+
+  const sticky = document.createElement('div');
+  sticky.className = 'spot-card__sticky-actions';
+  sticky.appendChild(ownClaim ? _buildClaimSection(spot, activeClaims, ownClaim) : _buildActions(spot.id, status));
+  card.appendChild(sticky);
 
   return card;
 }
@@ -151,14 +261,22 @@ function _buildCard(
  * Header: spot name + floor/building subtitle + × close button.
  *
  * @param {object} spot
+ * @param {object|null} featuredDetail
  * @returns {HTMLElement}
  */
-function _buildHeader(spot) {
+function _buildHeader(spot, featuredDetail = null) {
   const header     = document.createElement('div');
-  header.className = 'spot-card__header';
+  header.className = `spot-card__header${featuredDetail ? ' spot-card__header--featured' : ''}`;
 
   const text       = document.createElement('div');
   text.className   = 'spot-card__header-text';
+
+  if (featuredDetail?.eyebrow) {
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'spot-card__eyebrow';
+    eyebrow.textContent = featuredDetail.eyebrow;
+    text.appendChild(eyebrow);
+  }
 
   const name       = document.createElement('h2');
   name.className   = 'spot-card__name';
@@ -173,6 +291,20 @@ function _buildHeader(spot) {
     text.appendChild(sub);
   }
 
+  if (spot.discoverer_display_name) {
+    const meta       = document.createElement('p');
+    meta.className   = 'spot-card__subtitle';
+    meta.textContent = `Discovered by ${spot.discoverer_display_name}`;
+    text.appendChild(meta);
+  }
+
+  const openPageBtn = document.createElement('button');
+  openPageBtn.type = 'button';
+  openPageBtn.className = 'spot-card__share-page-link';
+  openPageBtn.textContent = 'Open shared page';
+  openPageBtn.addEventListener('click', () => navigateToSpot(spot.id));
+  text.appendChild(openPageBtn);
+
   header.appendChild(text);
 
   const closeBtn     = document.createElement('button');
@@ -184,6 +316,220 @@ function _buildHeader(spot) {
   header.appendChild(closeBtn);
 
   return header;
+}
+
+/**
+ * Build the visual half of the featured modal.
+ *
+ * @param {object} spot
+ * @param {object} featuredDetail
+ * @param {object} confDisplay
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedVisual(spot, featuredDetail, confDisplay) {
+  const visual = document.createElement('section');
+  visual.className = 'spot-card__featured-visual';
+
+  const glow = document.createElement('div');
+  glow.className = 'spot-card__featured-glow';
+  glow.setAttribute('aria-hidden', 'true');
+  visual.appendChild(glow);
+
+  const pattern = document.createElement('div');
+  pattern.className = 'spot-card__featured-pattern';
+  pattern.setAttribute('aria-hidden', 'true');
+  visual.appendChild(pattern);
+
+  const badgeRow = document.createElement('div');
+  badgeRow.className = 'spot-card__featured-badges';
+  badgeRow.appendChild(_buildFeaturedBadge(confDisplay.label));
+  badgeRow.appendChild(_buildFeaturedBadge(featuredDetail.highlightLabel));
+  visual.appendChild(badgeRow);
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'spot-card__featured-title-wrap';
+
+  const title = document.createElement('h3');
+  title.className = 'spot-card__featured-title';
+  title.textContent = spot.name;
+  titleWrap.appendChild(title);
+
+  const subtitle = document.createElement('p');
+  subtitle.className = 'spot-card__featured-copy';
+  subtitle.textContent = featuredDetail.vibe;
+  titleWrap.appendChild(subtitle);
+  visual.appendChild(titleWrap);
+
+  const stats = document.createElement('div');
+  stats.className = 'spot-card__featured-stat-stack';
+  stats.appendChild(_buildFeaturedStat('Best for', featuredDetail.bestFor, Sparkles));
+  stats.appendChild(_buildFeaturedStat('Capacity', _capacityRangeLabel(spot.rough_capacity), Users));
+  stats.appendChild(_buildFeaturedStat('Walk time', spot.walk_time_min ? `${spot.walk_time_min} min from campus flow` : 'Check on map for route', MapPinned));
+  visual.appendChild(stats);
+
+  return visual;
+}
+
+/**
+ * Build the content half of the featured modal.
+ *
+ * @param {object}      spot
+ * @param {object}      featuredDetail
+ * @param {object}      confDisplay
+ * @param {string}      status
+ * @param {object[]}    activeClaims
+ * @param {{ remaining: number | null, label: string }} capacity
+ * @param {object|null} ownClaim
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedMain(spot, featuredDetail, confDisplay, status, activeClaims, capacity) {
+  const main = document.createElement('div');
+  main.className = 'spot-card__featured-main';
+
+  main.appendChild(_buildStatusRow(confDisplay, status));
+  main.appendChild(createAvailabilityControls({ spot }));
+  main.appendChild(_buildFeaturedAmenityRail(spot));
+  main.appendChild(_buildFeaturedPanels(spot, featuredDetail, confDisplay, activeClaims, capacity));
+
+  return main;
+}
+
+/**
+ * @param {object} spot
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedAmenityRail(spot) {
+  const rail = document.createElement('div');
+  rail.className = 'spot-card__featured-amenity-rail';
+  rail.appendChild(_buildAmenityTile('WiFi', _wifiLabel(spot.wifi_strength), Boolean(spot.wifi_strength && spot.wifi_strength !== 'none'), Wifi));
+  rail.appendChild(_buildAmenityTile('Outlets', spot.has_outlets ? 'Likely available' : 'Not confirmed', Boolean(spot.has_outlets), Lightbulb));
+  rail.appendChild(_buildAmenityTile('Noise', _noiseLabel(spot.noise_baseline), spot.noise_baseline === 'quiet', BarChart2));
+  rail.appendChild(_buildAmenityTile('Food', spot.has_food ? 'Nearby' : 'No strong signal', Boolean(spot.has_food), Sparkles));
+  return rail;
+}
+
+/**
+ * @param {object}      spot
+ * @param {object}      featuredDetail
+ * @param {object}      confDisplay
+ * @param {object[]}    activeClaims
+ * @param {{ remaining: number | null, label: string }} capacity
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedPanels(spot, featuredDetail, confDisplay, activeClaims, capacity) {
+  const grid = document.createElement('div');
+  grid.className = 'spot-card__featured-panel-grid';
+
+  const locationPanel = document.createElement('section');
+  locationPanel.className = 'spot-card__featured-panel';
+  locationPanel.appendChild(_buildPanelLabel('Location context'));
+  locationPanel.appendChild(_buildPanelValue([spot.floor, spot.building].filter(Boolean).join(' - ') || 'Campus spot'));
+  locationPanel.appendChild(_buildPanelCopy(featuredDetail.landmark));
+  if (featuredDetail.accessNote) {
+    locationPanel.appendChild(_buildPanelCopy(featuredDetail.accessNote));
+  }
+  grid.appendChild(locationPanel);
+
+  const signalPanel = document.createElement('section');
+  signalPanel.className = 'spot-card__featured-panel';
+  signalPanel.appendChild(_buildPanelLabel('Live read'));
+  signalPanel.appendChild(_buildPanelValue(`${confDisplay.percent}% confidence`));
+  signalPanel.appendChild(_buildPanelCopy(_confidenceReason(confDisplay, spot.id)));
+  signalPanel.appendChild(_buildPanelCopy(activeClaims.length
+    ? `${activeClaims.length} active claim${activeClaims.length === 1 ? '' : 's'} attached right now.`
+    : 'No active claims attached right now.'));
+  grid.appendChild(signalPanel);
+
+  const rhythmPanel = document.createElement('section');
+  rhythmPanel.className = 'spot-card__featured-panel spot-card__featured-panel--wide';
+  rhythmPanel.appendChild(_buildPanelLabel('How this spot feels'));
+  rhythmPanel.appendChild(_buildPanelValue(featuredDetail.bestFor));
+  rhythmPanel.appendChild(_buildPanelCopy(featuredDetail.busyWindow));
+  rhythmPanel.appendChild(_buildPanelCopy(`Current capacity read: ${capacity.label}.`));
+  grid.appendChild(rhythmPanel);
+
+  return grid;
+}
+
+/**
+ * @param {string} label
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedBadge(label) {
+  const badge = document.createElement('span');
+  badge.className = 'spot-card__featured-badge';
+  badge.textContent = label;
+  return badge;
+}
+
+/**
+ * @param {string} label
+ * @param {string} value
+ * @param {Array} icon
+ * @returns {HTMLElement}
+ */
+function _buildFeaturedStat(label, value, icon) {
+  const stat = document.createElement('div');
+  stat.className = 'spot-card__featured-stat';
+  stat.innerHTML = /* html */`
+    <span class="spot-card__featured-stat-icon">${iconSvg(icon, 16)}</span>
+    <div>
+      <span class="spot-card__featured-stat-label">${label}</span>
+      <span class="spot-card__featured-stat-value">${value}</span>
+    </div>
+  `;
+  return stat;
+}
+
+/**
+ * @param {string} label
+ * @param {string} value
+ * @param {boolean} active
+ * @param {Array} icon
+ * @returns {HTMLElement}
+ */
+function _buildAmenityTile(label, value, active, icon) {
+  const tile = document.createElement('div');
+  tile.className = `spot-card__amenity-tile${active ? '' : ' spot-card__amenity-tile--muted'}`;
+  tile.innerHTML = /* html */`
+    <span class="spot-card__amenity-tile-icon">${iconSvg(icon, 16)}</span>
+    <span class="spot-card__amenity-tile-label">${label}</span>
+    <span class="spot-card__amenity-tile-value">${value}</span>
+  `;
+  return tile;
+}
+
+/**
+ * @param {string} value
+ * @returns {HTMLElement}
+ */
+function _buildPanelLabel(value) {
+  const label = document.createElement('p');
+  label.className = 'spot-card__panel-label';
+  label.textContent = value;
+  return label;
+}
+
+/**
+ * @param {string} value
+ * @returns {HTMLElement}
+ */
+function _buildPanelValue(value) {
+  const heading = document.createElement('p');
+  heading.className = 'spot-card__panel-value';
+  heading.textContent = value;
+  return heading;
+}
+
+/**
+ * @param {string} value
+ * @returns {HTMLElement}
+ */
+function _buildPanelCopy(value) {
+  const copy = document.createElement('p');
+  copy.className = 'spot-card__panel-copy';
+  copy.textContent = value;
+  return copy;
 }
 
 /**
@@ -211,15 +557,85 @@ function _buildStatusRow(confDisplay, status) {
 }
 
 /**
- * Full-width photo placeholder with diagonal stripe pattern.
+ * Full-width spot photo, or an upload prompt when none exists.
  *
+ * @param {object} spot
  * @returns {HTMLElement}
  */
-function _buildPhoto() {
+function _buildPhoto(spot) {
   const photo     = document.createElement('div');
-  photo.className = 'spot-card__photo';
-  photo.setAttribute('aria-hidden', 'true');
+  photo.className = `spot-card__photo${spot.image_url ? ' spot-card__photo--has-image' : ' spot-card__photo--empty'}`;
+
+  if (spot.image_url) {
+    photo.innerHTML = /* html */`<img src="${_escapeAttr(spot.image_url)}" alt="${_escapeHtml(spot.name)}">`;
+    return photo;
+  }
+
+  const { currentUser } = getState();
+  photo.innerHTML = /* html */`
+    <div class="spot-card__photo-empty-icon">${iconSvg(ImagePlus, 22)}</div>
+    <div class="spot-card__photo-empty-copy">
+      <strong>Add the first photo</strong>
+      <span>Show people what this spot looks like.</span>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="spot-card-upload-trigger">
+      ${currentUser ? 'Upload Image' : 'Sign in to Upload'}
+    </button>
+    ${currentUser
+      ? '<input id="spot-card-image-input" class="spot-card__photo-input" type="file" accept="image/jpeg,image/png,image/webp">'
+      : ''}
+  `;
+
+  photo.querySelector('#spot-card-upload-trigger')?.addEventListener('click', () => {
+    if (!currentUser) {
+      emit(EVENTS.UI_LOGIN_REQUESTED, {});
+      return;
+    }
+    photo.querySelector('#spot-card-image-input')?.click();
+  });
+  photo.querySelector('#spot-card-image-input')?.addEventListener('change', (event) => {
+    _handleSpotImageInput(event, spot.id);
+  });
+
   return photo;
+}
+
+async function _handleSpotImageInput(event, spotId) {
+  const input = /** @type {HTMLInputElement} */(event.target);
+  const file = input.files?.[0] ?? null;
+  if (!file) return;
+
+  if (!ACCEPTED_IMAGE_TYPES.has(file.type)) {
+    showToast('Choose a JPEG, PNG, or WebP image.', 'error');
+    input.value = '';
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_BYTES) {
+    showToast('Choose an image under 5 MB.', 'error');
+    input.value = '';
+    return;
+  }
+
+  showToast('Uploading spot photo...', 'info');
+  const uploaded = await uploadSpotImage({ spotId, file });
+  if (uploaded.error) {
+    showToast(uploaded.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const attached = await attachSpotImage({ spotId, imagePath: uploaded.path });
+  if (attached.error) {
+    showToast(attached.error, 'error');
+    input.value = '';
+    return;
+  }
+
+  const { spots, confidence } = await fetchSpots();
+  dispatch('SPOTS_LOADED', { spots, confidence });
+  renderSpotCard(spotId);
+  showToast('Spot photo added.', 'success');
 }
 
 /**
@@ -413,9 +829,11 @@ function _buildClaimSection(spot, activeClaims, ownClaim) {
       const row     = document.createElement('div');
       row.className = `spot-card__claim-group-row${isMine ? ' spot-card__claim-group-row--mine' : ''}`;
 
+      const name = isMine ? 'You' : (claim.nickname ?? 'Someone');
+
       row.innerHTML = /* html */`
         <span class="spot-card__claim-group-icon">${iconSvg(Users, 14)}</span>
-        <span class="spot-card__claim-group-size">${_groupLabel(claim.group_size_key)}${isMine ? ' (you)' : ''}</span>
+        <span class="spot-card__claim-group-size"><strong>${name}</strong><span class="spot-card__claim-group-sep"></span>${_groupLabel(claim.group_size_key)}</span>
         <span class="spot-card__claim-group-time">${timeAgo(claim.claimed_at)}</span>
       `;
       table.appendChild(row);
@@ -544,11 +962,21 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
       avatar.textContent = initials;
       row.appendChild(avatar);
 
-      // Location
+      // Name & Location
+      const nameLoc = document.createElement('div');
+      nameLoc.className = 'spot-card__gm-name-loc';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'spot-card__gm-member-name';
+      nameSpan.textContent = pin.display_name ?? 'Someone';
+      nameLoc.appendChild(nameSpan);
+
       const loc     = document.createElement('span');
       loc.className = 'spot-card__gm-location';
       loc.textContent = spotName;
-      row.appendChild(loc);
+      nameLoc.appendChild(loc);
+
+      row.appendChild(nameLoc);
 
       // Join count
       const joinCount     = document.createElement('span');
@@ -558,7 +986,7 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
 
       // Thumbs-up (heading join)
       const alreadyJoined = (groupPinJoins[pin.id] ?? []).some(
-        j => j.status === 'heading' && j.session_id === _mySessionId(),
+        j => j.status === 'heading' && j.user_id === getState().currentUser?.id,
       );
       const thumbBtn     = document.createElement('button');
       thumbBtn.type      = 'button';
@@ -602,7 +1030,7 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
   copyBtn.setAttribute('aria-label', 'Copy invite code');
   copyBtn.innerHTML = iconSvg(Copy, 16);
   copyBtn.addEventListener('click', async () => {
-    const url = `${window.location.origin}${window.location.pathname}?group=${group.code}`;
+    const url = buildGroupJoinUrl(group.code);
     try {
       await navigator.clipboard.writeText(url);
       showToast('Invite link copied! Share it with your group.', 'success');
@@ -704,7 +1132,15 @@ function _buildCreateForm(section, heading) {
   createBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
-    emit(EVENTS.UI_GROUP_CREATE, { name, displayName: name, color: _selectedColor, context: 'campus' });
+    const { viewMode, campuses, selectedCampusId } = getState();
+    const selectedCampus = campuses.find((campus) => campus.id === selectedCampusId) ?? null;
+    emit(EVENTS.UI_GROUP_CREATE, {
+      name,
+      displayName: name,
+      color: _selectedColor,
+      context: viewMode,
+      campusName: selectedCampus?.name ?? '',
+    });
   });
 
   const cancelBtn       = document.createElement('button');
@@ -855,6 +1291,21 @@ function _capacityNum(rough) {
 }
 
 /**
+ * Capacity copy used in the featured modal.
+ *
+ * @param {string} rough
+ * @returns {string}
+ */
+function _capacityRangeLabel(rough) {
+  const labels = {
+    small: 'Good for 4-8 students',
+    medium: 'Good for 8-20 students',
+    large: 'Good for 20+ students',
+  };
+  return labels[rough] ?? 'Capacity still being learned';
+}
+
+/**
  * Human-readable group size label.
  *
  * @param {string} key
@@ -863,6 +1314,43 @@ function _capacityNum(rough) {
 function _groupLabel(key) {
   const map = { solo: '1 person', small: '2–5 ppl', medium: '6–15 ppl', large: '16+ ppl' };
   return map[key] ?? key;
+}
+
+/**
+ * @param {string | null | undefined} value
+ * @returns {string}
+ */
+function _wifiLabel(value) {
+  const map = {
+    none: 'Unavailable',
+    weak: 'Weak signal',
+    ok: 'Usable',
+    strong: 'Strong signal',
+  };
+  return map[value] ?? 'Unknown';
+}
+
+/**
+ * @param {string | null | undefined} value
+ * @returns {string}
+ */
+function _noiseLabel(value) {
+  const map = {
+    quiet: 'Quiet',
+    moderate: 'Moderate',
+    loud: 'Lively',
+  };
+  return map[value] ?? 'Unknown';
+}
+
+/**
+ * @param {object} confDisplay
+ * @param {string} spotId
+ * @returns {string}
+ */
+function _confidenceReason(confDisplay, spotId) {
+  const reason = getState().confidence?.[spotId]?.reason ?? '';
+  return reason || `${confDisplay.label} based on the latest community signal.`;
 }
 
 /**
@@ -880,12 +1368,14 @@ function _toInitials(name) {
     .join('');
 }
 
-/**
- * Read the session id from localStorage (avoids circular import via store.js).
- *
- * @returns {string | null}
- */
-function _mySessionId() {
-  try { return localStorage.getItem('perch_session_id'); }
-  catch { return null; }
+function _escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _escapeAttr(value) {
+  return _escapeHtml(value);
 }

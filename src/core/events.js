@@ -80,6 +80,7 @@ export const EVENTS = Object.freeze({
   // ── Store: location ──────────────────────────────────────────────────────
   LOCATION_SET:           'state:locationSet',
   VIEW_MODE_CHANGED:      'state:viewModeChanged',
+  NICKNAME_UPDATED:       'state:nicknameUpdated',
 
   // ── Store: filters ───────────────────────────────────────────────────────
   FILTERS_CHANGED:        'state:filtersChanged',
@@ -88,6 +89,7 @@ export const EVENTS = Object.freeze({
   SPOTS_LOADED:           'state:spotsLoaded',
   SPOT_SELECTED:          'state:spotSelected',
   SPOT_DESELECTED:        'state:spotDeselected',
+  SPOT_WATCHERS_UPDATED:  'state:spotWatchersUpdated',
 
   // ── Store: claims ────────────────────────────────────────────────────────
   CLAIM_UPDATED:          'state:claimUpdated',
@@ -98,27 +100,69 @@ export const EVENTS = Object.freeze({
   // ── Store: shared link ───────────────────────────────────────────────────
   LINK_COPIED:            'state:linkCopied',
 
+  // â”€â”€ Store: settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  SETTINGS_DASHBOARD_UPDATED: 'state:settingsDashboardUpdated',
+  USER_SETTINGS_UPDATED:      'state:userSettingsUpdated',
+  USER_DEVICE_UPDATED:        'state:userDeviceUpdated',
+
   // ── Store: status ────────────────────────────────────────────────────────
   STATUS_CHANGED:         'state:statusChanged',
 
   // ── Map ──────────────────────────────────────────────────────────────────
   MAP_READY:              'map:ready',
   MAP_PIN_CLICKED:        'map:pinClicked',
+  MAP_BUILDING_CLICKED:   'map:buildingClicked',
 
   // ── Store: groups ────────────────────────────────────────────────────────
   GROUP_JOINED:           'state:groupJoined',
   GROUP_LEFT:             'state:groupLeft',
+  GROUP_UPDATED:          'state:groupUpdated',
+  GROUP_DASHBOARD_UPDATED:'state:groupDashboardUpdated',
   GROUP_PINS_UPDATED:     'state:groupPinsUpdated',
   GROUP_PIN_JOINS_UPDATED:'state:groupPinJoinsUpdated',
   GROUP_CONFIRMATIONS_UPDATED: 'state:groupConfirmationsUpdated',
 
+  // ── Store: campus ────────────────────────────────────────────────────────
+  CAMPUSES_LOADED:        'state:campusesLoaded',
+  AREAS_LOADED:           'state:areasLoaded',
+  CAMPUS_SELECTED:        'state:campusSelected',
+  BUILDINGS_LOADED:       'state:buildingsLoaded',
+
+  // ── Store: groups ────────────────────────────────────────────────────────
+  GROUP_MEMBERS_UPDATED:  'state:groupMembersUpdated',
+  GROUP_MEETUP_UPDATED:   'state:groupMeetupUpdated',
+  GROUP_PERK_UPDATED:     'state:groupPerkUpdated',
+
   // ── UI ───────────────────────────────────────────────────────────────────
-  UI_CLAIM_REQUESTED:     'ui:claimRequested',
-  UI_REPORT_REQUESTED:    'ui:reportRequested',
-  UI_CANCEL_CLAIM:        'ui:cancelClaim',
-  UI_FILTER_SUBMITTED:    'ui:filterSubmitted',
-  UI_SUGGEST_OPENED:      'ui:suggestOpened',
-  UI_PANEL_CLOSED:        'ui:panelClosed',
-  UI_GROUP_CREATE:        'ui:groupCreate',
-  UI_GROUP_JOIN:          'ui:groupJoin',
+  UI_CLAIM_REQUESTED:          'ui:claimRequested',
+  UI_REPORT_REQUESTED:         'ui:reportRequested',
+  UI_CANCEL_CLAIM:             'ui:cancelClaim',
+  UI_FILTER_SUBMITTED:         'ui:filterSubmitted',
+  UI_SUGGEST_OPENED:           'ui:suggestOpened',
+  UI_PANEL_CLOSED:             'ui:panelClosed',
+  UI_GROUP_CREATE:             'ui:groupCreate',
+  UI_GROUP_JOIN:               'ui:groupJoin',
+  UI_GROUP_PRESENCE_UPDATE:    'ui:groupPresenceUpdate',
+  UI_GROUP_CURRENT_SPOT_UPDATE:'ui:groupCurrentSpotUpdate',
+  UI_GROUP_MEETUP_UPDATE:      'ui:groupMeetupUpdate',
+  UI_GROUP_PERK_UPDATE:        'ui:groupPerkUpdate',
+  UI_GROUP_PERK_REDEEM:        'ui:groupPerkRedeem',
+  UI_GROUP_COVER_UPLOAD:       'ui:groupCoverUpload',
+  UI_GROUP_AVATAR_UPLOAD:      'ui:groupAvatarUpload',
+  UI_SUBMIT_SPOT_REQUESTED:    'ui:submitSpotRequested',
+  UI_SPOT_AVAILABILITY_UPDATE: 'ui:spotAvailabilityUpdate',
+  UI_SPOT_SMS_WATCH_TOGGLE:    'ui:spotSmsWatchToggle',
+  UI_CAMPUS_CHANGE_REQUESTED:  'ui:campusChangeRequested',
+  UI_CAMPUS_ADD_REQUESTED:     'ui:campusAddRequested',
+  UI_SETTINGS_UPDATE:          'ui:settingsUpdate',
+  UI_SETTINGS_PROFILE_UPDATE:  'ui:settingsProfileUpdate',
+  UI_SETTINGS_DEVICE_SYNC:     'ui:settingsDeviceSync',
+  UI_SETTINGS_GOOGLE_CALENDAR_TOGGLE: 'ui:settingsGoogleCalendarToggle',
+
+  // ── Auth ──────────────────────────────────────────────────────────────
+  AUTH_STATE_CHANGED:          'state:authChanged',
+  UI_LOGIN_REQUESTED:          'ui:loginRequested',
+
+  // ── Router ───────────────────────────────────────────────────────────────
+  ROUTE_CHANGED:               'state:routeChanged',
 });

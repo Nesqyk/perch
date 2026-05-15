@@ -1,0 +1,556 @@
+/**
+ * src/styles/campusSelector.css
+ *
+ * Campus picker styles.
+ *
+ * The picker now opens as a modal dialog (via openModalWithElement in
+ * modal.js) rather than a fixed popover, so there are no positioning
+ * or overflow-escape rules here. The modal box itself is styled by
+ * .modal-box--campus in main.css.
+ *
+ * Class inventory:
+ *   Trigger (in panel):
+ *     .campus-selector-container    outer wrapper
+ *     .campus-trigger               single-line trigger button
+ *     .campus-trigger--disabled     city-mode muted state
+ *     .campus-trigger__label        left-side label area
+ *     .campus-trigger__name         selected campus name text
+ *     .campus-trigger__placeholder  "Select campus" placeholder
+ *     .campus-trigger__near-dot     green dot when selected == nearest
+ *     .campus-trigger__chevron      right-side chevron icon
+ *
+ *   Modal content (inside .modal-box--campus):
+ *     .campus-modal                 content wrapper
+ *     .campus-modal__gps            GPS prompt row
+ *     .campus-modal__gps-btn        "Use my location" button
+ *     .campus-modal__gps-denied     blocked-location note
+ *     .campus-modal__search-wrap    search input wrapper
+ *     .campus-modal__search         search text input
+ *     .campus-modal__list           scrollable campus list (role="listbox")
+ *     .campus-modal__row            individual campus button
+ *     .campus-modal__row--selected   selected campus row highlight
+ *     .campus-modal__row--last-used  last-visited campus row modifier
+ *     .campus-modal__row-body        name + city stacked column
+ *     .campus-modal__row-name        campus name
+ *     .campus-modal__row-city        campus city (muted)
+ *     .campus-modal__row-stats       live stats row below city
+ *     .campus-modal__row-stat        individual stat pill
+ *     .campus-modal__row-stat--active active-claims pill (orange accent)
+ *     .campus-modal__row-end         right-side icon cluster
+ *     .campus-modal__near-dot        green dot for nearest campus
+ *     .campus-modal__check           checkmark icon for selected
+ *     .campus-modal__last-used-badge "Last visited" inline badge
+ *     .campus-modal__empty           no-results message
+ *     .campus-modal__empty-add       "Add as new campus" link in empty state
+ *     .campus-modal__add-row         "+ Add campus" list row button
+ *     .campus-modal__add-form        inline add-campus form
+ *     .campus-modal__add-input       text input inside add form
+ *     .campus-modal__add-actions     button row inside add form
+ */
+
+/* ─── Container ──────────────────────────────────────────────────────────────── */
+
+.campus-selector-container {
+  position: relative;
+}
+
+/* ─── Trigger button ─────────────────────────────────────────────────────────── */
+
+.campus-trigger {
+  height: 45px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  text-align: left;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.campus-trigger:hover:not(:disabled) {
+  border-color: var(--color-brand);
+}
+
+.campus-trigger:focus-visible {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.campus-trigger[aria-expanded="true"] {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.campus-trigger--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── Trigger label (left side) ───────────────────────────────────────────── */
+
+.campus-trigger__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.campus-trigger__name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: var(--font-medium);
+  color: var(--color-text);
+}
+
+.campus-trigger__placeholder {
+  color: var(--color-text-dim);
+  font-weight: var(--font-normal);
+}
+
+.campus-trigger__near-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  background: var(--pin-free);
+  border-radius: var(--radius-full);
+}
+
+/* ── Chevron (right side) ────────────────────────────────────────────────── */
+
+.campus-trigger__chevron {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+  color: var(--color-text-dim);
+}
+
+/* ─── Modal content wrapper ──────────────────────────────────────────────────── */
+
+.campus-modal {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Modal header (title + close button) ────────────────────────────────────── */
+
+.campus-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-bottom: var(--border);
+  flex-shrink: 0;
+}
+
+.campus-modal__title {
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+}
+
+.campus-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.campus-modal__close:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}
+
+.campus-modal__close svg {
+  flex-shrink: 0;
+}
+
+/* ─── GPS prompt row ─────────────────────────────────────────────────────────── */
+
+.campus-modal__gps {
+  display: flex;
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border);
+  background: var(--color-surface-alt);
+}
+
+.campus-modal__gps-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-brand);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.campus-modal__gps-btn:hover {
+  color: var(--color-green-700);
+}
+
+.campus-modal__gps-btn svg {
+  flex-shrink: 0;
+}
+
+.campus-modal__gps-denied {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+/* ─── Search input ───────────────────────────────────────────────────────────── */
+
+.campus-modal__search-wrap {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border);
+}
+
+.campus-modal__search {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-alt);
+  border: var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.campus-modal__search:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-light);
+}
+
+.campus-modal__search::placeholder {
+  color: var(--color-text-dim);
+}
+
+/* ─── Campus list ────────────────────────────────────────────────────────────── */
+
+.campus-modal__list {
+  overflow-y: auto;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Campus row ──────────────────────────────────────────────────────────── */
+
+.campus-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.campus-modal__row:last-of-type {
+  border-bottom: none;
+}
+
+.campus-modal__row:hover {
+  background: var(--color-surface-alt);
+}
+
+.campus-modal__row--selected {
+  background: var(--color-brand-light);
+}
+
+.campus-modal__row--selected:hover {
+  background: var(--color-brand-light);
+}
+
+.campus-modal__row--last-used {
+  border-left: 2px solid var(--color-brand);
+}
+
+/* ── Row body (name + city) ──────────────────────────────────────────────── */
+
+.campus-modal__row-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.campus-modal__row-name {
+  font-weight: var(--font-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campus-modal__row-city {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Row stats (spot count + live claims) ────────────────────────────────── */
+
+.campus-modal__row-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.campus-modal__row-stat {
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+}
+
+.campus-modal__row-stat--active {
+  color: var(--color-orange, var(--color-brand));
+  font-weight: var(--font-medium);
+}
+
+/* ── "Last visited" inline badge ─────────────────────────────────────────── */
+
+.campus-modal__last-used-badge {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px var(--space-1);
+  background: var(--color-brand-light);
+  color: var(--color-brand);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+/* ── Row end (dots + checkmark) ──────────────────────────────────────────── */
+
+.campus-modal__row-end {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  margin-left: var(--space-3);
+}
+
+.campus-modal__near-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--pin-free);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.campus-modal__check {
+  display: flex;
+  align-items: center;
+  color: var(--color-green-700);
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+
+.campus-modal__empty {
+  padding: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-dim);
+  text-align: center;
+}
+
+.campus-modal__empty-add {
+  display: inline;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast);
+}
+
+.campus-modal__empty-add:hover {
+  color: var(--color-green-700);
+}
+
+/* ── "+ Add campus" row ──────────────────────────────────────────────────── */
+
+.campus-modal__add-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-top: var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.campus-modal__add-row:hover {
+  color: var(--color-text);
+  background: var(--color-surface-alt);
+}
+
+/* ─── Inline add form ────────────────────────────────────────────────────────── */
+
+.campus-modal__add-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-top: var(--border);
+  background: var(--color-surface-alt);
+}
+
+.campus-modal__add-input {
+  width: 100%;
+}
+
+.campus-modal__add-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* ─── Nominatim search results dropdown ─────────────────────────────────────── */
+
+.campus-modal__nom-results {
+  display: flex;
+  flex-direction: column;
+  border: var(--border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  overflow: hidden;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.campus-modal__nom-result {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-bottom: var(--border);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+  line-height: 1.4;
+  transition: background var(--transition-fast);
+}
+
+.campus-modal__nom-result:last-child {
+  border-bottom: none;
+}
+
+.campus-modal__nom-result:hover {
+  background: var(--color-surface-alt);
+}
+
+.campus-modal__nom-empty {
+  padding: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--color-text-dim);
+  text-align: center;
+}
+
+/* ─── Confirmed location chip ────────────────────────────────────────────────── */
+
+.campus-modal__nom-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-brand-light);
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-md);
+}
+
+.campus-modal__nom-selected-text {
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.campus-modal__nom-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.campus-modal__nom-clear:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-text);
+}

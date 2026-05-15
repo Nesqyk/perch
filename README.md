@@ -46,6 +46,10 @@ npm run dev
 
 Admin panel is available at `/admin`.
 
+## Contributing
+
+We welcome contributions! Please see our **[Contributing Guidelines](./CONTRIBUTING.md)** for details on our technical workflow, AI-assisted development standards, and code review process.
+
 ## Project Structure
 
 <details>

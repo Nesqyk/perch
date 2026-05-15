@@ -8,10 +8,9 @@
  * Set up RLS rules in the Supabase dashboard to ensure:
  *  - spots:            public SELECT, no INSERT/UPDATE/DELETE from client
  *  - spot_confidence:  public SELECT, no client writes
- *  - claims:           public SELECT; INSERT where session_id = current token;
- *                      UPDATE (cancel) where session_id matches
- *  - corrections:      INSERT only (append-only log)
- *  - spot_submissions: INSERT only from client
+ *  - claims:           public SELECT; authenticated INSERT/UPDATE by user_id
+ *  - corrections:      authenticated INSERT only (append-only log)
+ *  - spot_submissions: authenticated INSERT; public read only after approval
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -28,9 +27,40 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 /** @type {import('@supabase/supabase-js').SupabaseClient} */
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  global: {
+    fetch: (url, options) => {
+      const sessionId = (() => {
+        try { return localStorage.getItem('perch_session_id'); }
+        catch { return null; }
+      })();
+
+      if (sessionId) {
+        // Ensure options.headers is an object we can modify.
+        // If it's a Headers instance from the browser, use .set().
+        if (typeof window !== 'undefined' && options.headers instanceof window.Headers) {
+          options.headers.set('x-perch-session', sessionId);
+        } else {
+          options.headers = {
+            ...options.headers,
+            'x-perch-session': sessionId,
+          };
+        }
+      }
+      return fetch(url, options);
+    },
+  },
   realtime: {
     params: {
       eventsPerSecond: 10,
     },
   },
 });
+
+/**
+ * Update the custom session header.
+ * @deprecated now handled automatically by custom fetch in createClient.
+ * @param {string} _sessionId
+ */
+export function setSessionHeader(_sessionId) {
+  // No-op - kept for compatibility with current session.js calls
+}

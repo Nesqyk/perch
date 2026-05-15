@@ -7,7 +7,7 @@
  *
  *  1. Import CSS (Vite processes these as side-effect imports)
  *  2. initStore()       — prime the state container
- *  3. initSession()     — ensure anonymous session token in localStorage
+ *  3. initAuth()        — mount Supabase auth listener (syncs JWT to store)
  *  4. readUrlParams()   — parse ?spot=, ?size=, ?needs=, ?building=, ?join=
  *  5. Restore filters from URL into store
  *  6. loadGoogleMaps()  → initMap()  — load Maps SDK then mount the map
@@ -29,6 +29,10 @@
  * 22. Wire geolocation (request permission, update store on change)
  * 23. Wire MAP_PIN_CLICKED → SELECT_SPOT dispatch
  * 24. Handle ?join= URL param → pre-fill inline join form
+ *
+ * Page routes (wired early so views render before async data arrives):
+ *  3.7 initProfilePage() — mount /profile route view
+ *  3.8 initGroupPage()   — mount /group route view
  */
 
 // ─── CSS side-effects (Vite bundles these) ────────────────────────────────────
@@ -40,21 +44,25 @@ import './styles/sidebar.css';
 import './styles/bottomSheet.css';
 import './styles/spotCard.css';
 import './styles/filters.css';
+import './styles/campusSelector.css';
+import './styles/navMenu.css';
+import './styles/pages.css';
+import './styles/landing.css';
+import './styles/submitSpotPanel.css';
+import './styles/buildingPanel.css';
 
 // ─── Core ─────────────────────────────────────────────────────────────────────
 
 import { initStore, dispatch, getState } from './core/store.js';
 import { on, EVENTS }             from './core/events.js';
-import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode } from './core/router.js';
+import { readUrlParams, writeUrlParams, clearUrlParams, readGroupCode, initRouter, getCurrentRoute } from './core/router.js';
 
-// ─── Utils ────────────────────────────────────────────────────────────────────
+// ─── API ──────────────────────────────────────────────────────────────────────
 
-import { initSession }  from './utils/session.js';
+import { fallbackNameFromEmail, initAuth } from './api/auth.js';
 
-// ─── Map ──────────────────────────────────────────────────────────────────────
-
-import { loadGoogleMaps }  from './map/mapLoader.js';
-import { initMap }         from './map/mapInit.js';
+import { loadGoogleMaps }          from './map/mapLoader.js';
+import { initMap, clearClickMarker } from './map/mapInit.js';
 import { initPins, initGroupPinLayer } from './map/pins.js';
 import { initMapControls }             from './map/mapControls.js';
 
@@ -62,6 +70,9 @@ import { initMapControls }             from './map/mapControls.js';
 
 import { fetchSpots }        from './api/spots.js';
 import { fetchActiveClaims } from './api/claims.js';
+import { getProfile, upsertProfile } from './api/profile.js';
+import { fetchCampuses, fetchBuildings } from './api/campuses.js';
+import { fetchAreas } from './api/areas.js';
 import { subscribeToRealtime } from './api/realtime.js';
 
 // ─── Features ────────────────────────────────────────────────────────────────
@@ -71,6 +82,9 @@ import { initClaim }            from './features/claim.js';
 import { initReportFull }       from './features/reportFull.js';
 import { initGroups }           from './features/groups.js';
 import { initGroupPins }        from './features/groupPins.js';
+import { initCampus }           from './features/campus.js';
+import { initSettingsFeature }  from './features/settings.js';
+import { initAvailabilityFeature } from './features/availability.js';
 
 // ─── UI ───────────────────────────────────────────────────────────────────────
 
@@ -78,6 +92,19 @@ import { initFilterPanel } from './ui/filterPanel.js';
 import { initSidebar }     from './ui/sidebar.js';
 import { initBottomSheet } from './ui/bottomSheet.js';
 import { showToast }       from './ui/toast.js';
+import { initSubmitSpotPanel } from './ui/submitSpotPanel.js';
+import { initBuildingPanel, openBuildingPanel } from './ui/buildingPanel.js';
+import { initDashboardShell } from './ui/dashboardShell.js';
+import { initAuthModal }   from './ui/authModal.js';
+import { initProfilePage } from './ui/profilePage.js';
+import { initGroupPage }   from './ui/groupPage.js';
+import { initCampusPage } from './ui/campusPage.js';
+import { initSharedSpotPage } from './ui/sharedSpotPage.js';
+import { initContributionsPage } from './ui/contributionsPage.js';
+import { initNotificationsPage } from './ui/notificationsPage.js';
+import { initSettingsPage } from './ui/settingsPage.js';
+import { initLandingPage } from './ui/landingPage.js';
+import { loadUserPreferences } from './utils/preferences.js';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
@@ -85,8 +112,55 @@ async function boot() {
   // ── 1 & 2. Prime state ──────────────────────────────────────────────────────
   initStore();
 
-  // ── 3. Anonymous session ─────────────────────────────────────────────────────
-  initSession();
+  const preferences = loadUserPreferences();
+  dispatch('SET_VIEW_MODE', preferences.defaultView);
+  dispatch('SET_GROUP_PINS_VISIBLE', preferences.showGroupPins);
+
+  // ── 3. Mount Auth ────────────────────────────────────────────────────────────
+  // initialises onAuthStateChange that syncs currentUser to store.
+  initAuth();
+  initSettingsFeature();
+  initAvailabilityFeature();
+
+  // ── 3.5 UI Header + Router + Nav shell + AuthModal ─────────────────────────
+  initAuthModal();
+
+  // initRouter MUST come before initDashboardShell so the route state is ready
+  // when the shell performs its first visibility sync.
+  initRouter((route) => {
+    dispatch('ROUTE_CHANGED', { route });
+  });
+  initDashboardShell();
+
+  // ── 3.7 & 3.8 Route-level page views ────────────────────────────────────────
+  // Mounted early — before async data — so views render immediately on navigation.
+  initProfilePage();
+  initGroupPage();
+  initCampusPage();
+  initSharedSpotPage();
+  initContributionsPage();
+  initNotificationsPage();
+  initSettingsPage();
+  initLandingPage();
+
+  // ── 3.6 Fetch user profile once auth resolves ────────────────────────────────
+  // getProfile() must run AFTER onAuthStateChange fires (which is async), so
+  // we wire it here rather than calling it synchronously after initAuth().
+  on(EVENTS.AUTH_STATE_CHANGED, async (e) => {
+    if (!e.detail.user) return;
+    const profile = await getProfile();
+    if (profile?.nickname) {
+      dispatch('SET_NICKNAME', profile.nickname);
+      return;
+    }
+
+    const fallbackName = e.detail.user.user_metadata?.full_name || fallbackNameFromEmail(e.detail.user.email);
+    const { error } = await upsertProfile(fallbackName);
+    if (error) {
+      console.warn('[main] Could not create profile fallback:', error);
+    }
+    dispatch('SET_NICKNAME', fallbackName);
+  });
 
   // ── 4 & 5. URL params → restore filters + selected spot ──────────────────────
   const urlState   = readUrlParams();
@@ -113,6 +187,32 @@ async function boot() {
 
   // ── 9. Realtime ───────────────────────────────────────────────────────────────
   subscribeToRealtime();
+
+  // ── 9.5. Fetch campuses (needed before map flyToBounds) ─────────────────────────
+  try {
+    const campuses = await fetchCampuses();
+    dispatch('CAMPUSES_LOADED', { campuses });
+    const areas = await fetchAreas();
+    dispatch('AREAS_LOADED', { areas });
+
+    // ?campus= deep-link overrides the auto-selected campus.
+    const preferredCampusId = !urlState.campusId ? preferences.preferredCampusId : null;
+    const campusId = urlState.campusId ?? preferredCampusId ?? getState().selectedCampusId;
+    if (urlState.campusId && campusId) {
+      dispatch('CAMPUS_SELECTED', { campusId });
+    } else if (preferredCampusId && campuses.some((campus) => campus.id === preferredCampusId)) {
+      dispatch('CAMPUS_SELECTED', { campusId: preferredCampusId });
+    }
+
+    const activeCampusId = getState().selectedCampusId;
+    if (activeCampusId) {
+      const buildings = await fetchBuildings(activeCampusId);
+      dispatch('BUILDINGS_LOADED', { buildings });
+    }
+  } catch (err) {
+    // Non-fatal — app still works with default CTU bounds baked into mapInit.
+    console.warn('[main] fetchCampuses failed:', err);
+  }
 
   // ── 10. Fetch spots ───────────────────────────────────────────────────────────
   dispatch('SET_STATUS', { spotsLoading: true });
@@ -141,7 +241,9 @@ async function boot() {
   if (urlState.selectedSpotId) {
     const exists = getState().spots.find(s => s.id === urlState.selectedSpotId);
     if (exists) {
-      dispatch('SELECT_SPOT', { spotId: urlState.selectedSpotId });
+      if (getState().currentRoute !== '/spot') {
+        dispatch('SELECT_SPOT', { spotId: urlState.selectedSpotId });
+      }
     } else {
       // Spot may have been removed; silently clear the param
       clearUrlParams();
@@ -152,10 +254,23 @@ async function boot() {
   initSmartSuggestions();
   initClaim();
   initReportFull();
+  initSubmitSpotPanel();
+  initBuildingPanel();
+
+  // ── 12.5. Open building panel from deep-link (?campus=&building=) ─────────────
+  // Must run after initBuildingPanel() (registers the listener) and after
+  // spots + claims are loaded so the room counts are correct.
+  if (urlState.buildingId) {
+    const buildingExists = getState().buildings.find(b => b.id === urlState.buildingId);
+    if (buildingExists) {
+      openBuildingPanel(urlState.buildingId);
+    }
+  }
 
   // ── 16–17. Group feature modules ─────────────────────────────────────────────
   initGroups();
   initGroupPins();
+  initCampus();
 
   // ── 18. Filter panel UI ───────────────────────────────────────────────────────
   const panelContent = document.getElementById('panel-content');
@@ -201,6 +316,11 @@ async function boot() {
     }
   });
 
+  on(EVENTS.CAMPUS_SELECTED, async (e) => {
+    const buildings = await fetchBuildings(e.detail.campusId);
+    dispatch('BUILDINGS_LOADED', { buildings });
+  });
+
   // ── 23. ?join= URL param → pre-fill filter panel join form ──────────────────
   if (groupCode) {
     // Clear the join code from the URL bar so a refresh doesn't re-trigger.
@@ -211,7 +331,11 @@ async function boot() {
     sessionStorage.setItem('perch_prefill_join_code', groupCode);
   }
 
-  console.warn('[Perch] App ready.');
+  // ── 24. Clear map click marker on panel close ─────────────────────────────────
+  on(EVENTS.UI_PANEL_CLOSED, clearClickMarker);
+  on(EVENTS.SPOT_SELECTED, clearClickMarker);
+
+  console.warn('[Perch] App ready. Route:', getCurrentRoute());
 }
 
 // ─── Geolocation helper ──────────────────────────────────────────────────────

@@ -14,7 +14,7 @@
  * This module only handles business logic and API calls.
  */
 
-import { on, EVENTS }        from '../core/events.js';
+import { on, emit, EVENTS }  from '../core/events.js';
 import { getState, dispatch } from '../core/store.js';
 import { createClaim, cancelClaim } from '../api/claims.js';
 import { GROUP_SIZE_CONFIG }  from '../utils/capacity.js';
@@ -32,7 +32,12 @@ export function initClaim() {
 
 async function _onClaimRequested(e) {
   const { spotId } = e.detail;
-  const { filters, myActiveClaim, spots } = getState();
+  const { filters, myActiveClaim, spots, currentUser } = getState();
+
+  if (!currentUser) {
+    emit(EVENTS.UI_LOGIN_REQUESTED, {});
+    return;
+  }
 
   // Prevent double-claims.
   if (myActiveClaim) {
@@ -102,7 +107,7 @@ async function _executeClaim(spotId, groupSizeKey) {
   }
 
   // Optimistic + confirmed update. Realtime INSERT will also fire and
-  // be deduplicated by the session_id check in realtime.js.
+  // be deduplicated by the authenticated user_id check in realtime.js.
   dispatch('CLAIM_ADDED', {
     spotId,
     claim:  data,

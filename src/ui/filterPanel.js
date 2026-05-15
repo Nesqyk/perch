@@ -1,37 +1,46 @@
 /**
  * src/ui/filterPanel.js
  *
- * Renders and manages the filter form: group size chips, amenity chips,
- * the "Near building" dropdown, "Find My Spot" button, and the inline
- * Create / Join a Group section (always visible when no spot is selected).
+ * Renders and manages the filter form: a two-tab layout ("Find" | "Group")
+ * that reduces vertical clutter by keeping spot-finding controls separate
+ * from group management.
+ *
+ * Find tab:  view mode toggle → campus selector → filter section →
+ *            "Find My Spot" CTA (always visible, never collapsible).
+ * Group tab (no group): hint text + create / join form.
+ * Group tab (in group): session summary card → members table →
+ *                       recent activity feed → spot sharing shortcut.
  *
  * This module owns the rendering of the filter UI inside #panel-content.
  * It emits EVENTS.UI_FILTER_SUBMITTED when the user taps "Find My Spot".
- * It listens for EVENTS.FILTERS_CHANGED to keep the UI in sync if filters
- * are programmatically updated (e.g. restored from URL params).
- *
- * The same group form also appears at the bottom of spotCard.js when a spot
- * is selected — both instances are independent.
+ * It listens for EVENTS.FILTERS_CHANGED / VIEW_MODE_CHANGED / GROUP_* to
+ * keep the UI in sync if state is updated programmatically or via Realtime.
  */
 
-import { on, emit, EVENTS }   from '../core/events.js';
-import { getState, dispatch }  from '../core/store.js';
-import { GROUP_SIZE_CONFIG }   from '../utils/capacity.js';
-import { Users, LogOut, ThumbsUp, Copy } from 'lucide';
-import { openModal } from './modal.js';
-import { showToast } from './toast.js';
-import { iconSvg }   from './icons.js';
-import { GROUP_PIN_EVENTS } from '../features/groupPins.js';
-import { leaveGroup } from '../features/groups.js';
+import { on, emit, EVENTS }      from '../core/events.js';
+import { getState, dispatch }    from '../core/store.js';
+import { renderSuggestionsList } from './suggestionsList.js';
+import { GROUP_SIZE_CONFIG }     from '../utils/capacity.js';
+import { timeAgo }               from '../utils/time.js';
+import { ArrowRight, LogOut, Copy, Link,
+          Search, MapPin, Star,
+          Eye, EyeOff }           from 'lucide';
+import { openModal }             from './modal.js';
+import { showToast }             from './toast.js';
+import { iconSvg }               from './icons.js';
+import { navigateToCampus }      from '../core/router.js';
+import { leaveGroup,
+          buildGroupJoinUrl }     from '../features/groups.js';
+import { initCampusSelector }    from './campusSelector.js';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const _GROUP_SIZE_LABELS = {
   solo:   'Just Me',
-  small:  '2-5',
-  medium: '6-15',
+  small:  '2–5',
+  medium: '6–15',
   large:  '15+',
 };
-
-// ─── Group colour swatches ────────────────────────────────────────────────────
 
 const _GROUP_SWATCHES = [
   '#3b82f6', // blue
@@ -41,13 +50,14 @@ const _GROUP_SWATCHES = [
   '#a855f7', // purple
 ];
 
-/** @type {string} Currently selected colour in the filter panel create form. */
+/** @type {string} Currently selected colour in the create form. */
 let _selectedColor = _GROUP_SWATCHES[0];
 
-/** @type {'create' | 'join'} Which sub-form is active in the filter panel. */
+/** @type {'create' | 'join'} Which sub-form is active. */
 let _groupSubForm = 'create';
 
-// ─── Amenity chip definitions ─────────────────────────────────────────────────
+/** @type {'find' | 'group'} Active tab — persists across re-renders. */
+let _activeTab = 'find';
 
 const _AMENITY_CHIPS = [
   { key: 'quiet',  icon: '🔇', label: 'Quiet'   },
@@ -58,19 +68,32 @@ const _AMENITY_CHIPS = [
 
 // ─── Initialise ──────────────────────────────────────────────────────────────
 
+/**
+ * Wire up event listeners. Call once from main.js at boot.
+ *
+ * @returns {void}
+ */
 export function initFilterPanel() {
-  on(EVENTS.FILTERS_CHANGED, _syncFromState);
-  on(EVENTS.VIEW_MODE_CHANGED, _syncFromState);
-  on(EVENTS.SPOTS_LOADED,    _populateBuildingDropdown);
+  on(EVENTS.FILTERS_CHANGED,      _syncFromState);
+  on(EVENTS.VIEW_MODE_CHANGED,    _syncFromState);
+  on(EVENTS.SPOTS_LOADED,         _populateBuildingDropdown);
+  on(EVENTS.BUILDINGS_LOADED,     _populateBuildingDropdown);
+  on(EVENTS.AREAS_LOADED,         _populateAreaDropdown);
+  on(EVENTS.GROUP_JOINED,         _syncGroupTab);
+  on(EVENTS.GROUP_LEFT,           _syncGroupTab);
+  on(EVENTS.GROUP_MEMBERS_UPDATED, _syncGroupTab);
+  on(EVENTS.GROUP_PINS_UPDATED,   _syncGroupTab);
+  on(EVENTS.UI_SUGGEST_OPENED,    _onSuggestOpened);
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 /**
  * Render the complete filter form into a given container element.
- * Called by sidebar.js and bottomSheet.js — they each pass their own container.
+ * Called by sidebar.js and bottomSheet.js.
  *
  * @param {HTMLElement} container
+ * @returns {void}
  */
 export function renderFilterPanel(container) {
   container.innerHTML = '';
@@ -78,69 +101,219 @@ export function renderFilterPanel(container) {
 }
 
 function _buildFilterForm() {
-  const form      = document.createElement('div');
-  form.className  = 'filter-form';
+  const form     = document.createElement('div');
+  form.className = 'filter-form';
 
-  form.appendChild(_buildViewModeToggle());
+  form.appendChild(_buildPanelBrand());
+  form.appendChild(_buildTabRow(form));
+  form.appendChild(_buildTabBody());
 
-  form.appendChild(_buildSectionHeader('Group Size'));
-  form.appendChild(_buildGroupSizeChips());
-
-  form.appendChild(_buildSectionHeader('Amenities:'));
-  form.appendChild(_buildAmenityChips());
-
-  const nearHeader = _buildSectionHeader('Near:');
-  nearHeader.id = 'filter-near-header';
-  form.appendChild(nearHeader);
-  form.appendChild(_buildBuildingDropdown());
-
-  form.appendChild(_buildFindButton());
-
-  form.appendChild(_buildGroupSection());
-
-  // Set initial display of conditionally visible elements
   setTimeout(_syncFromState, 0);
-
   return form;
 }
 
-function _buildViewModeToggle() {
+// ─── Brand ───────────────────────────────────────────────────────────────────
+
+function _buildPanelBrand() {
+  const brand     = document.createElement('div');
+  brand.className = 'panel-brand';
+  brand.innerHTML = /* html */`
+    <img class="panel-brand__logo" src="/logo.svg" alt="Perch logo" width="36" height="36" />
+    <div class="panel-brand__copy">
+      <span class="panel-brand__name">Perch</span>
+    </div>
+  `;
+  return brand;
+}
+
+// ─── Tab row ─────────────────────────────────────────────────────────────────
+
+/**
+ * @param {HTMLElement} form  The parent form element, used to update the tab body.
+ * @returns {HTMLElement}
+ */
+function _buildTabRow(form) {
   const row     = document.createElement('div');
-  row.className = 'chip-row view-mode-toggle';
-  row.id        = 'toggle-view-mode';
-  row.style.marginBottom = 'var(--space-6)';
+  row.className = 'filter-tabs';
+  row.id        = 'filter-tab-row';
 
-  const modes = [
-    { key: 'campus', label: 'Campus' },
-    { key: 'city',   label: 'City' }
-  ];
+  [{ key: 'find', label: 'Find' }, { key: 'group', label: 'Squad' }].forEach(({ key, label }) => {
+    const btn       = document.createElement('button');
+    btn.type        = 'button';
+    btn.className   = `filter-tab${_activeTab === key ? ' filter-tab--active' : ''}`;
+    btn.dataset.tab = key;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(_activeTab === key));
 
+    // Label + optional group colour badge
+    const labelSpan     = document.createElement('span');
+    labelSpan.textContent = label;
+    btn.appendChild(labelSpan);
+
+    if (key === 'group') {
+      const { group } = getState();
+      const badge     = document.createElement('span');
+      badge.className = 'filter-tab__badge';
+      badge.id        = 'group-tab-badge';
+      badge.hidden    = !group;
+      if (group) badge.style.background = group.color ?? 'var(--color-brand)';
+      btn.appendChild(badge);
+    }
+
+    btn.addEventListener('click', () => {
+      if (_activeTab === key) return;
+      _activeTab = /** @type {'find'|'group'} */ (key);
+
+      // Update tab button states
+      row.querySelectorAll('.filter-tab').forEach((t) => {
+        const active = t.dataset.tab === key;
+        t.classList.toggle('filter-tab--active', active);
+        t.setAttribute('aria-selected', String(active));
+      });
+
+      // Swap tab body
+      const existing = form.querySelector('.filter-tab-body');
+      const next     = _buildTabBody();
+      if (existing) {
+        existing.replaceWith(next);
+      } else {
+        form.appendChild(next);
+      }
+      _syncFromState();
+    });
+
+    row.appendChild(btn);
+  });
+
+  return row;
+}
+
+// ─── Tab body ─────────────────────────────────────────────────────────────────
+
+function _buildTabBody() {
+  const body     = document.createElement('div');
+  body.className = 'filter-tab-body';
+
+  if (_activeTab === 'find') {
+    body.appendChild(_buildViewModeToggle());
+    body.appendChild(_buildCampusSelectorBox());
+    body.appendChild(_buildFilterAccordion());
+    body.appendChild(_buildFindButton());
+
+    // Suggestions inject slot — populated by _onSuggestOpened
+    const inject = document.createElement('div');
+    inject.id    = 'suggestions-inject';
+    body.appendChild(inject);
+  } else {
+    body.appendChild(_buildGroupSection());
+  }
+
+  return body;
+}
+
+// ─── View mode toggle ─────────────────────────────────────────────────────────
+
+/**
+ * Two-chip row that lets the user manually switch between campus and city
+ * view mode. Stays in sync when zoom-based auto-switching fires.
+ *
+ * @returns {HTMLElement}
+ */
+function _buildViewModeToggle() {
   const { viewMode } = getState();
 
-  modes.forEach(({ key, label }) => {
-    const chip        = document.createElement('button');
-    chip.type         = 'button';
-    chip.className    = `chip ${viewMode === key ? 'chip-active' : ''}`;
-    chip.dataset.key  = key;
-    chip.textContent  = label;
-    chip.setAttribute('aria-pressed', String(viewMode === key));
+  const row     = document.createElement('div');
+  row.className = 'chip-row';
+  row.id        = 'view-mode-toggle';
 
+  [{ key: 'campus', label: 'Campus' }, { key: 'city', label: 'City' }].forEach(({ key, label }) => {
+    const chip       = document.createElement('button');
+    chip.type        = 'button';
+    chip.className   = `chip${viewMode === key ? ' chip-active' : ''}`;
+    chip.dataset.key = key;
+    chip.textContent = label;
+    chip.setAttribute('aria-pressed', String(viewMode === key));
     chip.addEventListener('click', () => {
       dispatch('SET_VIEW_MODE', key);
     });
-
     row.appendChild(chip);
   });
 
   return row;
 }
 
-function _buildSectionHeader(text) {
-  const h       = document.createElement('p');
-  h.className   = 'filter-label';
-  h.textContent = text;
-  return h;
+// ─── Campus selector ─────────────────────────────────────────────────────────
+
+function _buildCampusSelectorBox() {
+  const wrapper     = document.createElement('div');
+  wrapper.id        = 'campus-selector-wrapper';
+
+  const label       = document.createElement('p');
+  label.className   = 'filter-accordion__label';
+  label.textContent = 'Campus';
+  wrapper.appendChild(label);
+
+  const container = document.createElement('div');
+  initCampusSelector(container);
+  wrapper.appendChild(container);
+
+  const exploreBtn = document.createElement('button');
+  exploreBtn.type = 'button';
+  exploreBtn.className = 'filter-campus-link';
+  exploreBtn.innerHTML = /* html */`${iconSvg(ArrowRight, 14)} Explore this campus`;
+  exploreBtn.addEventListener('click', () => {
+    const { selectedCampusId } = getState();
+    if (!selectedCampusId) return;
+    navigateToCampus(selectedCampusId);
+  });
+  wrapper.appendChild(exploreBtn);
+
+  return wrapper;
 }
+
+// ─── Filters section ─────────────────────────────────────────────────────────
+
+function _buildFilterAccordion() {
+  const body     = document.createElement('div');
+  body.className = 'filter-section';
+
+  // Group size
+  const sizeLabel     = document.createElement('p');
+  sizeLabel.className = 'filter-accordion__label';
+  sizeLabel.textContent = 'Group Size';
+  body.appendChild(sizeLabel);
+  body.appendChild(_buildGroupSizeChips());
+
+  // Amenities
+  const amenLabel     = document.createElement('p');
+  amenLabel.className = 'filter-accordion__label';
+  amenLabel.textContent = 'Amenities';
+  body.appendChild(amenLabel);
+  body.appendChild(_buildAmenityChips());
+
+  // Near building (campus-mode only)
+  const nearRow     = document.createElement('div');
+  nearRow.id        = 'filter-near-row';
+  const nearLabel     = document.createElement('p');
+  nearLabel.className = 'filter-accordion__label';
+  nearLabel.textContent = 'Near';
+  nearRow.appendChild(nearLabel);
+  nearRow.appendChild(_buildBuildingDropdown());
+  body.appendChild(nearRow);
+
+  const areaRow = document.createElement('div');
+  areaRow.id = 'filter-area-row';
+  const areaLabel = document.createElement('p');
+  areaLabel.className = 'filter-accordion__label';
+  areaLabel.textContent = 'Area';
+  areaRow.appendChild(areaLabel);
+  areaRow.appendChild(_buildAreaDropdown());
+  body.appendChild(areaRow);
+
+  return body;
+}
+
+// ─── Group size chips ─────────────────────────────────────────────────────────
 
 function _buildGroupSizeChips() {
   const row     = document.createElement('div');
@@ -150,53 +323,51 @@ function _buildGroupSizeChips() {
   const { filters } = getState();
 
   Object.values(GROUP_SIZE_CONFIG).forEach(({ key }) => {
-    const chip        = document.createElement('button');
-    chip.type         = 'button';
-    chip.className    = `chip ${filters.groupSize === key ? 'chip-active' : ''}`;
-    chip.dataset.key  = key;
-    chip.textContent  = _GROUP_SIZE_LABELS[key] ?? key;
+    const chip       = document.createElement('button');
+    chip.type        = 'button';
+    chip.className   = `chip ${filters.groupSize === key ? 'chip-active' : ''}`;
+    chip.dataset.key = key;
+    chip.textContent = _GROUP_SIZE_LABELS[key] ?? key;
     chip.setAttribute('aria-pressed', String(filters.groupSize === key));
-
     chip.addEventListener('click', () => {
-      const isActive = chip.classList.contains('chip-active');
-      dispatch('SET_FILTERS', { groupSize: isActive ? null : key });
+      dispatch('SET_FILTERS', { groupSize: chip.classList.contains('chip-active') ? null : key });
     });
-
     row.appendChild(chip);
   });
 
   return row;
 }
 
+// ─── Amenity chips ────────────────────────────────────────────────────────────
+
 function _buildAmenityChips() {
-  const grid      = document.createElement('div');
-  grid.className  = 'amenity-chip-grid';
-  grid.id         = 'chips-needs';
+  const grid     = document.createElement('div');
+  grid.className = 'amenity-chip-grid';
+  grid.id        = 'chips-needs';
 
   const { filters } = getState();
 
   _AMENITY_CHIPS.forEach(({ key, icon, label }) => {
-    const chip        = document.createElement('button');
-    chip.type         = 'button';
-    chip.className    = `amenity-chip ${filters.needs.includes(key) ? 'amenity-chip--active' : ''}`;
-    chip.dataset.key  = key;
+    const chip       = document.createElement('button');
+    chip.type        = 'button';
+    chip.className   = `amenity-chip ${filters.needs.includes(key) ? 'amenity-chip--active' : ''}`;
+    chip.dataset.key = key;
     chip.setAttribute('aria-label', label);
     chip.setAttribute('aria-pressed', String(filters.needs.includes(key)));
-    chip.innerHTML    = /* html */`<span class="amenity-chip__icon">${icon}</span><span class="amenity-chip__label">${label}</span>`;
-
+    chip.innerHTML   = /* html */`<span class="amenity-chip__icon">${icon}</span><span class="amenity-chip__label">${label}</span>`;
     chip.addEventListener('click', () => {
       const current = getState().filters.needs;
-      const next    = current.includes(key)
-        ? current.filter(n => n !== key)
-        : [...current, key];
-      dispatch('SET_FILTERS', { needs: next });
+      dispatch('SET_FILTERS', {
+        needs: current.includes(key) ? current.filter(n => n !== key) : [...current, key],
+      });
     });
-
     grid.appendChild(chip);
   });
 
   return grid;
 }
+
+// ─── Near building dropdown ───────────────────────────────────────────────────
 
 function _buildBuildingDropdown() {
   const select     = document.createElement('select');
@@ -205,10 +376,8 @@ function _buildBuildingDropdown() {
 
   const defaultOpt       = document.createElement('option');
   defaultOpt.value       = '';
-  defaultOpt.textContent = 'Main Building';
+  defaultOpt.textContent = 'Any building';
   select.appendChild(defaultOpt);
-
-  // Options populated by _populateBuildingDropdown() once spots are loaded.
 
   select.addEventListener('change', () => {
     dispatch('SET_FILTERS', { nearBuilding: select.value || null });
@@ -217,84 +386,124 @@ function _buildBuildingDropdown() {
   return select;
 }
 
+function _buildAreaDropdown() {
+  const select = document.createElement('select');
+  select.className = 'select';
+  select.id = 'filter-area';
+
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = 'Any area';
+  select.appendChild(defaultOpt);
+
+  const { areas, filters } = getState();
+  areas.forEach((area) => {
+    const opt = document.createElement('option');
+    opt.value = area.id;
+    opt.textContent = _areaLabel(area);
+    opt.selected = filters.areaId === area.id;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', () => {
+    dispatch('SET_FILTERS', { areaId: select.value || null });
+  });
+
+  return select;
+}
+
+// ─── Find button ─────────────────────────────────────────────────────────────
+
 function _buildFindButton() {
   const btn     = document.createElement('button');
   btn.type      = 'button';
   btn.className = 'btn btn-primary btn-full';
   btn.id        = 'btn-find';
-  btn.innerHTML = /* html */`<span class="btn-find-icon">🔍</span> Find My Spot`;
-
+  btn.innerHTML = /* html */`${iconSvg(Search, 16)} Find My Spot`;
   btn.addEventListener('click', () => {
     emit(EVENTS.UI_FILTER_SUBMITTED, { filters: getState().filters });
   });
-
   return btn;
 }
 
-// ─── Inline group create / join section ──────────────────────────────────────
+// ─── Group section ────────────────────────────────────────────────────────────
 
 /**
- * Container for the create/join group form shown in the filter panel.
- * Hidden when the user is already in a group (future design TBD).
+ * Returns the group members section when in a group, or the compact
+ * create / join form otherwise.
  *
  * @returns {HTMLElement}
  */
 function _buildGroupSection() {
-  const { group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots } = getState();
+  const { group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots, groupMembers } = getState();
   if (group) {
-    return _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots);
+    return _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, groupPinJoins, myGroupPinId, spots);
   }
 
   const section     = document.createElement('div');
   section.className = 'spot-card__group-section';
 
-  const heading       = document.createElement('p');
-  heading.className   = 'spot-card__group-heading';
-  heading.textContent = _groupSubForm === 'join' ? 'Join a Group' : 'Create a Group';
-  section.appendChild(heading);
+  // Hint for users who haven't joined a group yet
+  section.appendChild(_buildGroupHint());
 
   if (_groupSubForm === 'join') {
-    section.appendChild(_buildJoinForm(section, heading));
+    section.appendChild(_buildJoinForm(section));
   } else {
-    section.appendChild(_buildCreateForm(section, heading));
+    section.appendChild(_buildCreateForm(section));
   }
 
   return section;
 }
 
 /**
- * Create-group sub-form for the filter panel.
+ * Hint blurb shown above the create/join form when the user is not in a group.
  *
- * @param {HTMLElement} section
- * @param {HTMLElement} heading
  * @returns {HTMLElement}
  */
-function _buildCreateForm(section, heading) {
-  const form      = document.createElement('div');
-  form.className  = 'spot-card__group-form';
+function _buildGroupHint() {
+  const p     = document.createElement('p');
+  p.className = 'group-tab__hint';
+  p.textContent = 'Coordinate with friends — see where everyone is heading in real time.';
+  return p;
+}
 
-  const nameLabel       = document.createElement('label');
-  nameLabel.className   = 'spot-card__group-label';
-  nameLabel.textContent = 'Group Name:';
-  nameLabel.htmlFor     = 'fp-group-name';
-  form.appendChild(nameLabel);
+/**
+ * Compact create-group sub-form.
+ *
+ * @param {HTMLElement} section
+ * @returns {HTMLElement}
+ */
+function _buildCreateForm(section) {
+  const form     = document.createElement('div');
+  form.className = 'spot-card__group-form';
 
-  const nameInput     = document.createElement('input');
-  nameInput.type      = 'text';
-  nameInput.id        = 'fp-group-name';
-  nameInput.className = 'input';
-  nameInput.maxLength = 40;
+  const { campuses, selectedCampusId, viewMode } = getState();
+
+  const nameInput       = document.createElement('input');
+  nameInput.type        = 'text';
+  nameInput.id          = 'fp-group-name';
+  nameInput.className   = 'input';
+  nameInput.maxLength   = 40;
+  nameInput.placeholder = 'Group name';
   form.appendChild(nameInput);
 
-  const colorLabel       = document.createElement('label');
-  colorLabel.className   = 'spot-card__group-label';
-  colorLabel.textContent = 'Color:';
-  form.appendChild(colorLabel);
+  let campusInput = null;
+  if (viewMode === 'campus') {
+    const selectedCampus = campuses.find((c) => c.id === selectedCampusId) ?? null;
+    campusInput             = document.createElement('input');
+    campusInput.type        = 'text';
+    campusInput.id          = 'fp-campus-name';
+    campusInput.className   = 'input';
+    campusInput.placeholder = 'Campus / turf name';
+    campusInput.maxLength   = 80;
+    campusInput.value       = selectedCampus?.name ?? '';
+    form.appendChild(campusInput);
+  }
 
+  // Color swatches (no label — visual affordance is sufficient)
   const swatches     = document.createElement('div');
   swatches.className = 'spot-card__color-swatches';
-
-  _GROUP_SWATCHES.forEach(hex => {
+  _GROUP_SWATCHES.forEach((hex) => {
     const sw        = document.createElement('button');
     sw.type         = 'button';
     sw.className    = `color-swatch${_selectedColor === hex ? ' color-swatch--active' : ''}`;
@@ -303,99 +512,80 @@ function _buildCreateForm(section, heading) {
     sw.dataset.color = hex;
     sw.addEventListener('click', () => {
       _selectedColor = hex;
-      swatches.querySelectorAll('.color-swatch').forEach(s => {
+      swatches.querySelectorAll('.color-swatch').forEach((s) => {
         s.classList.toggle('color-swatch--active', s.dataset.color === hex);
       });
     });
     swatches.appendChild(sw);
   });
-
   form.appendChild(swatches);
 
-  const btnRow      = document.createElement('div');
-  btnRow.className  = 'spot-card__group-btn-row';
+  const btnRow     = document.createElement('div');
+  btnRow.className = 'spot-card__group-btn-row';
 
   const createBtn       = document.createElement('button');
   createBtn.type        = 'button';
   createBtn.className   = 'btn btn-primary';
-  createBtn.textContent = 'Create';
+  createBtn.textContent = 'Create group';
   createBtn.addEventListener('click', () => {
     const name = nameInput.value.trim();
     if (!name) { nameInput.focus(); return; }
-    emit(EVENTS.UI_GROUP_CREATE, { name, displayName: name, color: _selectedColor, context: 'campus' });
+    const campusName = campusInput?.value.trim() ?? '';
+    if (viewMode === 'campus' && !campusName) { campusInput?.focus(); return; }
+    emit(EVENTS.UI_GROUP_CREATE, { name, displayName: name, color: _selectedColor, context: viewMode, campusName });
   });
 
-  const cancelBtn       = document.createElement('button');
-  cancelBtn.type        = 'button';
-  cancelBtn.className   = 'btn btn-ghost';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.addEventListener('click', () => { nameInput.value = ''; });
+  const joinLink     = document.createElement('button');
+  joinLink.type      = 'button';
+  joinLink.className = 'btn btn-ghost';
+  joinLink.textContent = 'Join one instead';
+  joinLink.addEventListener('click', () => {
+    _groupSubForm = 'join';
+    form.replaceWith(_buildJoinForm(section));
+  });
 
   btnRow.appendChild(createBtn);
-  btnRow.appendChild(cancelBtn);
+  btnRow.appendChild(joinLink);
   form.appendChild(btnRow);
 
-  const joinLink     = document.createElement('p');
-  joinLink.className = 'spot-card__group-join-link';
-  joinLink.innerHTML = /* html */`Already have a group to <a href="#" id="fp-link-join">join?</a>`;
-  joinLink.querySelector('#fp-link-join').addEventListener('click', (e) => {
-    e.preventDefault();
-    _groupSubForm = 'join';
-    heading.textContent = 'Join a Group';
-    form.replaceWith(_buildJoinForm(section, heading));
-  });
-
-  form.appendChild(joinLink);
   return form;
 }
 
 /**
- * Join-group sub-form for the filter panel.
+ * Compact join-group sub-form.
  *
  * @param {HTMLElement} section
- * @param {HTMLElement} heading
  * @returns {HTMLElement}
  */
-function _buildJoinForm(section, heading) {
-  const form      = document.createElement('div');
-  form.className  = 'spot-card__group-form';
+function _buildJoinForm(section) {
+  const form     = document.createElement('div');
+  form.className = 'spot-card__group-form';
 
-  const codeLabel       = document.createElement('label');
-  codeLabel.className   = 'spot-card__group-label';
-  codeLabel.textContent = 'Group Code:';
-  codeLabel.htmlFor     = 'fp-group-code';
-  form.appendChild(codeLabel);
-
-  const codeInput     = document.createElement('input');
-  codeInput.type      = 'text';
-  codeInput.id        = 'fp-group-code';
-  codeInput.className = 'input';
-  codeInput.placeholder = 'e.g. AB12';
-  codeInput.maxLength = 4;
+  const codeInput       = document.createElement('input');
+  codeInput.type        = 'text';
+  codeInput.id          = 'fp-group-code';
+  codeInput.className   = 'input';
+  codeInput.placeholder = 'Group code (e.g. AB12)';
+  codeInput.maxLength   = 4;
   form.appendChild(codeInput);
 
-  const nameLabel       = document.createElement('label');
-  nameLabel.className   = 'spot-card__group-label';
-  nameLabel.textContent = 'Your Name:';
-  nameLabel.htmlFor     = 'fp-join-display-name';
-  form.appendChild(nameLabel);
-
-  const nameInput     = document.createElement('input');
-  nameInput.type      = 'text';
-  nameInput.id        = 'fp-join-display-name';
-  nameInput.className = 'input';
-  nameInput.maxLength = 30;
+  const nameInput       = document.createElement('input');
+  nameInput.type        = 'text';
+  nameInput.id          = 'fp-join-display-name';
+  nameInput.className   = 'input';
+  nameInput.placeholder = 'Your display name';
+  nameInput.maxLength   = 30;
   form.appendChild(nameInput);
 
-  const btnRow      = document.createElement('div');
-  btnRow.className  = 'spot-card__group-btn-row';
+  const btnRow     = document.createElement('div');
+  btnRow.className = 'spot-card__group-btn-row';
 
   const joinBtn       = document.createElement('button');
   joinBtn.type        = 'button';
-  joinBtn.className   = 'btn btn-primary';
-  joinBtn.textContent = 'Join';
+  joinBtn.className   = 'btn btn-primary btn-sm';
+  joinBtn.textContent = 'Join group';
   joinBtn.addEventListener('click', () => {
-    const code        = codeInput.value.trim();
+    const code = codeInput.value.trim();
     const displayName = nameInput.value.trim();
     if (!code || !displayName) { codeInput.focus(); return; }
     emit(EVENTS.UI_GROUP_JOIN, { code, displayName });
@@ -403,12 +593,11 @@ function _buildJoinForm(section, heading) {
 
   const backBtn       = document.createElement('button');
   backBtn.type        = 'button';
-  backBtn.className   = 'btn btn-ghost';
+  backBtn.className   = 'btn btn-ghost btn-sm';
   backBtn.textContent = 'Back';
   backBtn.addEventListener('click', () => {
     _groupSubForm = 'create';
-    heading.textContent = 'Create a Group';
-    form.replaceWith(_buildCreateForm(section, heading));
+    form.replaceWith(_buildCreateForm(section));
   });
 
   btnRow.appendChild(joinBtn);
@@ -421,94 +610,127 @@ function _buildJoinForm(section, heading) {
 // ─── Sync helpers ─────────────────────────────────────────────────────────────
 
 /**
- * Re-render chip active states when filters change via dispatch.
- * Keeps the chips in sync when URL params pre-fill filters on load.
+ * Inject ranked suggestions into the #suggestions-inject slot inside the
+ * Find tab body. Called when UI_SUGGEST_OPENED fires.
+ *
+ * @param {CustomEvent<{ rankedSpots: object[] }>} e
+ * @returns {void}
+ */
+function _onSuggestOpened(e) {
+  const slot = document.getElementById('suggestions-inject');
+  if (!slot) return;
+  renderSuggestionsList(slot, e.detail.rankedSpots);
+}
+
+/**
+ * Re-sync all chip active states and filter-dependent visibility
+ * whenever filters or view mode change.
+ *
+ * @returns {void}
  */
 function _syncFromState() {
   const { filters, viewMode } = getState();
 
-  // View mode toggle
-  document.querySelectorAll('#toggle-view-mode .chip').forEach(chip => {
+  // View mode toggle chips
+  document.querySelectorAll('#view-mode-toggle .chip').forEach((chip) => {
     const active = chip.dataset.key === viewMode;
     chip.classList.toggle('chip-active', active);
     chip.setAttribute('aria-pressed', String(active));
   });
 
-  // Group size chips.
-  document.querySelectorAll('#chips-group-size .chip').forEach(chip => {
+  // Group size chips
+  document.querySelectorAll('#chips-group-size .chip').forEach((chip) => {
     const active = chip.dataset.key === filters.groupSize;
     chip.classList.toggle('chip-active', active);
     chip.setAttribute('aria-pressed', String(active));
   });
 
-  // Amenity chips.
-  document.querySelectorAll('#chips-needs .amenity-chip').forEach(chip => {
+  // Amenity chips
+  document.querySelectorAll('#chips-needs .amenity-chip').forEach((chip) => {
     const active = filters.needs.includes(chip.dataset.key);
     chip.classList.toggle('amenity-chip--active', active);
     chip.setAttribute('aria-pressed', String(active));
   });
 
-  // Building dropdown visibility & value.
-  const nearHeader = document.getElementById('filter-near-header');
-  const sel = document.getElementById('filter-building');
-  
-  if (nearHeader && sel) {
+  // Near row visibility (campus mode only)
+  const nearRow = document.getElementById('filter-near-row');
+  const sel     = document.getElementById('filter-building');
+  if (nearRow && sel) {
     const isCampus = viewMode === 'campus';
-    nearHeader.style.display = isCampus ? 'block' : 'none';
-    sel.style.display        = isCampus ? 'block' : 'none';
+    nearRow.style.display = isCampus ? '' : 'none';
     if (!isCampus && filters.nearBuilding) {
-       // Clear the building filter automatically if switching to City view
-       dispatch('SET_FILTERS', { nearBuilding: null });
+      dispatch('SET_FILTERS', { nearBuilding: null });
     } else {
-       sel.value = filters.nearBuilding ?? '';
+      sel.value = filters.nearBuilding ?? '';
     }
+  }
+
+  const areaSelect = document.getElementById('filter-area');
+  if (areaSelect) {
+    areaSelect.value = filters.areaId ?? '';
   }
 }
 
 /**
- * Populate the building dropdown with unique building names from loaded spots.
+ * Populate the near-building dropdown from the loaded buildings list.
+ *
+ * @returns {void}
  */
 function _populateBuildingDropdown() {
   const sel = document.getElementById('filter-building');
   if (!sel) return;
 
-  const { spots } = getState();
-  const buildings = [...new Set(
-    spots
-      .filter(s => s.on_campus && s.building)
-      .map(s => s.building)
+  const { buildings } = getState();
+  const options = [...new Set(
+    (buildings ?? []).map((b) => b.name).filter(Boolean),
   )].sort();
 
-  // Remove all options except the first (default).
   while (sel.options.length > 1) sel.remove(1);
 
-  buildings.forEach(building => {
+  options.forEach((name) => {
     const opt       = document.createElement('option');
-    opt.value       = building;
-    opt.textContent = building;
+    opt.value       = name;
+    opt.textContent = name;
     sel.appendChild(opt);
   });
 }
 
-// ─── Group member section (when already in a group) ──────────────────────────
+function _populateAreaDropdown() {
+  const sel = document.getElementById('filter-area');
+  if (!sel) return;
+
+  const { areas, filters } = getState();
+  while (sel.options.length > 1) sel.remove(1);
+
+  areas.forEach((area) => {
+    const opt = document.createElement('option');
+    opt.value = area.id;
+    opt.textContent = _areaLabel(area);
+    opt.selected = filters.areaId === area.id;
+    sel.appendChild(opt);
+  });
+}
+
+// ─── Group members section ────────────────────────────────────────────────────
 
 /**
- * Replaces the Create/Join form when the user is already in a group.
- * Renders: group header, scrollable member rows, invite code.
+ * Replaces the create/join form when the user is already in a group.
+ * Renders: header → session summary → members table → activity feed → spot share.
  *
  * @param {object}      group
  * @param {object|null} groupMember
- * @param {object}      groupPins     - Record<pinId, GroupPin>
- * @param {object}      groupPinJoins - Record<pinId, GroupPinJoin[]>
+ * @param {object[]}    groupMembers
+ * @param {object}      groupPins
+ * @param {object}      groupPinJoins
  * @param {string|null} myGroupPinId
  * @param {object[]}    spots
  * @returns {HTMLElement}
  */
-function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins, myGroupPinId, spots) {
+function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, groupPinJoins, myGroupPinId, spots) {
   const section     = document.createElement('div');
   section.className = 'spot-card__group-members-section';
 
-  // ── Header row: colored dot + name + leave button ────────────────────────
+  // ── Header: dot + name + leave ───────────────────────────────────────────
   const header     = document.createElement('div');
   header.className = 'spot-card__gm-header';
 
@@ -542,84 +764,110 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
   });
   header.appendChild(leaveBtn);
 
+  // ── Group pins visibility toggle ──────────────────────────────────────────
+  const pinToggleBtn     = document.createElement('button');
+  pinToggleBtn.type      = 'button';
+  pinToggleBtn.className = 'spot-card__gm-leave';
+  const { groupPinsVisible } = getState();
+  pinToggleBtn.setAttribute('aria-label', groupPinsVisible ? 'Hide group pins' : 'Show group pins');
+  pinToggleBtn.innerHTML = iconSvg(groupPinsVisible ? Eye : EyeOff, 18);
+  pinToggleBtn.addEventListener('click', () => {
+    const current = getState().groupPinsVisible;
+    dispatch('SET_GROUP_PINS_VISIBLE', !current);
+    pinToggleBtn.innerHTML = iconSvg(!current ? Eye : EyeOff, 18);
+    pinToggleBtn.setAttribute('aria-label', !current ? 'Hide group pins' : 'Show group pins');
+  });
+  header.appendChild(pinToggleBtn);
+
   section.appendChild(header);
 
-  // ── Member count ──────────────────────────────────────────────────────────
-  const livePins = Object.values(groupPins).filter(p => p.pin_type === 'live' && !p.ended_at);
+  // ── Session summary card ──────────────────────────────────────────────────
+  const mySessionId = _mySessionId();
+  const myPins      = Object.values(groupPins).filter(
+    (p) => p.session_id === mySessionId && p.pin_type === 'live',
+  );
+  const myMember    = groupMembers.find((m) => m.session_id === mySessionId);
+  const myPoints    = myMember?.scout_points ?? 0;
 
+  const summary     = document.createElement('div');
+  summary.className = 'group-tab__summary';
+  summary.innerHTML = /* html */`
+    <span class="group-tab__summary-stat">
+      ${iconSvg(MapPin, 13)}
+      <span>${myPins.length} spot${myPins.length !== 1 ? 's' : ''} scouted</span>
+    </span>
+    <span class="group-tab__summary-sep"></span>
+    <span class="group-tab__summary-stat">
+      ${iconSvg(Star, 13)}
+      <span>${myPoints} pt${myPoints !== 1 ? 's' : ''}</span>
+    </span>
+  `;
+  section.appendChild(summary);
+
+  // ── Member count ─────────────────────────────────────────────────────────
+  const memberCount = groupMembers.length || 1;
   const count     = document.createElement('p');
   count.className = 'spot-card__gm-count';
-  count.textContent = `${livePins.length || 1} Member${(livePins.length || 1) !== 1 ? 's' : ''}`;
+  count.textContent = `${memberCount} Member${memberCount !== 1 ? 's' : ''}`;
   section.appendChild(count);
 
-  // ── Members table (scrollable) ────────────────────────────────────────────
-  if (livePins.length > 0) {
-    const table     = document.createElement('div');
-    table.className = 'spot-card__gm-table';
+  // ── Member table ─────────────────────────────────────────────────────────
+  const table     = document.createElement('div');
+  table.className = 'spot-card__gm-table';
 
-    livePins.sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at)).forEach(pin => {
-      const isMine   = pin.id === myGroupPinId;
-      const joins    = (groupPinJoins[pin.id] ?? []).filter(j => j.status === 'heading');
-      const spotName = pin.spot_id
-        ? (spots.find(s => s.id === pin.spot_id)?.name ?? 'Unknown')
-        : 'En Route';
+  if (groupMembers.length > 0) {
+    groupMembers.forEach((mem) => {
+      const isMine   = mem.session_id === mySessionId;
+      const initials = _toInitials(mem.display_name ?? '?');
 
-      const initials = _toInitials(pin.display_name ?? groupMember?.displayName ?? '?');
+      const livePins = Object.values(groupPins).filter(
+        (p) => p.session_id === mem.session_id && p.pin_type === 'live' && !p.ended_at,
+      );
+      const spotName = livePins.length
+        ? (spots.find((s) => s.id === livePins[0].spot_id)?.name ?? 'En Route')
+        : 'Browsing';
 
       const row     = document.createElement('div');
       row.className = `spot-card__gm-row${isMine ? ' spot-card__gm-row--mine' : ''}`;
 
-      // Avatar
       const avatar     = document.createElement('span');
       avatar.className = 'spot-card__gm-avatar';
       avatar.style.background = group.color ?? 'var(--color-brand)';
       avatar.textContent = initials;
       row.appendChild(avatar);
 
-      // Location
+      const info     = document.createElement('div');
+      info.className = 'spot-card__gm-info';
+
+      const displayName     = document.createElement('span');
+      displayName.className = 'spot-card__gm-display-name';
+      displayName.textContent = mem.display_name + (isMine ? ' (you)' : '');
+      info.appendChild(displayName);
+
       const loc     = document.createElement('span');
       loc.className = 'spot-card__gm-location';
       loc.textContent = spotName;
-      row.appendChild(loc);
+      info.appendChild(loc);
 
-      // Join count
-      const joinCount     = document.createElement('span');
-      joinCount.className = 'spot-card__gm-joins';
-      joinCount.innerHTML = `${iconSvg(Users, 14)} ${joins.length}`;
-      row.appendChild(joinCount);
+      row.appendChild(info);
 
-      // Thumbs-up (heading join)
-      const alreadyJoined = (groupPinJoins[pin.id] ?? []).some(
-        j => j.status === 'heading' && j.session_id === _mySessionId(),
-      );
-      const thumbBtn     = document.createElement('button');
-      thumbBtn.type      = 'button';
-      thumbBtn.className = `spot-card__gm-thumb${alreadyJoined ? ' spot-card__gm-thumb--active' : ''}`;
-      thumbBtn.setAttribute('aria-label', 'Heading there');
-      thumbBtn.innerHTML = iconSvg(ThumbsUp, 16);
-      if (!isMine) {
-        thumbBtn.addEventListener('click', () => {
-          emit(GROUP_PIN_EVENTS.JOIN_REQUESTED, { pinId: pin.id, status: 'heading' });
-        });
-      } else {
-        thumbBtn.disabled = true;
-        thumbBtn.setAttribute('aria-label', 'Your pin');
-      }
-      row.appendChild(thumbBtn);
+      const pts     = document.createElement('span');
+      pts.className = 'spot-card__gm-pts';
+      pts.textContent = `${mem.scout_points ?? 0}pt`;
+      row.appendChild(pts);
 
       table.appendChild(row);
     });
-
-    section.appendChild(table);
-  } else if (groupMember) {
-    // No live pins yet — show a placeholder row for this member
+  } else {
     const placeholder     = document.createElement('p');
     placeholder.className = 'spot-card__gm-empty';
-    placeholder.textContent = 'No members heading anywhere yet. Drop a pin!';
-    section.appendChild(placeholder);
+    placeholder.textContent = 'Loading members…';
+    table.appendChild(placeholder);
   }
 
-  // ── Code + copy row ──────────────────────────────────────────────────────
+  section.appendChild(table);
+
+  // ── Code + share row ─────────────────────────────────────────────────────
   const codeRow     = document.createElement('div');
   codeRow.className = 'spot-card__gm-code-row';
 
@@ -628,13 +876,13 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
   codeText.innerHTML = `Code: <strong>${group.code}</strong>`;
   codeRow.appendChild(codeText);
 
-  const copyBtn     = document.createElement('button');
-  copyBtn.type      = 'button';
-  copyBtn.className = 'spot-card__gm-copy';
-  copyBtn.setAttribute('aria-label', 'Copy invite code');
-  copyBtn.innerHTML = iconSvg(Copy, 16);
-  copyBtn.addEventListener('click', async () => {
-    const url = `${window.location.origin}${window.location.pathname}?group=${group.code}`;
+  const copyLinkBtn     = document.createElement('button');
+  copyLinkBtn.type      = 'button';
+  copyLinkBtn.className = 'spot-card__gm-copy';
+  copyLinkBtn.setAttribute('aria-label', 'Copy invite link');
+  copyLinkBtn.innerHTML = iconSvg(Link, 16);
+  copyLinkBtn.addEventListener('click', async () => {
+    const url = buildGroupJoinUrl(group.code);
     try {
       await navigator.clipboard.writeText(url);
       showToast('Invite link copied! Share it with your group.', 'success');
@@ -642,10 +890,140 @@ function _buildGroupMembersSection(group, groupMember, groupPins, groupPinJoins,
       showToast(`Share this code: ${group.code}`, 'success');
     }
   });
-  codeRow.appendChild(copyBtn);
+  codeRow.appendChild(copyLinkBtn);
+
+  const codeCopyBtn     = document.createElement('button');
+  codeCopyBtn.type      = 'button';
+  codeCopyBtn.className = 'spot-card__gm-copy';
+  codeCopyBtn.setAttribute('aria-label', 'Copy group code');
+  codeCopyBtn.innerHTML = iconSvg(Copy, 16);
+  codeCopyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(group.code);
+      showToast(`Code ${group.code} copied!`, 'success');
+    } catch {
+      showToast(`Share this code: ${group.code}`, 'success');
+    }
+  });
+  codeRow.appendChild(codeCopyBtn);
 
   section.appendChild(codeRow);
+
+  // ── Recent activity feed ─────────────────────────────────────────────────
+  const allLivePins = Object.values(groupPins)
+    .filter((p) => p.pin_type === 'live' && !p.ended_at && p.created_at)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, 5);
+
+  if (allLivePins.length > 0) {
+    const feed     = document.createElement('div');
+    feed.className = 'group-tab__activity';
+
+    const feedLabel     = document.createElement('p');
+    feedLabel.className = 'filter-accordion__label';
+    feedLabel.textContent = 'Recent activity';
+    feed.appendChild(feedLabel);
+
+    allLivePins.forEach((pin) => {
+      const mem      = groupMembers.find((m) => m.session_id === pin.session_id);
+      const memName  = mem?.display_name ?? 'Someone';
+      const spotName = spots.find((s) => s.id === pin.spot_id)?.name ?? 'a spot';
+      const when     = timeAgo(pin.created_at);
+      const initials = _toInitials(memName);
+
+      const item     = document.createElement('div');
+      item.className = 'group-tab__activity-item';
+      item.innerHTML = /* html */`
+        <span class="group-tab__activity-avatar" style="background:${group.color ?? 'var(--color-brand)'}">${_escHtml(initials)}</span>
+        <span class="group-tab__activity-body">
+          <span class="group-tab__activity-name">${_escHtml(memName)}</span>
+          <span class="group-tab__activity-spot"> → ${_escHtml(spotName)}</span>
+        </span>
+        <span class="group-tab__activity-time">${_escHtml(when)}</span>
+      `;
+      feed.appendChild(item);
+    });
+
+    section.appendChild(feed);
+  }
+
+  // ── Spot sharing shortcut (my active pin) ────────────────────────────────
+  if (myGroupPinId) {
+    const activePin  = groupPins[myGroupPinId];
+    const activeSpot = activePin ? spots.find((s) => s.id === activePin.spot_id) : null;
+
+    if (activeSpot) {
+      const shareRow     = document.createElement('div');
+      shareRow.className = 'group-tab__share-row';
+
+      const shareLabel     = document.createElement('span');
+      shareLabel.className = 'group-tab__share-label';
+      shareLabel.innerHTML = /* html */`${iconSvg(MapPin, 13)} Sharing: <strong>${_escHtml(activeSpot.name)}</strong>`;
+      shareRow.appendChild(shareLabel);
+
+      const shareBtn     = document.createElement('button');
+      shareBtn.type      = 'button';
+      shareBtn.className = 'spot-card__gm-copy';
+      shareBtn.setAttribute('aria-label', 'Copy spot link');
+      shareBtn.innerHTML = iconSvg(Copy, 14);
+      shareBtn.addEventListener('click', async () => {
+        const url = `${window.location.origin}?spot=${activeSpot.id}`;
+        try {
+          await navigator.clipboard.writeText(url);
+          showToast(`Spot link for "${activeSpot.name}" copied!`, 'success');
+        } catch {
+          showToast(`Find me at: ${activeSpot.name}`, 'success');
+        }
+      });
+      shareRow.appendChild(shareBtn);
+
+      section.appendChild(shareRow);
+    }
+  }
+
   return section;
+}
+
+// ─── Private helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Escape a string for safe insertion into innerHTML.
+ *
+ * @param {string} str
+ * @returns {string}
+ */
+function _escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/**
+ * Re-render the group tab body and update the colour badge whenever
+ * group state changes (join, leave, members update, pins update).
+ *
+ * @returns {void}
+ */
+function _syncGroupTab() {
+  // Always keep the badge in sync regardless of active tab
+  const badge = document.getElementById('group-tab-badge');
+  if (badge) {
+    const { group } = getState();
+    badge.hidden = !group;
+    if (group) badge.style.background = group.color ?? 'var(--color-brand)';
+  }
+
+  // Re-render the body only when the group tab is visible
+  if (_activeTab !== 'group') return;
+
+  const form     = document.querySelector('.filter-form');
+  const existing = form?.querySelector('.filter-tab-body');
+  if (!existing) return;
+
+  const next = _buildTabBody();
+  existing.replaceWith(next);
 }
 
 /**
@@ -659,12 +1037,18 @@ function _toInitials(name) {
     .trim()
     .split(/\s+/)
     .slice(0, 2)
-    .map(w => w[0]?.toUpperCase() ?? '')
+    .map((w) => w[0]?.toUpperCase() ?? '')
     .join('');
 }
 
+function _areaLabel(area) {
+  return [area.sitio, area.barangay, area.city_municipality]
+    .filter(Boolean)
+    .join(', ');
+}
+
 /**
- * Read the session id from localStorage (avoids circular import via store.js).
+ * Read the session id from localStorage.
  *
  * @returns {string | null}
  */

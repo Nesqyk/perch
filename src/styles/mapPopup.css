@@ -70,9 +70,17 @@
 
 /* ─── Photo placeholder ──────────────────────────────────────────────────── */
 
+.map-spot-popup__photo,
 .map-spot-popup__photo-placeholder {
   width:      100%;
   height:     72px;
+}
+
+.map-spot-popup__photo {
+  object-fit: cover;
+}
+
+.map-spot-popup__photo-placeholder {
   background: var(--color-gray-100);
   /* Subtle diagonal stripe pattern to signal "image forthcoming" */
   background-image: repeating-linear-gradient(

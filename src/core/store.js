@@ -17,12 +17,16 @@
  */
 
 import { emit, EVENTS } from './events.js';
+import { buildSpotShareUrl } from './router.js';
 
 // ─── Initial state shape ─────────────────────────────────────────────────────
 
 const _state = {
   /** Geolocation. null until the user grants permission. */
   userLocation: null,           // { lat: number, lng: number } | null
+
+  /** The user's manually set nickname. Fetched from Supabase on init. */
+  nickname: null,               // string | null
 
   /**
    * Current macro view of the map.
@@ -31,12 +35,37 @@ const _state = {
    */
   viewMode: 'campus',           // 'campus' | 'city'
 
+  /**
+   * All active campuses from the database.
+   * Populated on boot. Used by campus selector UI and mapInit.
+   */
+  campuses: [],                 // Campus[]
+
+  /** Multi-area catalogue for city/barangay/sitio filtering. */
+  areas: [],                    // Area[]
+
+  /** The id of the currently selected campus. null = no campus constraint. */
+  selectedCampusId: null,       // string (uuid) | null
+
+  /** Building catalogue for the selected campus in campus mode. */
+  buildings: [],                // Building[]
+
   /** Active filter selections driven by the filter panel. */
   filters: {
     groupSize:    null,         // 'solo' | 'small' | 'medium' | 'large' | null
     needs:        [],           // Array<'outlet' | 'wifi' | 'quiet' | 'food'>
     nearBuilding: null,         // building id string | null
+    areaId:       null,         // area id string | null
   },
+
+  /**
+   * Persisted settings dashboard data, loaded after authentication.
+   */
+  settingsProfile: null,        // User profile row | null
+  userSettings: null,           // User settings row | null
+  userDevices: [],              // UserDevice[]
+  nextSession: null,            // UserSession | null
+  sharedNote: null,             // UserSharedNote | null
 
   /**
    * All approved spots fetched from Supabase.
@@ -50,6 +79,9 @@ const _state = {
    * Updated by the background job and broadcast via Supabase Realtime.
    */
   confidence: {},               // Record<spotId, { score, reason, validUntil }>
+
+  /** Current user's SMS watchers keyed by spot id. */
+  spotWatchers: {},             // Record<spotId, SpotWatcher>
 
   /**
    * Active claims keyed by spot_id.
@@ -90,6 +122,7 @@ const _state = {
     claimPending:       false,
     correctionPending:  false,
     groupPending:       false,
+    campusPending:      false,
     error:              null,   // string | null
   },
 
@@ -105,7 +138,7 @@ const _state = {
    * This session's member record for the current group.
    * null until group is joined.
    */
-  groupMember: null,            // { id, groupId, sessionId, displayName, scoutPoints } | null
+  groupMember: null,            // { id, groupId, userId, displayName, scoutPoints } | null
 
   /**
    * Live and saved pins for the current group, keyed by pin id.
@@ -123,6 +156,51 @@ const _state = {
    * null when the session has no live pin in the current group.
    */
   myGroupPinId: null,           // string (uuid) | null
+
+  /**
+   * Controls whether group member pins are rendered on the map.
+   * Toggled by the Eye/EyeOff button in the Group tab header.
+   */
+  groupPinsVisible: true,       // boolean
+
+  /**
+   * All members of the current group, fetched on join and refreshed on demand.
+   * Keyed by member id for fast lookup.
+   */
+  groupMembers: [],             // GroupMember[]
+
+  /**
+   * Hydrated current venue for the active squad dashboard.
+   */
+  groupCurrentSpot: null,       // Spot | null
+
+  /**
+   * Upcoming persisted meetup for the active squad.
+   */
+  groupMeetup: null,            // GroupMeetup | null
+
+  /**
+   * Active persisted perk for the active squad.
+   */
+  groupPerk: null,              // GroupPerk | null
+
+  /**
+   * The currently active client-side route.
+   * Driven by the hash router in router.js via dispatch('ROUTE_CHANGED').
+   * '/' is the Dashboard (map). '/profile', '/group', '/campus',
+   * '/spot', '/settings', '/contributions', '/notifications', and '/landing' are page views.
+   */
+  currentRoute: '/',            // '/' | '/profile' | '/group' | '/campus' | '/spot' | '/settings' | '/contributions' | '/notifications' | '/landing'
+
+  /**
+   * The authenticated Supabase user object, or null when signed out.
+   * Set via dispatch('AUTH_STATE_CHANGED') from src/api/auth.js.
+   * This is the single source of truth for auth state — nothing else in the
+   * app reads from supabase.auth.getUser() directly.
+   *
+   * @type {import('@supabase/supabase-js').User | null}
+   */
+  currentUser: null,            // User | null
 };
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -158,6 +236,12 @@ export function dispatch(action, payload) {
       break;
     }
 
+    case 'SET_NICKNAME': {
+      _state.nickname = payload; // string | null
+      emit(EVENTS.NICKNAME_UPDATED, { nickname: payload });
+      break;
+    }
+
     // ── Filters ─────────────────────────────────────────────────────────────
     case 'SET_FILTERS': {
       // Merge partial filter updates — callers only pass what changed.
@@ -167,7 +251,7 @@ export function dispatch(action, payload) {
     }
 
     case 'RESET_FILTERS': {
-      _state.filters = { groupSize: null, needs: [], nearBuilding: null };
+      _state.filters = { groupSize: null, needs: [], nearBuilding: null, areaId: null };
       emit(EVENTS.FILTERS_CHANGED, { filters: getState().filters });
       break;
     }
@@ -191,10 +275,36 @@ export function dispatch(action, payload) {
       break;
     }
 
+    case 'SPOT_WATCHERS_LOADED': {
+      const watchers = payload.watchers ?? [];
+      _state.spotWatchers = watchers.reduce((acc, watcher) => {
+        acc[watcher.spot_id] = watcher;
+        return acc;
+      }, {});
+      emit(EVENTS.SPOT_WATCHERS_UPDATED, { spotWatchers: _state.spotWatchers });
+      break;
+    }
+
+    case 'SPOT_WATCHER_UPDATED': {
+      const { spotId, watcher } = payload;
+      const next = { ..._state.spotWatchers };
+      if (watcher) {
+        next[spotId] = watcher;
+      } else {
+        delete next[spotId];
+      }
+      _state.spotWatchers = next;
+      emit(EVENTS.SPOT_WATCHERS_UPDATED, { spotWatchers: _state.spotWatchers, spotId });
+      break;
+    }
+
     // ── Spot selection ───────────────────────────────────────────────────────
     case 'SELECT_SPOT': {
       _state.selectedSpotId = payload.spotId;
-      emit(EVENTS.SPOT_SELECTED, { spotId: payload.spotId });
+      emit(EVENTS.SPOT_SELECTED, {
+        spotId: payload.spotId,
+        navigate: payload.navigate ?? false,
+      });
       break;
     }
 
@@ -272,6 +382,58 @@ export function dispatch(action, payload) {
       break;
     }
 
+    case 'SETTINGS_DASHBOARD_LOADED': {
+      const { profile, settings, devices, nextSession, sharedNote } = payload;
+      _state.settingsProfile = profile ?? null;
+      _state.userSettings = settings ?? null;
+      _state.userDevices = devices ?? [];
+      _state.nextSession = nextSession ?? null;
+      _state.sharedNote = sharedNote ?? null;
+      if (profile?.nickname) {
+        _state.nickname = profile.nickname;
+        emit(EVENTS.NICKNAME_UPDATED, { nickname: _state.nickname });
+      }
+      emit(EVENTS.SETTINGS_DASHBOARD_UPDATED, {
+        profile: _state.settingsProfile,
+        settings: _state.userSettings,
+        devices: _state.userDevices,
+        nextSession: _state.nextSession,
+        sharedNote: _state.sharedNote,
+      });
+      break;
+    }
+
+    case 'USER_SETTINGS_UPDATED': {
+      _state.userSettings = payload.settings ?? null;
+      emit(EVENTS.USER_SETTINGS_UPDATED, { settings: _state.userSettings });
+      break;
+    }
+
+    case 'SETTINGS_PROFILE_UPDATED': {
+      _state.settingsProfile = payload.profile ?? null;
+      if (payload.profile?.nickname) {
+        _state.nickname = payload.profile.nickname;
+        emit(EVENTS.NICKNAME_UPDATED, { nickname: _state.nickname });
+      }
+      emit(EVENTS.SETTINGS_DASHBOARD_UPDATED, {
+        profile: _state.settingsProfile,
+        settings: _state.userSettings,
+        devices: _state.userDevices,
+        nextSession: _state.nextSession,
+        sharedNote: _state.sharedNote,
+      });
+      break;
+    }
+
+    case 'USER_DEVICE_UPSERTED': {
+      const { device } = payload;
+      if (!device) break;
+      const existing = _state.userDevices.filter(item => item.id !== device.id && item.device_key !== device.device_key);
+      _state.userDevices = [device, ...existing].slice(0, 4);
+      emit(EVENTS.USER_DEVICE_UPDATED, { device, devices: _state.userDevices });
+      break;
+    }
+
     // ── Status ───────────────────────────────────────────────────────────────
     case 'SET_STATUS': {
       _state.status = { ..._state.status, ...payload };
@@ -279,15 +441,76 @@ export function dispatch(action, payload) {
       break;
     }
 
+    // ── Campuses ────────────────────────────────────────────────────────
+    case 'CAMPUSES_LOADED': {
+      _state.campuses = payload.campuses ?? [];
+      // Auto-select the first campus if none is selected yet.
+      if (!_state.selectedCampusId && _state.campuses.length > 0) {
+        _state.selectedCampusId = _state.campuses[0].id;
+      }
+      emit(EVENTS.CAMPUSES_LOADED, { campuses: _state.campuses });
+      break;
+    }
+
+    case 'AREAS_LOADED': {
+      _state.areas = payload.areas ?? [];
+      emit(EVENTS.AREAS_LOADED, { areas: _state.areas });
+      break;
+    }
+
+    case 'CAMPUS_SELECTED': {
+      _state.selectedCampusId = payload.campusId;
+      emit(EVENTS.CAMPUS_SELECTED, { campusId: payload.campusId });
+      break;
+    }
+
+    case 'BUILDINGS_LOADED': {
+      _state.buildings = payload.buildings ?? [];
+      emit(EVENTS.BUILDINGS_LOADED, { buildings: _state.buildings });
+      break;
+    }
+
     // ── Groups ───────────────────────────────────────────────────────────────
     case 'GROUP_JOINED': {
       const { group, member } = payload;
-      _state.group       = group;
-      _state.groupMember = member;
-      _state.groupPins   = {};
+      _state.group         = group;
+      _state.groupMember   = member;
+      _state.groupPins     = {};
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
+      _state.groupMembers  = [];
+      _state.groupCurrentSpot = null;
+      _state.groupMeetup = null;
+      _state.groupPerk = null;
       emit(EVENTS.GROUP_JOINED, { group, member });
+      break;
+    }
+
+    case 'GROUP_DASHBOARD_LOADED': {
+      const { group, members, currentSpot, meetup, perk } = payload;
+      if (group) _state.group = group;
+      _state.groupMembers = members ?? [];
+      _state.groupCurrentSpot = currentSpot ?? null;
+      _state.groupMeetup = meetup ?? null;
+      _state.groupPerk = perk ?? null;
+      emit(EVENTS.GROUP_DASHBOARD_UPDATED, {
+        group: _state.group,
+        members: _state.groupMembers,
+        currentSpot: _state.groupCurrentSpot,
+        meetup: _state.groupMeetup,
+        perk: _state.groupPerk,
+      });
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_UPDATED': {
+      if (payload.group) _state.group = payload.group;
+      if ('currentSpot' in payload) _state.groupCurrentSpot = payload.currentSpot;
+      emit(EVENTS.GROUP_UPDATED, {
+        group: _state.group,
+        currentSpot: _state.groupCurrentSpot,
+      });
       break;
     }
 
@@ -297,7 +520,47 @@ export function dispatch(action, payload) {
       _state.groupPins     = {};
       _state.groupPinJoins = {};
       _state.myGroupPinId  = null;
+      _state.groupMembers  = [];
+      _state.groupCurrentSpot = null;
+      _state.groupMeetup = null;
+      _state.groupPerk = null;
       emit(EVENTS.GROUP_LEFT, {});
+      break;
+    }
+
+    case 'SET_GROUP_PINS_VISIBLE': {
+      _state.groupPinsVisible = !!payload; // boolean
+      emit(EVENTS.GROUP_PINS_UPDATED, { groupPins: getState().groupPins });
+      break;
+    }
+
+    case 'GROUP_MEMBERS_UPDATED': {
+      _state.groupMembers = payload.members ?? [];
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_MEMBER_UPDATED': {
+      const { member } = payload;
+      if (!member) break;
+      const existing = _state.groupMembers.filter(item => item.id !== member.id);
+      _state.groupMembers = [...existing, member];
+      if (_state.groupMember?.id === member.id) {
+        _state.groupMember = { ..._state.groupMember, ...member };
+      }
+      emit(EVENTS.GROUP_MEMBERS_UPDATED, { members: _state.groupMembers });
+      break;
+    }
+
+    case 'GROUP_MEETUP_UPDATED': {
+      _state.groupMeetup = payload.meetup ?? null;
+      emit(EVENTS.GROUP_MEETUP_UPDATED, { meetup: _state.groupMeetup });
+      break;
+    }
+
+    case 'GROUP_PERK_UPDATED': {
+      _state.groupPerk = payload.perk ?? null;
+      emit(EVENTS.GROUP_PERK_UPDATED, { perk: _state.groupPerk });
       break;
     }
 
@@ -313,7 +576,7 @@ export function dispatch(action, payload) {
       const { pin } = payload;
       _state.groupPins = { ..._state.groupPins, [pin.id]: pin };
       // Track our own live pin.
-      if (pin.session_id === _mySessionId() && pin.pin_type === 'live' && !pin.ended_at) {
+      if (pin.user_id === _state.currentUser?.id && pin.pin_type === 'live' && !pin.ended_at) {
         _state.myGroupPinId = pin.id;
       } else if (_state.myGroupPinId === pin.id && pin.ended_at) {
         _state.myGroupPinId = null;
@@ -348,6 +611,28 @@ export function dispatch(action, payload) {
       break;
     }
 
+    // ── Router ──────────────────────────────────────────────────────────────
+    case 'ROUTE_CHANGED': {
+      _state.currentRoute = payload.route;
+      emit(EVENTS.ROUTE_CHANGED, { route: payload.route });
+      break;
+    }
+
+    // ── Auth ────────────────────────────────────────────────────────────────
+    case 'AUTH_STATE_CHANGED': {
+      _state.currentUser = payload.user ?? null;
+      if (!_state.currentUser) {
+        _state.settingsProfile = null;
+        _state.userSettings = null;
+        _state.userDevices = [];
+        _state.nextSession = null;
+        _state.sharedNote = null;
+        _state.spotWatchers = {};
+      }
+      emit(EVENTS.AUTH_STATE_CHANGED, { user: _state.currentUser });
+      break;
+    }
+
     default:
       console.warn(`[store] Unknown action: "${action}"`);
   }
@@ -365,19 +650,7 @@ export function initStore() {
 
 // ─── Private helpers ─────────────────────────────────────────────────────────
 
-/**
- * Read the session id from localStorage without importing session.js
- * (which would create a circular dependency through store → session → store).
- *
- * @returns {string | null}
- */
-function _mySessionId() {
-  try {
-    return localStorage.getItem('perch_session_id');
-  } catch {
-    return null;
-  }
-}
+
 
 /**
  * Build the shareable URL for a claimed spot.
@@ -388,7 +661,5 @@ function _mySessionId() {
  * @returns {string}
  */
 function _buildShareLink(spotId) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('spot', spotId);
-  return url.toString();
+  return buildSpotShareUrl(spotId);
 }

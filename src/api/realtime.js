@@ -21,8 +21,8 @@
  */
 
 import { supabase }     from './supabaseClient.js';
-import { dispatch }     from '../core/store.js';
-import { getSessionId } from '../utils/session.js';
+import { fetchGroupCurrentSpot, signGroupAssetUrl } from './groups.js';
+import { dispatch, getState } from '../core/store.js';
 
 /** @type {import('@supabase/supabase-js').RealtimeChannel | null} */
 let _channel = null;
@@ -49,7 +49,7 @@ export function subscribeToRealtime() {
       { event: 'INSERT', schema: 'public', table: 'claims' },
       (payload) => {
         const claim  = payload.new;
-        const isMine = claim.session_id === getSessionId();
+        const isMine = claim.user_id === getState().currentUser?.id;
 
         dispatch('CLAIM_ADDED', {
           spotId: claim.spot_id,
@@ -81,8 +81,9 @@ export function subscribeToRealtime() {
       { event: 'INSERT', schema: 'public', table: 'corrections' },
       (payload) => {
         const correction = payload.new;
-        // Avoid double-applying our own correction (store.js already applied it).
-        if (correction.session_id !== getSessionId()) {
+        // Avoid double-applying our own correction; the feature dispatches
+        // after the insert succeeds.
+        if (correction.user_id !== getState().currentUser?.id) {
           dispatch('CORRECTION_FILED', { spotId: correction.spot_id });
         }
       }
@@ -131,6 +132,38 @@ export function subscribeToGroupRealtime(groupId) {
   _groupChannel = supabase
     .channel(`perch-group-${groupId}`)
 
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'groups', filter: `id=eq.${groupId}` },
+      async (payload) => {
+        const group = payload.new;
+        group.cover_image_url = await signGroupAssetUrl(group.cover_image_path);
+        const currentSpot = group.current_spot_id
+          ? await fetchGroupCurrentSpot(group.current_spot_id)
+          : null;
+        dispatch('GROUP_UPDATED', { group, currentSpot });
+      }
+    )
+
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'group_members', filter: `group_id=eq.${groupId}` },
+      async (payload) => {
+        const member = payload.new;
+        member.avatar_image_url = await signGroupAssetUrl(member.avatar_image_path);
+        dispatch('GROUP_MEMBER_UPDATED', { member });
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'group_members', filter: `group_id=eq.${groupId}` },
+      async (payload) => {
+        const member = payload.new;
+        member.avatar_image_url = await signGroupAssetUrl(member.avatar_image_path);
+        dispatch('GROUP_MEMBER_UPDATED', { member });
+      }
+    )
+
     // ── Group pin inserted (new live or saved pin) ────────────────────────
     .on(
       'postgres_changes',
@@ -170,6 +203,36 @@ export function subscribeToGroupRealtime(groupId) {
       }
     )
 
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'group_meetups', filter: `group_id=eq.${groupId}` },
+      (payload) => {
+        dispatch('GROUP_MEETUP_UPDATED', { meetup: payload.new });
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'group_meetups', filter: `group_id=eq.${groupId}` },
+      (payload) => {
+        dispatch('GROUP_MEETUP_UPDATED', { meetup: payload.new });
+      }
+    )
+
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'group_perks', filter: `group_id=eq.${groupId}` },
+      (payload) => {
+        dispatch('GROUP_PERK_UPDATED', { perk: payload.new.is_redeemed ? null : payload.new });
+      }
+    )
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'group_perks', filter: `group_id=eq.${groupId}` },
+      (payload) => {
+        dispatch('GROUP_PERK_UPDATED', { perk: payload.new.is_redeemed ? null : payload.new });
+      }
+    )
+
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         console.warn(`[realtime] Connected to group channel: ${groupId}`);
@@ -201,4 +264,3 @@ export function unsubscribeFromRealtime() {
     _channel = null;
   }
 }
-
