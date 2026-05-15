@@ -254,30 +254,44 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-3);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   border: var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .group-tab__summary-stat {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-2);
+  flex: 1;
   font-size: var(--text-sm);
   color: var(--color-text-muted);
 }
 
 .group-tab__summary-stat svg {
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--color-green-700);
 }
 
 .group-tab__summary-sep {
   width: 1px;
-  height: 14px;
+  align-self: stretch;
   background: var(--color-border);
   flex-shrink: 0;
+}
+
+.group-tab__summary-value {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.group-tab__summary-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
 }
 
 /* ------------------------------------------------------------------
@@ -288,6 +302,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  padding-top: var(--space-1);
 }
 
 .group-tab__activity-item {

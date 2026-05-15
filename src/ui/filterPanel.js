@@ -907,6 +907,9 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
   section.className = 'spot-card__group-members-section';
 
   // ── Header: dot + name + leave ───────────────────────────────────────────
+  const hero     = document.createElement('div');
+  hero.className = 'spot-card__gm-hero';
+
   const header     = document.createElement('div');
   header.className = 'spot-card__gm-header';
 
@@ -918,12 +921,25 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
   dot.style.background = group.color ?? 'var(--color-brand)';
   nameRow.appendChild(dot);
 
+  const identity     = document.createElement('div');
+  identity.className = 'spot-card__gm-identity';
+
   const name     = document.createElement('span');
   name.className = 'spot-card__gm-name';
   name.textContent = group.name;
-  nameRow.appendChild(name);
+  identity.appendChild(name);
+
+  const meta     = document.createElement('span');
+  meta.className = 'spot-card__gm-meta';
+  meta.textContent = groupMember?.role === 'mayor' ? 'Squad leader' : 'Active squad';
+  identity.appendChild(meta);
+
+  nameRow.appendChild(identity);
 
   header.appendChild(nameRow);
+
+  const actions     = document.createElement('div');
+  actions.className = 'spot-card__gm-actions';
 
   const leaveBtn     = document.createElement('button');
   leaveBtn.type      = 'button';
@@ -938,7 +954,7 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
       cancel:  { label: 'Stay' },
     });
   });
-  header.appendChild(leaveBtn);
+  actions.appendChild(leaveBtn);
 
   // ── Group pins visibility toggle ──────────────────────────────────────────
   const pinToggleBtn     = document.createElement('button');
@@ -953,9 +969,21 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
     pinToggleBtn.innerHTML = iconSvg(!current ? Eye : EyeOff, 18);
     pinToggleBtn.setAttribute('aria-label', !current ? 'Hide group pins' : 'Show group pins');
   });
-  header.appendChild(pinToggleBtn);
+  actions.appendChild(pinToggleBtn);
 
-  section.appendChild(header);
+  header.appendChild(actions);
+  hero.appendChild(header);
+
+  const memberCount = groupMembers.length || 1;
+  const heroMeta     = document.createElement('div');
+  heroMeta.className = 'spot-card__gm-hero-meta';
+  heroMeta.innerHTML = /* html */`
+    <span class="spot-card__gm-hero-chip">${memberCount} Member${memberCount !== 1 ? 's' : ''}</span>
+    <span class="spot-card__gm-hero-subtle">Invite others with the code below.</span>
+  `;
+  hero.appendChild(heroMeta);
+
+  section.appendChild(hero);
 
   // ── Session summary card ──────────────────────────────────────────────────
   const mySessionId = _mySessionId();
@@ -970,21 +998,22 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
   summary.innerHTML = /* html */`
     <span class="group-tab__summary-stat">
       ${iconSvg(MapPin, 13)}
-      <span>${myPins.length} spot${myPins.length !== 1 ? 's' : ''} scouted</span>
+      <span class="group-tab__summary-value">${myPins.length}</span>
+      <span class="group-tab__summary-label">spots scouted</span>
     </span>
     <span class="group-tab__summary-sep"></span>
     <span class="group-tab__summary-stat">
       ${iconSvg(Star, 13)}
-      <span>${myPoints} pt${myPoints !== 1 ? 's' : ''}</span>
+      <span class="group-tab__summary-value">${myPoints}</span>
+      <span class="group-tab__summary-label">pts</span>
     </span>
   `;
   section.appendChild(summary);
 
   // ── Member count ─────────────────────────────────────────────────────────
-  const memberCount = groupMembers.length || 1;
   const count     = document.createElement('p');
   count.className = 'spot-card__gm-count';
-  count.textContent = `${memberCount} Member${memberCount !== 1 ? 's' : ''}`;
+  count.textContent = 'Roster';
   section.appendChild(count);
 
   // ── Member table ─────────────────────────────────────────────────────────
@@ -1027,9 +1056,14 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
 
       row.appendChild(info);
 
+      const role     = document.createElement('span');
+      role.className = 'spot-card__gm-role';
+      role.textContent = mem.role === 'mayor' ? 'Leader' : 'Member';
+      row.appendChild(role);
+
       const pts     = document.createElement('span');
       pts.className = 'spot-card__gm-pts';
-      pts.textContent = `${mem.scout_points ?? 0}pt`;
+      pts.textContent = `${mem.scout_points ?? 0} pts`;
       row.appendChild(pts);
 
       table.appendChild(row);
@@ -1047,10 +1081,22 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
   const codeRow     = document.createElement('div');
   codeRow.className = 'spot-card__gm-code-row';
 
+  const codeCopy     = document.createElement('div');
+  codeCopy.className = 'spot-card__gm-code-copy';
+
+  const codeLabel     = document.createElement('span');
+  codeLabel.className = 'spot-card__gm-code-label';
+  codeLabel.textContent = 'Invite code';
+  codeCopy.appendChild(codeLabel);
+
   const codeText     = document.createElement('span');
   codeText.className = 'spot-card__gm-code-text';
-  codeText.innerHTML = `Code: <strong>${group.code}</strong>`;
-  codeRow.appendChild(codeText);
+  codeText.innerHTML = `<strong>${group.code}</strong>`;
+  codeCopy.appendChild(codeText);
+  codeRow.appendChild(codeCopy);
+
+  const codeActions     = document.createElement('div');
+  codeActions.className = 'spot-card__gm-code-actions';
 
   const copyLinkBtn     = document.createElement('button');
   copyLinkBtn.type      = 'button';
@@ -1066,7 +1112,7 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
       showToast(`Share this code: ${group.code}`, 'success');
     }
   });
-  codeRow.appendChild(copyLinkBtn);
+  codeActions.appendChild(copyLinkBtn);
 
   const codeCopyBtn     = document.createElement('button');
   codeCopyBtn.type      = 'button';
@@ -1081,7 +1127,8 @@ function _buildGroupMembersSection(group, groupMember, groupMembers, groupPins, 
       showToast(`Share this code: ${group.code}`, 'success');
     }
   });
-  codeRow.appendChild(codeCopyBtn);
+  codeActions.appendChild(codeCopyBtn);
+  codeRow.appendChild(codeActions);
 
   section.appendChild(codeRow);
 

@@ -44,6 +44,7 @@ const COMMUNITY_SPOT_SELECT = `
 
 const SPOT_IMAGES_BUCKET = 'spot-images';
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const SPOT_SELECT = `
   id,
@@ -407,6 +408,10 @@ async function _createOrFindCommunitySpot({
  * @returns {Promise<{ path: string, url: string, error: string | null }>}
  */
 export async function uploadSpotImage({ spotId, file }) {
+  if (!UUID_RE.test(String(spotId ?? ''))) {
+    return { path: '', url: '', error: 'A valid spot is required before uploading an image.' };
+  }
+
   const path = `spots/${spotId}/${Date.now()}-${_safeFileName(file.name)}`;
   const { error } = await supabase
     .storage
