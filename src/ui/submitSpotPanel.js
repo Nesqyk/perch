@@ -16,6 +16,7 @@
 
 import { on, emit, EVENTS }   from '../core/events.js';
 import { getState, dispatch }  from '../core/store.js';
+import { reverseGeocode } from '../utils/nominatim.js';
 import {
   fetchBuildings,
   createBuilding,
@@ -33,6 +34,25 @@ import { showToast }           from './toast.js';
 
 const OVERLAY_ID = 'submit-modal-overlay';
 const CONTENT_ID = 'submit-modal-content';
+
+/** @type {{
+ *   lat: number | null,
+ *   lng: number | null,
+ *   prefillArea: { sitio: string, barangay: string, cityMunicipality: string } | null,
+ *   displayLabel: string,
+ *   loading: boolean,
+ *   error: string | null,
+ *   requestId: number,
+ * }} */
+let _clickLocationContext = {
+  lat: null,
+  lng: null,
+  prefillArea: null,
+  displayLabel: '',
+  loading: false,
+  error: null,
+  requestId: 0,
+};
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 
@@ -64,12 +84,14 @@ async function _onSubmitRequested(e) {
   const content = document.getElementById(CONTENT_ID);
   if (!overlay || !content) return;
 
+  _primeClickLocationContext(lat, lng);
   content.innerHTML = '';
   content.appendChild(_buildStep1(lat, lng, viewMode));
 
   overlay.hidden = false;
   overlay.addEventListener('click', _handleOverlayClick);
   document.addEventListener('keydown', _handleKeyDown);
+  void _hydrateClickLocationContext(lat, lng, _clickLocationContext.requestId);
 }
 
 function _closeModal() {
@@ -87,6 +109,50 @@ function _handleOverlayClick(e) {
 
 function _handleKeyDown(e) {
   if (e.key === 'Escape') _closeModal();
+}
+
+/**
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {void}
+ */
+function _primeClickLocationContext(lat, lng) {
+  _clickLocationContext = {
+    lat,
+    lng,
+    prefillArea: null,
+    displayLabel: '',
+    loading: true,
+    error: null,
+    requestId: _clickLocationContext.requestId + 1,
+  };
+}
+
+/**
+ * @param {number} lat
+ * @param {number} lng
+ * @param {number} requestId
+ * @returns {Promise<void>}
+ */
+async function _hydrateClickLocationContext(lat, lng, requestId) {
+  const prefill = await reverseGeocode(lat, lng);
+  if (_clickLocationContext.requestId !== requestId) return;
+
+  _clickLocationContext = {
+    ..._clickLocationContext,
+    prefillArea: prefill
+      ? {
+          sitio: prefill.sitio ?? '',
+          barangay: prefill.barangay ?? '',
+          cityMunicipality: prefill.cityMunicipality ?? '',
+        }
+      : null,
+    displayLabel: prefill?.displayLabel ?? '',
+    loading: false,
+    error: prefill ? null : 'Location details unavailable',
+  };
+
+  _applyClickLocationPrefillToOpenForm();
 }
 
 // ─── Step 1 — Type selector ───────────────────────────────────────────────────
@@ -203,7 +269,7 @@ function _buildStep2Spot(lat, lng, buildings) {
   form.appendChild(floorLabel);
   form.appendChild(_input('submit-spot-floor', 'e.g. 4F', 12));
 
-  form.appendChild(_buildAreaFields('submit-spot', lat, lng));
+  form.appendChild(_buildAreaFields('submit-spot', lat, lng, _clickLocationContext));
 
   const nameLabel = _label('submit-spot-name', 'Table, corner, or spot name (required)');
   form.appendChild(nameLabel);
@@ -341,7 +407,7 @@ function _buildStep2Room(lat, lng, buildings) {
   form.appendChild(_label('room-floor', 'Floor (optional)'));
   form.appendChild(_input('room-floor', 'e.g. 4F', 12));
 
-  form.appendChild(_buildAreaFields('submit-room', lat, lng));
+  form.appendChild(_buildAreaFields('submit-room', lat, lng, _clickLocationContext));
 
   form.appendChild(_label('room-notes', 'Notes (optional)'));
   const notesInput = document.createElement('textarea');
@@ -635,32 +701,52 @@ function _input(id, placeholder, maxLength) {
  * @param {string} idPrefix
  * @param {number} lat
  * @param {number} lng
+ * @param {{
+ *   prefillArea: { sitio: string, barangay: string, cityMunicipality: string } | null,
+ *   displayLabel: string,
+ *   loading: boolean,
+ * } | null} clickLocation
  * @returns {HTMLElement}
  */
-function _buildAreaFields(idPrefix, lat, lng) {
+function _buildAreaFields(idPrefix, lat, lng, clickLocation = null) {
   const wrap = document.createElement('div');
   wrap.className = 'submit-spot-panel__area-fields';
+  wrap.dataset.prefix = idPrefix;
   const { campuses, selectedCampusId } = getState();
   const campus = campuses.find(item => item.id === selectedCampusId);
+  const prefillArea = clickLocation?.prefillArea ?? null;
+  const helperText = clickLocation?.loading
+    ? 'Looking up map location…'
+    : prefillArea
+      ? 'Filled from map location.'
+      : 'Supports multiple sitios, barangays, and cities.';
+
   wrap.innerHTML = /* html */`
     <div class="submit-spot-panel__area-head">
       <strong>Area</strong>
-      <span>Supports multiple sitios, barangays, and cities.</span>
+      <span class="submit-spot-panel__area-hint">${helperText}</span>
     </div>
   `;
 
   const sitioLabel = _label(`${idPrefix}-sitio`, 'Sitio / purok (optional)');
   wrap.appendChild(sitioLabel);
-  wrap.appendChild(_input(`${idPrefix}-sitio`, 'e.g. Sitio San Jose', 80));
+  const sitioInput = _input(`${idPrefix}-sitio`, 'e.g. Sitio San Jose', 80);
+  _setAreaInputValue(sitioInput, prefillArea?.sitio ?? '');
+  _wireAreaInputTracking(sitioInput);
+  wrap.appendChild(sitioInput);
 
   const barangayLabel = _label(`${idPrefix}-barangay`, 'Barangay (required)');
   wrap.appendChild(barangayLabel);
-  wrap.appendChild(_input(`${idPrefix}-barangay`, 'e.g. Sambag II', 80));
+  const barangayInput = _input(`${idPrefix}-barangay`, 'e.g. Sambag II', 80);
+  _setAreaInputValue(barangayInput, prefillArea?.barangay ?? '');
+  _wireAreaInputTracking(barangayInput);
+  wrap.appendChild(barangayInput);
 
   const cityLabel = _label(`${idPrefix}-city`, 'City / municipality (required)');
   wrap.appendChild(cityLabel);
   const cityInput = _input(`${idPrefix}-city`, 'e.g. Cebu City', 80);
-  cityInput.value = campus?.city ?? 'Cebu City';
+  _setAreaInputValue(cityInput, prefillArea?.cityMunicipality ?? campus?.city ?? 'Cebu City');
+  _wireAreaInputTracking(cityInput);
   wrap.appendChild(cityInput);
 
   const coord = document.createElement('p');
@@ -669,6 +755,64 @@ function _buildAreaFields(idPrefix, lat, lng) {
   wrap.appendChild(coord);
 
   return wrap;
+}
+
+/**
+ * Update the open spot/room form with reverse-geocoded area defaults if the
+ * wizard is currently showing those fields.
+ *
+ * @returns {void}
+ */
+function _applyClickLocationPrefillToOpenForm() {
+  ['submit-spot', 'submit-room'].forEach((idPrefix) => {
+    const areaWrap = document.querySelector(`.submit-spot-panel__area-fields[data-prefix="${idPrefix}"]`);
+    if (!areaWrap) return;
+
+    const hint = areaWrap.querySelector('.submit-spot-panel__area-hint');
+    if (hint) {
+      hint.textContent = _clickLocationContext.prefillArea
+        ? 'Filled from map location.'
+        : 'Supports multiple sitios, barangays, and cities.';
+    }
+
+    _setAreaInputValue(
+      /** @type {HTMLInputElement | null} */ (areaWrap.querySelector(`#${idPrefix}-sitio`)),
+      _clickLocationContext.prefillArea?.sitio ?? '',
+    );
+    _setAreaInputValue(
+      /** @type {HTMLInputElement | null} */ (areaWrap.querySelector(`#${idPrefix}-barangay`)),
+      _clickLocationContext.prefillArea?.barangay ?? '',
+    );
+    _setAreaInputValue(
+      /** @type {HTMLInputElement | null} */ (areaWrap.querySelector(`#${idPrefix}-city`)),
+      _clickLocationContext.prefillArea?.cityMunicipality ?? '',
+    );
+  });
+}
+
+/**
+ * @param {HTMLInputElement | null} input
+ * @returns {void}
+ */
+function _wireAreaInputTracking(input) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    input.dataset.prefill = 'false';
+  });
+}
+
+/**
+ * @param {HTMLInputElement | null} input
+ * @param {string} value
+ * @returns {void}
+ */
+function _setAreaInputValue(input, value) {
+  if (!input || !value) return;
+  const currentValue = input.value.trim();
+  const canOverwrite = !currentValue || input.dataset.prefill === 'true';
+  if (!canOverwrite) return;
+  input.value = value;
+  input.dataset.prefill = 'true';
 }
 
 /**

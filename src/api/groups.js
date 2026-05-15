@@ -569,21 +569,31 @@ export async function uploadMyGroupAvatar({ groupId, memberId, file }) {
  * @returns {Promise<{ member: object | null, error: string | null }>}
  */
 async function _insertMember(groupId, displayName, role = 'member', userId = null) {
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('group_members')
     .upsert(
       { group_id: groupId, display_name: displayName, role, user_id: userId },
       { onConflict: 'group_id,user_id', ignoreDuplicates: false },
-    )
-    .select(MEMBER_SELECT)
-    .single();
+    );
 
   if (error) {
     console.error('[groups] _insertMember error:', error.message);
     return { member: null, error: error.message };
   }
 
-  return { member: data, error: null };
+  const { data: member, error: fetchError } = await supabase
+    .from('group_members')
+    .select(MEMBER_SELECT)
+    .eq('group_id', groupId)
+    .eq('user_id', userId)
+    .single();
+
+  if (fetchError) {
+    console.error('[groups] _insertMember fetch error:', fetchError.message);
+    return { member: null, error: fetchError.message };
+  }
+
+  return { member, error: null };
 }
 
 function _randomCode() {

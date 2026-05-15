@@ -17,6 +17,7 @@
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+const NOMINATIM_REVERSE_BASE = 'https://nominatim.openstreetmap.org/reverse';
 const USER_AGENT     = 'Perch-App/1.0 (https://github.com/anomalyco/perch)';
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -87,6 +88,53 @@ export async function searchUniversities(query) {
 }
 
 /**
+ * Reverse geocode a single map coordinate into the area fields used by the
+ * submit-spot wizard.
+ *
+ * @param {number} lat
+ * @param {number} lng
+ * @returns {Promise<{
+ *   sitio: string,
+ *   barangay: string,
+ *   cityMunicipality: string,
+ *   displayLabel: string,
+ * } | null>}
+ */
+export async function reverseGeocode(lat, lng) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lng),
+    format: 'jsonv2',
+    addressdetails: '1',
+    zoom: '18',
+  });
+
+  const url = `${NOMINATIM_REVERSE_BASE}?${params.toString()}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      console.error('[nominatim] reverseGeocode HTTP error:', res.status, res.statusText);
+      return null;
+    }
+
+    const raw = await res.json();
+    return extractAreaPrefill(raw?.address ?? {}, raw?.display_name ?? '');
+  } catch (err) {
+    console.error('[nominatim] reverseGeocode fetch error:', err);
+    return null;
+  }
+}
+
+/**
  * Extract the best available city/locality string from a Nominatim address object.
  * Prefers city → town → county → state, in that order.
  *
@@ -98,8 +146,49 @@ export function extractCity(address) {
   return (
     address.city   ||
     address.town   ||
+    address.municipality ||
     address.county ||
     address.state  ||
     ''
   );
+}
+
+/**
+ * Normalize a Nominatim reverse-geocode response into the area fields used by
+ * Perch forms.
+ *
+ * @param {Record<string, string>} address
+ * @param {string} displayLabel
+ * @returns {{
+ *   sitio: string,
+ *   barangay: string,
+ *   cityMunicipality: string,
+ *   displayLabel: string,
+ * }}
+ */
+export function extractAreaPrefill(address, displayLabel = '') {
+  if (!address || typeof address !== 'object') {
+    return {
+      sitio: '',
+      barangay: '',
+      cityMunicipality: '',
+      displayLabel: displayLabel || '',
+    };
+  }
+
+  return {
+    sitio: (
+      address.suburb ||
+      address.neighbourhood ||
+      address.quarter ||
+      address.hamlet ||
+      address.village ||
+      address.residential ||
+      address.city_district ||
+      ''
+    ),
+    barangay: address.barangay || '',
+    cityMunicipality: extractCity(address),
+    displayLabel: displayLabel || '',
+  };
 }

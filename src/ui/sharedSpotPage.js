@@ -168,40 +168,60 @@ function _buildHeroPhoto(spot, detail, capacity, currentUser) {
 function _buildInfoColumn(spot, campus, detail, statusKey, confDisplay, spotClaims, currentUser) {
   const column = document.createElement('section');
   column.className = 'shared-location-detail';
-  column.appendChild(_buildSummaryCard(spot, detail, statusKey, confDisplay));
-  column.appendChild(createAvailabilityControls({ spot }));
+  column.appendChild(_buildSummaryCard(spot, campus, detail, statusKey, confDisplay));
+  column.appendChild(_buildAvailabilitySection(spot));
+  column.appendChild(_buildActionRow(spot, currentUser));
   column.appendChild(_buildMapCard(spot, campus, detail));
   column.appendChild(_buildActivityCard(detail, spotClaims));
-  column.appendChild(_buildActionRow(spot, currentUser));
   return column;
 }
 
-function _buildSummaryCard(spot, detail, statusKey, confDisplay) {
+function _buildSummaryCard(spot, campus, detail, statusKey, confDisplay) {
   const card = document.createElement('section');
   card.className = 'shared-location-card shared-location-card--summary';
   card.innerHTML = /* html */`
+    <p class="shared-location-card__eyebrow">${_escapeHtml(campus?.short_name || campus?.name || 'Shared spot')}</p>
     <div class="shared-location-card__head">
-      <h1 class="shared-location-card__title">${_escapeHtml(spot.name)}</h1>
+      <div class="shared-location-card__identity">
+        <h1 class="shared-location-card__title">${_escapeHtml(spot.name)}</h1>
+        <p class="shared-location-card__supporting">${_escapeHtml(detail.address)}</p>
+      </div>
       <div class="shared-location-badges">
         ${detail.badges.map((badge) => _badgeMarkup(badge, statusKey)).join('')}
       </div>
     </div>
-    <div class="shared-location-card__rule"></div>
+    <div class="shared-location-card__meta">
+      <p class="shared-location-card__confidence">${_escapeHtml(`${confDisplay.label} with ${confDisplay.percent}% confidence`)}</p>
+      <p class="shared-location-card__walk">${_escapeHtml(detail.walkLabel)}</p>
+    </div>
     <div class="shared-location-amenities" aria-label="Amenities">
       ${_amenityMarkup('Free WiFi', _hasWifi(spot), iconSvg(Wifi, 20))}
       ${_amenityMarkup('Power Outlets', Boolean(spot.has_outlets), iconSvg(PlugZap, 20))}
       ${_amenityMarkup('Food & Drinks', Boolean(spot.has_food), iconSvg(Utensils, 20))}
       ${_amenityMarkup(_noiseLabel(spot.noise_baseline), spot.noise_baseline === 'quiet', iconSvg(Volume2, 20))}
     </div>
-    <p class="shared-location-card__confidence">${_escapeHtml(`${confDisplay.label} with ${confDisplay.percent}% confidence`)}</p>
   `;
   return card;
+}
+
+function _buildAvailabilitySection(spot) {
+  const section = document.createElement('section');
+  section.className = 'shared-location-card shared-location-card--availability';
+  section.appendChild(createAvailabilityControls({ spot }));
+  return section;
 }
 
 function _buildMapCard(spot, campus, detail) {
   const card = document.createElement('section');
   card.className = 'shared-location-card shared-location-card--map';
   card.innerHTML = /* html */`
+    <div class="shared-location-card__section-head">
+      <div>
+        <p class="shared-location-card__section-eyebrow">Location</p>
+        <h2 class="shared-location-card__section-title">${_escapeHtml(campus?.short_name || campus?.name || 'Campus area')}</h2>
+      </div>
+      <span class="shared-location-card__section-chip">${_escapeHtml(spot.on_campus ? 'On campus' : 'Shared spot')}</span>
+    </div>
     <div class="shared-location-map" aria-label="Map preview">
       <span class="shared-location-map__street shared-location-map__street--one"></span>
       <span class="shared-location-map__street shared-location-map__street--two"></span>
@@ -232,29 +252,47 @@ function _buildActivityCard(detail, spotClaims) {
 
   const card = document.createElement('section');
   card.className = 'shared-location-card shared-location-card--activity';
-  card.innerHTML = rows.map((row) => /* html */`
-    <div class="shared-location-activity-row">
-      <span class="shared-location-activity-row__avatar">${_escapeHtml(row.initials)}</span>
-      <span class="shared-location-activity-row__body">
-        <span class="shared-location-activity-row__name">${_escapeHtml(row.name)}</span>
-        <span class="shared-location-activity-row__meta">${_escapeHtml(row.meta)}</span>
-      </span>
-      <span class="shared-location-activity-row__tag">${_escapeHtml(row.tag)}</span>
+  card.innerHTML = /* html */`
+    <div class="shared-location-card__section-head shared-location-card__section-head--compact">
+      <div>
+        <p class="shared-location-card__section-eyebrow">Live activity</p>
+        <h2 class="shared-location-card__section-title">Recent check-ins</h2>
+      </div>
     </div>
-  `).join('');
+    <div class="shared-location-activity-list">
+      ${rows.map((row) => /* html */`
+        <div class="shared-location-activity-row">
+          <span class="shared-location-activity-row__avatar">${_escapeHtml(row.initials)}</span>
+          <span class="shared-location-activity-row__body">
+            <span class="shared-location-activity-row__name">${_escapeHtml(row.name)}</span>
+            <span class="shared-location-activity-row__meta">${_escapeHtml(row.meta)}</span>
+          </span>
+          <span class="shared-location-activity-row__tag">${_escapeHtml(row.tag)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
   return card;
 }
 
 function _buildActionRow(spot, currentUser) {
   const row = document.createElement('div');
-  row.className = 'shared-location-actions';
+  row.className = 'shared-location-card shared-location-card--actions';
   row.innerHTML = /* html */`
-    ${currentUser
-      ? `<button type="button" class="shared-location-actions__claim" id="shared-spot-claim">Claim Spot</button>`
-      : `<button type="button" class="shared-location-actions__claim" id="shared-spot-login">${iconSvg(LogIn, 18)} Sign in to Claim</button>`}
-    <button type="button" class="shared-location-actions__share" id="shared-spot-copy-link">
-      ${iconSvg(Share2, 18)} <span>Share Link to Group Chat</span>
-    </button>
+    <div class="shared-location-card__section-head shared-location-card__section-head--compact">
+      <div>
+        <p class="shared-location-card__section-eyebrow">Actions</p>
+        <h2 class="shared-location-card__section-title">Take this spot forward</h2>
+      </div>
+    </div>
+    <div class="shared-location-actions">
+      ${currentUser
+        ? `<button type="button" class="shared-location-actions__claim" id="shared-spot-claim">Claim Spot</button>`
+        : `<button type="button" class="shared-location-actions__claim" id="shared-spot-login">${iconSvg(LogIn, 18)} Sign in to Claim</button>`}
+      <button type="button" class="shared-location-actions__share" id="shared-spot-copy-link">
+        ${iconSvg(Share2, 18)} <span>Share Link to Group Chat</span>
+      </button>
+    </div>
   `;
 
   row.querySelector('#shared-spot-claim')?.addEventListener('click', () => emit(EVENTS.UI_CLAIM_REQUESTED, { spotId: spot.id }));
@@ -315,15 +353,17 @@ async function _copySpotLink(spotId) {
 function _emptyHeroUploadMarkup(spot, canUpload) {
   return /* html */`
     <div class="shared-location-hero__empty">
-      <div class="shared-location-hero__empty-icon">${iconSvg(ImagePlus, 30)}</div>
-      <p class="shared-location-hero__empty-title">Add the first real photo</p>
-      <p class="shared-location-hero__empty-copy">${_escapeHtml(spot.name)} does not have an image yet.</p>
-      <button type="button" class="shared-location-hero__upload-btn" id="shared-spot-upload-trigger">
-        ${canUpload ? 'Upload Image' : 'Sign in to Upload'}
-      </button>
-      ${canUpload
-        ? '<input id="shared-spot-image-input" class="shared-location-hero__file-input" type="file" accept="image/jpeg,image/png,image/webp">'
-        : ''}
+      <div class="shared-location-hero__empty-body">
+        <div class="shared-location-hero__empty-icon">${iconSvg(ImagePlus, 30)}</div>
+        <p class="shared-location-hero__empty-title">Add the first real photo</p>
+        <p class="shared-location-hero__empty-copy">${_escapeHtml(spot.name)} does not have an image yet.</p>
+        <button type="button" class="shared-location-hero__upload-btn" id="shared-spot-upload-trigger">
+          ${canUpload ? 'Upload Image' : 'Sign in to Upload'}
+        </button>
+        ${canUpload
+          ? '<input id="shared-spot-image-input" class="shared-location-hero__file-input" type="file" accept="image/jpeg,image/png,image/webp">'
+          : ''}
+      </div>
     </div>
   `;
 }

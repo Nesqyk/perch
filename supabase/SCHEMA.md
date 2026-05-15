@@ -319,7 +319,7 @@ erDiagram
 - `corrections` is append-only (no update columns) — the `refresh_spot_confidence()` fn aggregates them.
 - `spot_submissions.user_id`: authenticated owner of the suggestion; admin review promotes approved rows.
 - `spot_submissions` has no FK to `spots` — independent until an admin promotes one.
-- `spots.image_path`: primary image path in the private `spot-images` Storage bucket.
+- `spots.image_path`: primary image path in the private `spot-images` Storage bucket; the first photo can be uploaded by any signed-in user for an image-less active spot.
 - `spots.created_by`: authenticated creator for community-added live spots.
 - `spots.area_id`: optional pointer to a reusable sitio/barangay/city area; existing rows can stay null.
 - `spots.availability_status`: community-reported `available` | `occupied`; null means no direct report yet.

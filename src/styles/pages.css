@@ -1638,10 +1638,10 @@
 
 /* Detail-style shared location page */
 .shared-location-page {
-  --shared-location-bg: color-mix(in srgb, var(--color-gray-50) 76%, var(--color-white));
+  --shared-location-bg: linear-gradient(180deg, color-mix(in srgb, var(--color-gray-50) 82%, var(--color-white)) 0%, color-mix(in srgb, var(--color-brand-light) 16%, var(--color-white)) 100%);
   --shared-location-ink: color-mix(in srgb, var(--color-gray-900) 94%, var(--color-green-700));
   --shared-location-card: var(--color-white);
-  --shared-location-soft: color-mix(in srgb, var(--color-gray-100) 58%, var(--color-white));
+  --shared-location-soft: color-mix(in srgb, var(--color-gray-100) 44%, var(--color-white));
   --shared-location-line: color-mix(in srgb, var(--color-border) 70%, var(--color-white));
   --shared-location-green: var(--pin-free);
   --shared-location-mint: color-mix(in srgb, var(--color-brand) 68%, var(--color-white));
@@ -1656,7 +1656,7 @@
 
 .shared-location-page__topbar {
   position: sticky;
-  top: var(--space-8);
+  top: var(--space-6);
   z-index: 5;
   display: flex;
   align-items: center;
@@ -1676,15 +1676,15 @@
 }
 
 .shared-location-page__circle-btn {
-  width: 76px;
-  height: 76px;
+  width: 60px;
+  height: 60px;
   background: color-mix(in srgb, var(--color-gray-200) 82%, var(--color-white));
 }
 
 .shared-location-page__avatar-btn {
-  width: 78px;
-  height: 78px;
-  border: 8px solid color-mix(in srgb, var(--color-white) 72%, transparent);
+  width: 64px;
+  height: 64px;
+  border: 6px solid color-mix(in srgb, var(--color-white) 72%, transparent);
   background:
     radial-gradient(circle at 50% 30%, var(--color-white), color-mix(in srgb, var(--color-brand-light) 56%, var(--color-white)));
   font-size: var(--text-sm);
@@ -1719,58 +1719,70 @@
 
 .shared-location-page__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.04fr) minmax(24rem, 0.96fr);
-  gap: var(--space-8);
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1.1fr) minmax(22rem, 0.9fr);
+  gap: var(--space-6);
+  align-items: start;
   min-height: calc(100vh - var(--space-8) * 2);
-  padding-top: 102px;
+  padding-top: 80px;
 }
 
 .shared-location-hero {
   position: relative;
   min-height: 0;
-  border-radius: 26px;
+  border-radius: 22px;
   overflow: hidden;
   background: var(--shared-location-soft);
+  box-shadow: 0 18px 38px rgb(17 24 39 / 0.07);
 }
 
 .shared-location-hero__image {
   width: 100%;
   height: 100%;
-  min-height: 660px;
+  min-height: 520px;
   object-fit: cover;
 }
 
 .shared-location-hero__empty {
+  display: grid;
+  place-items: center;
+  min-height: 520px;
+  height: 100%;
+  padding: var(--space-6);
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--color-brand-light) 42%, var(--color-white)), transparent 38%),
+    linear-gradient(145deg, color-mix(in srgb, var(--color-brand-light) 44%, var(--color-white)), var(--color-gray-50)),
+    var(--shared-location-soft);
+}
+
+.shared-location-hero__empty-body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: var(--space-3);
-  min-height: 660px;
-  height: 100%;
-  padding: var(--space-8);
+  width: min(100%, 22rem);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 14%, var(--color-white));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-white) 88%, transparent);
   text-align: center;
-  background:
-    linear-gradient(145deg, color-mix(in srgb, var(--color-brand-light) 52%, var(--color-white)), var(--color-gray-50)),
-    var(--shared-location-soft);
+  box-shadow: var(--shadow-sm);
 }
 
 .shared-location-hero__empty-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 76px;
-  height: 76px;
+  width: 60px;
+  height: 60px;
   border-radius: var(--radius-full);
   background: var(--color-white);
   color: var(--color-green-700);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .shared-location-hero__empty-title {
   max-width: 18rem;
-  font-size: var(--text-2xl);
+  font-size: clamp(1.5rem, 2vw, 2rem);
   font-weight: var(--font-bold);
   line-height: 1.15;
   color: var(--shared-location-ink);
@@ -1815,23 +1827,27 @@
 
 .shared-location-hero__facts {
   position: absolute;
-  left: var(--space-5);
+  left: var(--space-4);
+  right: var(--space-4);
   bottom: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  width: min(254px, calc(100% - var(--space-10)));
-  padding: var(--space-6) var(--space-8);
-  border-radius: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: 18px;
   background: color-mix(in srgb, var(--color-white) 94%, transparent);
-  box-shadow: 0 18px 42px rgb(17 24 39 / 0.16);
+  box-shadow: 0 14px 28px rgb(17 24 39 / 0.12);
+  backdrop-filter: blur(12px);
 }
 
 .shared-location-hero__fact {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: var(--space-2);
   align-items: center;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-white) 62%, transparent);
 }
 
 .shared-location-hero__fact-icon {
@@ -1860,35 +1876,72 @@
 }
 
 .shared-location-detail {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: var(--space-6);
-  align-content: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .shared-location-card {
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--shared-location-card);
-  box-shadow: 0 12px 30px rgb(17 24 39 / 0.035);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 10%, var(--color-border));
+  box-shadow: 0 10px 24px rgb(17 24 39 / 0.04);
 }
 
 .shared-location-card--summary {
-  padding: var(--space-5) var(--space-4);
+  padding: var(--space-4);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-white) 94%, transparent), var(--color-white)),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--color-brand-light) 42%, transparent), transparent 45%);
+}
+
+.shared-location-card__eyebrow,
+.shared-location-card__section-eyebrow {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-green-700);
 }
 
 .shared-location-card__head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
+}
+
+.shared-location-card__identity {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .shared-location-card__title {
   min-width: 0;
-  font-size: var(--text-xl);
-  line-height: 1.15;
+  font-size: clamp(1.7rem, 2vw, 2.3rem);
+  line-height: 1.02;
   font-weight: var(--font-bold);
-  letter-spacing: 0;
+  letter-spacing: -0.02em;
+}
+
+.shared-location-card__supporting {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.shared-location-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--shared-location-line);
+  flex-wrap: wrap;
 }
 
 .shared-location-badges {
@@ -1925,28 +1978,24 @@
   color: var(--color-yellow-700);
 }
 
-.shared-location-card__rule {
-  height: 1px;
-  margin: var(--space-5) 0;
-  background: var(--shared-location-line);
-}
-
 .shared-location-amenities {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, max-content));
-  justify-content: space-between;
-  gap: var(--space-4);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 }
 
 .shared-location-amenities__item {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--shared-location-soft) 70%, var(--color-white));
   color: var(--color-text-muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   line-height: 1.2;
-  white-space: nowrap;
 }
 
 .shared-location-amenities__item--active,
@@ -1960,20 +2009,76 @@
 }
 
 .shared-location-card__confidence {
-  margin-top: var(--space-4);
   font-size: var(--text-xs);
   color: var(--color-text-muted);
+  margin: 0;
+}
+
+.shared-location-card__walk {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
+  color: var(--shared-location-ink);
+}
+
+.shared-location-card--availability {
+  padding: var(--space-3);
+  background: color-mix(in srgb, var(--color-brand-light) 22%, var(--color-white));
+}
+
+.shared-location-card--availability .availability-controls {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.shared-location-card--actions,
+.shared-location-card--map,
+.shared-location-card--activity {
+  padding: var(--space-4);
+}
+
+.shared-location-card__section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.shared-location-card__section-head--compact {
+  margin-bottom: var(--space-2);
+}
+
+.shared-location-card__section-title {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--font-bold);
+  color: var(--shared-location-ink);
+}
+
+.shared-location-card__section-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-brand-light) 70%, var(--color-white));
+  color: var(--color-green-700);
+  font-size: var(--text-xs);
+  font-weight: var(--font-bold);
 }
 
 .shared-location-card--map {
-  padding: var(--space-4);
+  background: color-mix(in srgb, var(--color-gray-50) 74%, var(--color-white));
 }
 
 .shared-location-map {
   position: relative;
-  min-height: 192px;
+  min-height: 168px;
   overflow: hidden;
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     linear-gradient(115deg, transparent 0 42%, color-mix(in srgb, var(--color-gray-200) 72%, var(--color-white)) 42% 48%, transparent 48%),
     linear-gradient(25deg, transparent 0 54%, color-mix(in srgb, var(--color-gray-200) 72%, var(--color-white)) 54% 60%, transparent 60%),
@@ -2078,7 +2183,7 @@
 }
 
 .shared-location-address {
-  padding: var(--space-4) var(--space-1) var(--space-1);
+  padding: var(--space-3) 0 0;
 }
 
 .shared-location-address__main {
@@ -2093,11 +2198,13 @@
 }
 
 .shared-location-card--activity {
+  background: color-mix(in srgb, var(--color-gray-50) 82%, var(--color-white));
+}
+
+.shared-location-activity-list {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-4);
+  gap: var(--space-2);
 }
 
 .shared-location-activity-row {
@@ -2105,12 +2212,11 @@
   grid-template-columns: 40px minmax(0, 1fr) auto;
   gap: var(--space-3);
   align-items: center;
-  min-height: 66px;
-  padding: var(--space-3);
+  min-height: 58px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--shared-location-line);
-  border-radius: var(--radius-full);
-  background: var(--color-white);
-  box-shadow: var(--shadow-sm);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-white) 92%, transparent);
 }
 
 .shared-location-activity-row__avatar {
@@ -2150,7 +2256,7 @@
 .shared-location-actions {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .shared-location-actions__claim,
@@ -2159,7 +2265,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  min-height: 60px;
+  min-height: 52px;
   padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-full);
   font-size: var(--text-base);
@@ -2848,34 +2954,34 @@
   }
 
   .shared-location-hero__image {
-    height: min(72vh, 720px);
-    min-height: 520px;
+    height: min(66vh, 620px);
+    min-height: 420px;
   }
 
   .shared-location-hero__empty {
-    height: min(72vh, 720px);
-    min-height: 520px;
-  }
-
-  .shared-location-detail {
-    grid-template-rows: none;
+    height: min(66vh, 620px);
+    min-height: 420px;
   }
 }
 
 @media (max-width: 900px) {
-  .shared-location-card__head,
-  .shared-location-amenities,
-  .shared-location-actions {
-    grid-template-columns: 1fr;
-  }
-
   .shared-location-card__head {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .shared-location-actions,
+  .shared-location-hero__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .shared-location-card__meta {
+    display: grid;
+    align-items: flex-start;
+  }
+
   .shared-location-amenities {
-    justify-content: stretch;
+    grid-template-columns: 1fr;
   }
 
   .shared-location-amenities__item {
@@ -2903,24 +3009,24 @@
   }
 
   .shared-location-page__layout {
-    gap: var(--space-5);
-    padding-top: 76px;
+    gap: var(--space-4);
+    padding-top: 72px;
   }
 
   .shared-location-hero,
   .shared-location-card {
-    border-radius: 20px;
+    border-radius: 18px;
   }
 
   .shared-location-hero__image {
-    height: 68vh;
-    min-height: 430px;
+    height: 52vh;
+    min-height: 300px;
   }
 
   .shared-location-hero__empty {
-    height: 68vh;
-    min-height: 430px;
-    padding: var(--space-5);
+    height: auto;
+    min-height: 300px;
+    padding: var(--space-4);
   }
 
   .shared-location-hero__facts {
@@ -2928,28 +3034,34 @@
     right: var(--space-3);
     bottom: var(--space-3);
     width: auto;
-    padding: var(--space-4);
-    border-radius: 20px;
+    padding: var(--space-3);
+    border-radius: 16px;
   }
 
   .shared-location-card--summary,
+  .shared-location-card--actions,
+  .shared-location-card--availability,
   .shared-location-card--map,
   .shared-location-card--activity {
-    padding: var(--space-4);
+    padding: var(--space-3);
   }
 
   .shared-location-map {
-    min-height: 176px;
+    min-height: 156px;
   }
 
   .shared-location-activity-row {
     grid-template-columns: 40px minmax(0, 1fr);
-    border-radius: 22px;
+    border-radius: 16px;
   }
 
   .shared-location-activity-row__tag {
     grid-column: 2;
     width: fit-content;
+  }
+
+  .shared-location-card__title {
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
   }
 }
 

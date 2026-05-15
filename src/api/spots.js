@@ -414,7 +414,7 @@ export async function uploadSpotImage({ spotId, file }) {
     .upload(path, file, {
       cacheControl: '3600',
       contentType: file.type || 'image/jpeg',
-      upsert: true,
+      upsert: false,
     });
 
   if (error) {
